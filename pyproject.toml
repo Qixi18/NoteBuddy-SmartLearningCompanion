@@ -1,0 +1,22 @@
+[project]
+name = "smart-learning-companion"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.setuptools]
+package-dir = {"" = "apps/backend"}
+
+[tool.setuptools.packages.find]
+where = ["apps/backend"]
+
+[tool.setuptools.package-data]
+"app" = ["web/dist/index.html", "web/dist/assets/*"]
+
+[project.scripts]
+smart-learning = "app.cli:main"
+smart-learning-server = "app.main:main"
+
+[tool.pytest.ini_options]
+testpaths = ["apps/backend/tests"]
+pythonpath = ["apps/backend"]

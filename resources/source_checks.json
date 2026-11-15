@@ -1,0 +1,23 @@
+{
+  "T01": {
+    "curriculum_file_page": 62,
+    "curriculum_body_page": 55,
+    "curriculum_check": "已对照扫描页 OCR 文本核对主题内容；公式和细节仍须人工逐页复核",
+    "textbook_slices": ["B05_相关资料切片.pdf", "B06_相关资料切片.pdf"],
+    "textbook_check": "已核对切片含代数式、整式加减内容；指标级精确页码待核对"
+  },
+  "T02": {
+    "curriculum_file_page": 63,
+    "curriculum_body_page": 56,
+    "curriculum_check": "已对照扫描页 OCR 文本核对方程与方程组内容；细节仍须人工逐页复核",
+    "textbook_slices": ["B04_相关资料切片.pdf", "B06_相关资料切片.pdf", "B02_相关资料切片.pdf"],
+    "textbook_check": "已核对切片含一元一次方程、方程组内容；指标级精确页码待核对"
+  },
+  "T03": {
+    "curriculum_file_page": 63,
+    "curriculum_body_page": 56,
+    "curriculum_check": "已对照扫描页 OCR 文本核对不等式与不等式组内容；细节仍须人工逐页复核",
+    "textbook_slices": ["B02_相关资料切片.pdf"],
+    "textbook_check": "已核对切片含不等式与不等式组内容；指标级精确页码待核对"
+  }
+}

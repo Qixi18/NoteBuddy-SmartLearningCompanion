@@ -1,0 +1,17 @@
+data/
+.env
+__pycache__/
+.pytest_cache/
+*.pyc
+*.tsbuildinfo
+_bmad/render/
+_bmad-output/
+apps/web/node_modules/
+apps/backend/app/web/dist/
+apps/web/dist/
+build/
+dist/
+*.egg-info/
+*.whl
+apps/web/.env*
+!apps/web/.env.example
