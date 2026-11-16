@@ -23,6 +23,7 @@ class DraftRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     student_id: str = Field(min_length=1)
     indicator_id: str = Field(min_length=1)
+    node_id: str | None = Field(default=None, min_length=1)
 
 
 class ReviewRequest(BaseModel):
@@ -55,6 +56,11 @@ class QualityReportResponse(BaseModel):
     excluded_record_ids: list[str]
     finding_counts: dict[str, int]
     findings: list[dict[str, Any]]
+    # Additive, optional disposition detail keeps earlier stored snapshots valid.
+    record_dispositions: list[dict[str, Any]] = Field(default_factory=list)
+    disposition_counts: dict[str, int] = Field(default_factory=dict)
+    raw_status_counts: dict[str, int] = Field(default_factory=dict)
+    event_disposition_counts: dict[str, int] = Field(default_factory=dict)
 
 
 class AnalysisRunResponse(BaseModel):
@@ -64,6 +70,7 @@ class AnalysisRunResponse(BaseModel):
     created_at: str
     rule_version: str
     quality: QualityReportResponse
+    rubric_observations: list[dict[str, Any]] = Field(default_factory=list)
     objectives: list[dict[str, Any]]
     items: list[dict[str, Any]]
     students: list[dict[str, Any]]
@@ -101,6 +108,18 @@ class DraftResponse(BaseModel):
     status: Literal["needs_review"]
     prompt_version: str | None
     model: str | None
+    run_id: str | None = None
+    node_id: str | None = None
+    scope_required: bool = False
+    rule_id: str | None = None
+    evidence_kind: str | None = None
+    observed_fact: str = ""
+    inference_limit: str = ""
+    unknown_reason: str | None = None
+    steps: list[str] = Field(default_factory=list)
+    activity: str | None = None
+    source_locator: str | None = None
+    evidence_source_lines: list[int] = Field(default_factory=list)
 
 
 class ReviewRecordResponse(BaseModel):

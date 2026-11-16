@@ -7,9 +7,9 @@
 | `api/routes/` | 请求校验、调用应用能力、序列化响应 | 文件读写、统计计算、模型 HTTP |
 | `schemas/http.py` | Pydantic HTTP 输入和已建模的稳定响应契约 | 持久化或业务决策 |
 | `services/task01/source_index_service.py`、`source_service.py` | 来源索引及 PDF allowlist、定位、哈希 | 统计计算、HTTP 响应 |
-| `services/task02/` | 版本选择、质量校验、指标与观察、导入编排、案例筛选 | HTTP 路由和持久化格式 |
-| `services/task03/` | 规则/DeepSeek 草稿、证据校验、教师复核规则 | HTTP 与文件格式 |
-| `services/shared/export_service.py` | 从分析及复核快照生成成果 ZIP | HTTP 响应发送 |
+| `services/task02/` | 版本选择、逐行质量处置、加权指标/节点观察、导入编排、当前节点案例候选 | HTTP 路由和持久化格式 |
+| `services/task03/` | TR-01..TR-08 确定性草稿、节点范围/评分点校验、DeepSeek 输入输出证据校验 | HTTP 与文件格式 |
+| `services/shared/export_service.py` | 从分析及复核快照生成兼容成果 ZIP、课程关系和节点摘要 | HTTP 响应发送 |
 | `application/ports/` | Repository、UoW、FileStorage、LLM 的框架无关 Protocol | SQLAlchemy Session/ORM 和具体 adapter |
 | `infrastructure/database/unit_of_work.py` | 绑定单个 Session 并拥有提交、回滚、关闭的 SQLAlchemy UoW | Domain 规则或 HTTP |
 | `infrastructure/files/local_file_storage.py` | 当前 CSV/PDF 读取及 SHA-256 文件访问 adapter | 文件资产数据库或 ZIP 持久化 |
@@ -22,11 +22,11 @@
 | `infrastructure/llm/deepseek_client.py` | DeepSeek HTTP 请求与提供方响应读取 | 提示策略、教学判断 |
 | `repositories/store.py` | 兼容门面，组织导入服务与两个 Repository | 长期新增持久化职责 |
 
-TASK 依赖方向：TASK 01 课程数据 → TASK 02 质量/统计/案例 → TASK 03 证据/建议/复核；共享导出服务读取分析和复核输出。TASK 能力已按实际职责落在相应目录中，顶层旧模块仅保留兼容导出。
+TASK 依赖方向：TASK 01 课程数据 → TASK 02 质量/统计/案例 → TASK 03 证据/建议/复核；共享导出服务读取分析和复核输出。TASK02 保留旧跨节点聚合键，并增加带 `node_id` 的学生/班级指标和学生×节点×指标观察；质量报告逐原始行标记 scored/pending/unanswered/superseded/excluded。TASK03 使用 TR-01..TR-08，校验单节点、有效记录和评分点；跨节点不得合并，冲突优先于模型草稿。题目不是默认教学材料；无人工核验的指标级映射保持 pending，建议不虚构材料 ID。非正/非法或任意重复修订号会隔离整个事件，不回退旧版本。LLM Port 是轻量 `LLMClient`，仅由 DeepSeek Adapter 实现，业务服务不直接创建供应方客户端。TASK 能力已按实际职责落在相应目录中，顶层旧模块仅保留兼容导出。
 
 ## 前端
 
-`App.tsx` 负责界面组合；`app/hooks/useWorkbench.ts` 管理工作台状态和 API 调用协调；`api/client.ts` 是唯一网络入口。目标/来源面板位于 TASK 01，质量/班级/学生/证据视图位于 TASK 02，复核位于 TASK 03；导入与导出保持独立 feature，共享 UI 控件放在 `components/`。
+`App.tsx` 负责界面组合；`app/hooks/useWorkbench.ts` 管理工作台状态和 API 调用协调；`api/client.ts` 是唯一网络入口。目标/来源面板位于 TASK 01，质量/班级/学生/证据视图位于 TASK 02，复核位于 TASK 03；导入与导出保持独立 feature，共享 UI 控件放在 `components/`。学生/指标切换或载入新运行时，节点选择重置，避免沿用旧范围。
 
 ## 持久化
 

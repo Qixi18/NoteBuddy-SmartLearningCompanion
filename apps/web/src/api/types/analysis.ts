@@ -2,9 +2,13 @@ import type { Objective, LearningItem, SourceIndexEntry } from './subject';
 
 export interface QualityFinding {
   code: string;
-  record_id: string;
-  source_line: number;
+  record_id: string | null;
+  source_line: number | null;
   detail: string;
+  event_id?: string | null;
+  source_file?: string;
+  severity?: 'INFO' | 'WARN' | 'ERROR';
+  disposition?: string;
 }
 
 export interface QualityReport {
@@ -15,6 +19,16 @@ export interface QualityReport {
   excluded_record_ids: string[];
   finding_counts: Record<string, number>;
   findings: QualityFinding[];
+  record_dispositions?: Array<{
+    record_id: string | null;
+    event_id: string | null;
+    source_file: string;
+    source_line: number | null;
+    disposition: 'scored' | 'pending' | 'unanswered' | 'superseded' | 'excluded';
+  }>;
+  disposition_counts?: Record<string, number>;
+  raw_status_counts?: Record<string, number>;
+  event_disposition_counts?: Record<string, number>;
 }
 
 export interface Student {
@@ -39,7 +53,7 @@ export interface ResponseRecord {
 }
 
 export interface Metric {
-  kind: 'student' | 'class' | 'topic' | 'indicator' | 'item' | 'node' | 'student_indicator' | 'class_indicator';
+  kind: 'student' | 'class' | 'topic' | 'indicator' | 'item' | 'node' | 'student_indicator' | 'class_indicator' | 'student_node_indicator';
   key: string;
   score: number;
   maximum: number;
@@ -47,6 +61,10 @@ export interface Metric {
   count: number;
   record_ids: string[];
   event_ids: string[];
+  node_id?: string;
+  indicator_id?: string;
+  student_id?: string | null;
+  class_id?: string | null;
 }
 
 export interface Observation {
@@ -59,6 +77,12 @@ export interface Observation {
   unanswered_count: number;
   excluded_count: number;
   record_ids: string[];
+  node_id?: string | null;
+  state?: 'scored' | 'pending' | 'unanswered' | 'excluded' | 'no_record' | 'not_measured' | 'unknown';
+  unknown_reason?: string | null;
+  available_item_count?: number;
+  quarantined_count?: number;
+  quarantined_record_ids?: string[];
 }
 
 export interface AnalysisRun {
@@ -66,12 +90,28 @@ export interface AnalysisRun {
   created_at: string;
   rule_version: string;
   quality: QualityReport;
+  rubric_observations?: RubricObservation[];
   objectives: Objective[];
   items: LearningItem[];
   students: Student[];
   nodes: Array<{ '节点编号': string; '可用题目编号': string }>;
   metrics: Metric[];
   responses: ResponseRecord[];
+  raw_responses?: ResponseRecord[];
   observations: Observation[];
   source_index: SourceIndexEntry[];
+}
+
+export interface RubricObservation {
+  record_id: string;
+  event_id: string;
+  student_id: string;
+  item_id: string;
+  node_id: string;
+  state: 'valid' | 'conflict' | 'unknown';
+  reason: string;
+  conflicts: string[];
+  points: Array<{ point_id: string; earned: number; maximum: number }>;
+  total_score: number | null;
+  total_maximum: number | null;
 }

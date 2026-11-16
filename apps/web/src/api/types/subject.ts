@@ -25,11 +25,22 @@ export interface SourceCheck {
   textbook_check?: string;
 }
 
+export interface IndicatorCheck {
+  topic_id?: string;
+  status?: string;
+  curriculum_locator?: string;
+  textbook_locator?: string;
+  reviewer?: string;
+  checked_at?: string;
+}
+
 export interface SourceIndexEntry {
   indicator_id: string;
   topic_id: string;
   curriculum_reference?: string;
   textbook_reference?: string;
   source_check: SourceCheck;
+  indicator_check?: IndicatorCheck;
   verification: string;
+  integrity_issues?: string[];
 }

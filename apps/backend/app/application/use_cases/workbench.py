@@ -48,8 +48,10 @@ class RuleDraft:
     def __init__(self, current_run: CurrentRun):
         self.current_run = current_run
 
-    def execute(self, student_id: str, indicator_id: str) -> dict:
-        return draft(self.current_run.execute(), student_id, indicator_id)
+    def execute(
+        self, student_id: str, indicator_id: str, node_id: str | None = None
+    ) -> dict:
+        return draft(self.current_run.execute(), student_id, indicator_id, node_id)
 
 
 class DeepSeekDraft:
@@ -58,7 +60,9 @@ class DeepSeekDraft:
         self.config = config
         self.client = client
 
-    def execute(self, student_id: str, indicator_id: str) -> dict:
+    def execute(
+        self, student_id: str, indicator_id: str, node_id: str | None = None
+    ) -> dict:
         return deepseek_draft(
             self.current_run.execute(),
             student_id,
@@ -66,6 +70,7 @@ class DeepSeekDraft:
             self.config.deepseek_api_key,
             self.config.deepseek_model,
             client=self.client,
+            node_id=node_id,
         )
 
 

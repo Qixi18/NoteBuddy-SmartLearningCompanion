@@ -3,11 +3,7 @@
 import json
 import urllib.request
 
-from ...application.ports.llm import LLMClient
-
-
-class DeepSeekClientError(RuntimeError):
-    """Transport or provider response failure safe to expose as a category."""
+from ...application.ports.llm import LLMClient, LLMError
 
 
 def complete(body: dict, api_key: str, timeout: int = 30) -> dict:
@@ -23,9 +19,9 @@ def complete(body: dict, api_key: str, timeout: int = 30) -> dict:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             result = json.load(response)
     except Exception as exc:
-        raise DeepSeekClientError(type(exc).__name__) from exc
+        raise LLMError(type(exc).__name__) from exc
     if not isinstance(result, dict):
-        raise DeepSeekClientError("invalid response")
+        raise LLMError("invalid response")
     return result
 
 

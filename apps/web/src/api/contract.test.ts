@@ -3,7 +3,10 @@ import health from '../../../../contracts/api/health.json';
 import errorFixture from '../../../../contracts/api/error.json';
 import reviewRequest from '../../../../contracts/api/review-request.json';
 import reviewSuccess from '../../../../contracts/api/review-success.json';
-import { api, jsonRequest } from './client';
+import draftFixture from '../../../../contracts/api/draft.json';
+import analysisRunFixture from '../../../../contracts/api/analysis-run.json';
+import { api, jsonRequest, learningApi } from './client';
+import type { AnalysisRun } from './types';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -29,5 +32,23 @@ describe('shared API fixtures', () => {
     vi.stubGlobal('fetch', fetchMock);
     await expect(api('/api/review', jsonRequest(reviewRequest))).resolves.toEqual(reviewSuccess);
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual(reviewRequest);
+  });
+
+  it('keeps the node-scoped draft contract aligned with the shared fixture', async () => {
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify(draftFixture), {
+      status: 200, headers: { 'content-type': 'application/json' },
+    })));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(learningApi.ruleDraft('D01', 'T01I1', 'N01')).resolves.toEqual(draftFixture);
+    expect(fetchMock.mock.calls[0][0]).toContain('node=N01');
+    await expect(learningApi.modelDraft('D01', 'T01I1', 'N01')).resolves.toEqual(draftFixture);
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ student_id: 'D01', indicator_id: 'T01I1', node_id: 'N01' });
+  });
+
+  it('keeps analysis quality disposition fields aligned with the shared fixture', () => {
+    const run = analysisRunFixture as unknown as AnalysisRun;
+    expect(run.quality.disposition_counts?.scored).toBe(1);
+    expect(run.quality.record_dispositions?.[1].disposition).toBe('superseded');
+    expect(run.rubric_observations?.[0].points[0].point_id).toBe('Q001P1');
   });
 });

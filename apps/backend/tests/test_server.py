@@ -16,8 +16,8 @@ from app.services.analysis import TABLES
 from test_core import sample_tables
 
 
-def client_for(tmp_path, config=None):
-    run = analyze(sample_tables(), {})
+def client_for(tmp_path, config=None, tables=None):
+    run = analyze(tables or sample_tables(), {})
     store = Store(tmp_path)
     store.database.create_schema_for_tests()
     with store.uow_factory() as uow:
@@ -29,7 +29,11 @@ def test_http_review_to_export(tmp_path):
     client = client_for(tmp_path)
     response = client.get("/api/draft", params={"student": "D01", "indicator": "T01I1"})
     assert response.status_code == 200
-    assert response.json()["evidence_record_ids"] == ["R2"]
+    assert response.json()["rule_id"] == "TR-08"
+    assert response.json()["unknown_reason"] == "evidence_conflict"
+    assert response.json()["evidence_record_ids"] == ["R4"]
+    assert response.json()["node_id"] == "N01"
+    assert response.json()["scope_required"] is False
     body = {
         "student_id": "D01",
         "indicator_id": "T01I1",
@@ -48,6 +52,54 @@ def test_http_review_to_export(tmp_path):
         recommendations = json.loads(archive.read("recommendations.json"))
         assert recommendations[0]["recommendation"] == "先做一道练习"
         assert len(json.loads(archive.read("student_cases.json"))) == 3
+
+
+def test_shared_draft_contract_fixture(tmp_path):
+    fixture = json.loads(
+        (Path(__file__).parents[3] / "contracts/api/draft.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    response = client_for(tmp_path).get(
+        "/api/draft",
+        params={"student": "D01", "indicator": "T01I1", "node": "N01"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert set(fixture).issubset(payload)
+    assert payload["node_id"] == fixture["node_id"]
+    assert isinstance(payload["scope_required"], bool)
+    assert isinstance(payload["evidence_record_ids"], list)
+
+
+def test_deepseek_does_not_override_tr08_conflict_baseline(tmp_path):
+    response = client_for(tmp_path).post(
+        "/api/deepseek", json={"student_id": "D01", "indicator_id": "T01I1"}
+    )
+    assert response.status_code == 200
+    assert response.json()["rule_id"] == "TR-08"
+    assert response.json()["unknown_reason"] == "evidence_conflict"
+    assert response.json()["source"] == "rule"
+
+
+def test_run_api_exposes_extended_quality_dispositions(tmp_path):
+    payload = client_for(tmp_path).get("/api/run").json()
+    quality = payload["quality"]
+    assert quality["record_dispositions"]
+    assert quality["disposition_counts"]["scored"] > 0
+    assert "raw_status_counts" in quality
+    assert "event_disposition_counts" in quality
+    assert payload["rubric_observations"]
+
+
+def test_draft_rejects_node_outside_current_run(tmp_path):
+    response = client_for(tmp_path).get(
+        "/api/draft",
+        params={"student": "D01", "indicator": "T01I1", "node": "N99"},
+    )
+    assert response.status_code == 400
+    assert response.json()["code"] == "INVALID_REQUEST"
+    assert response.json()["error"] == "测验节点不存在"
 
 
 def test_health_and_validation_error_contract(tmp_path):
@@ -137,9 +189,11 @@ def test_http_import_through_review_and_export(tmp_path: Path):
         quality = json.loads(archive.read("data_quality.json"))
         reviewed = json.loads(archive.read("recommendations.json"))
         evidence = json.loads(archive.read("evidence_index.json"))
+        rubric = json.loads(archive.read("rubric_observations.json"))
     assert quality["eligible_scored"] == 1
     assert reviewed[0]["recommendation"] == "先做一道基础练习"
     assert any(row["record_id"] == "R2" and row["source_line"] == 3 for row in evidence)
+    assert rubric == run["rubric_observations"]
 
 
 def test_failed_import_keeps_current_run(tmp_path: Path):
@@ -172,7 +226,14 @@ def test_deepseek_timeout_returns_safe_error_and_rule_draft_remains_available(
     tmp_path: Path, monkeypatch
 ):
     config = replace(settings, deepseek_api_key="test-only-key")
-    client = client_for(tmp_path, config)
+    clean_tables = sample_tables()
+    clean_tables["作答记录"] = [
+        row for row in clean_tables["作答记录"] if row["记录编号"] != "R4"
+    ]
+    for row in clean_tables["作答记录"]:
+        if row["记录编号"] == "R2":
+            row["评分点得分"] = ""
+    client = client_for(tmp_path, config, clean_tables)
 
     def timeout(*args, **kwargs):
         raise TimeoutError("provider timeout")
@@ -198,7 +259,14 @@ def test_malformed_deepseek_response_uses_model_error_contract(
     tmp_path: Path, monkeypatch
 ):
     config = replace(settings, deepseek_api_key="test-only-key")
-    client = client_for(tmp_path, config)
+    clean_tables = sample_tables()
+    clean_tables["作答记录"] = [
+        row for row in clean_tables["作答记录"] if row["记录编号"] != "R4"
+    ]
+    for row in clean_tables["作答记录"]:
+        if row["记录编号"] == "R2":
+            row["评分点得分"] = ""
+    client = client_for(tmp_path, config, clean_tables)
 
     class FakeResponse:
         def __enter__(self):

@@ -16,7 +16,7 @@ from starlette.exceptions import HTTPException
 
 from ..config import Settings, settings
 from ..core.logging import configure_logging
-from ..infrastructure.llm.deepseek_client import DeepSeekClientError
+from ..application.ports.llm import LLMError
 from ..repositories.store import Store
 from .routes import analysis, exports, health, imports, recommendations, reviews
 
@@ -83,8 +83,8 @@ def create_app(store: Store | None = None, config: Settings = settings) -> FastA
         message = str(exc.detail) if exc.status_code < 500 else "服务器内部错误"
         return error(request, exc.status_code, message, code)
 
-    @application.exception_handler(DeepSeekClientError)
-    async def model_error(request: Request, exc: DeepSeekClientError) -> JSONResponse:
+    @application.exception_handler(LLMError)
+    async def model_error(request: Request, exc: LLMError) -> JSONResponse:
         logger.warning(
             "model provider request failed",
             extra={"request_id": request.state.request_id},

@@ -10,7 +10,7 @@ import { ExportPanel } from '../features/export/ExportPanel';
 
 export function App() {
   const workbench = useWorkbench();
-  const { run, reviews, suggestions, student, indicator, draft, message, error, reviewKey } = workbench;
+  const { run, reviews, suggestions, student, indicator, node, draft, message, error, reviewKey } = workbench;
 
   return <>
     <header><h1>智慧学伴 · 证据工作台</h1><p>课程要求 → 作答证据 → 学情诊断 → 教学建议</p></header>
@@ -21,7 +21,7 @@ export function App() {
         <div className="grid"><QualityPanel run={run} /><ClassPanel run={run} /></div>
         <div className="grid"><ObjectivesPanel run={run} /><StudentPanel run={run} student={student} indicator={indicator} onStudent={workbench.setStudent} onIndicator={workbench.setIndicator} /></div>
         <EvidencePanel run={run} student={student} indicator={indicator} />
-        <ReviewPanel student={student} indicator={indicator} review={reviews[reviewKey]?.at(-1)} draft={draft} onDraft={workbench.makeDraft} onSave={workbench.saveReview} />
+        <ReviewPanel student={student} indicator={indicator} node={node} nodes={[...new Set(run.responses.filter(row => row['学生编号'] === student && run.items.some(item => item['材料编号'] === row['材料编号'] && item['指标编号'] === indicator)).map(row => row['节点编号']))]} onNode={workbench.setNode} review={reviews[reviewKey]?.at(-1)} draft={draft} onDraft={workbench.makeDraft} onSave={workbench.saveReview} />
         <ExportPanel students={run.students} suggestions={suggestions} onExport={workbench.exportCases} />
       </>}
     </main>

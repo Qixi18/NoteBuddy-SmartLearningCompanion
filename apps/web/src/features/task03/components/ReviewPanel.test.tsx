@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { useState } from 'react';
+import type { Draft } from '../../../api/types';
 import { ReviewPanel } from './ReviewPanel';
+import draftFixture from '../../../../../../contracts/api/draft.json';
 
 afterEach(cleanup);
 
@@ -10,10 +13,42 @@ describe('ReviewPanel', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', {
       status: 200, headers: { 'content-type': 'application/json' },
     })));
-    render(<ReviewPanel student="S1" indicator="I1" draft={null} onDraft={vi.fn()} onSave={vi.fn()} />);
+    render(<ReviewPanel student="S1" indicator="I1" node="" nodes={[]} onNode={vi.fn()} draft={null} onDraft={vi.fn()} onSave={vi.fn()} />);
     const select = screen.getByLabelText('复核状态');
     fireEvent.change(select, { target: { value: 'needs_observation' } });
     expect((select as HTMLSelectElement).value).toBe('needs_observation');
     expect((screen.getByRole('button', { name: '保存复核' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('passes the selected node when requesting a draft', () => {
+    const onDraft = vi.fn();
+    function Harness() {
+      const [node, setNode] = useState('');
+      return <ReviewPanel student="S1" indicator="I1" node={node} nodes={['N01', 'N02']} onNode={setNode} draft={null} onDraft={onDraft} onSave={vi.fn()} />;
+    }
+    render(<Harness />);
+    fireEvent.change(screen.getByLabelText('测验节点'), { target: { value: 'N02' } });
+    fireEvent.click(screen.getByRole('button', { name: '生成规则草稿' }));
+    expect(onDraft).toHaveBeenCalledWith('rule', 'N02');
+  });
+
+  it('does not allow saving a draft that still requires node scope', () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', {
+      status: 200, headers: { 'content-type': 'application/json' },
+    })));
+    render(<ReviewPanel student="S1" indicator="I1" node="" nodes={['N01', 'N02']} onNode={vi.fn()} draft={{ ...draftFixture, scope_required: true, node_id: null }} onDraft={vi.fn()} onSave={vi.fn()} />);
+    expect(screen.getByText(/多个节点有记录/)).toBeTruthy();
+    expect((screen.getByRole('button', { name: '保存复核' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('shows rule evidence and inference limits with the editable draft', () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('[]', {
+      status: 200, headers: { 'content-type': 'application/json' },
+    })));
+    render(<ReviewPanel student="D01" indicator="T01I1" node="N01" nodes={["N01"]} onNode={vi.fn()} draft={draftFixture as Draft} onDraft={vi.fn()} onSave={vi.fn()} />);
+    expect(screen.getByText(/规则：TR-05/)).toBeTruthy();
+    expect(screen.getByText(/观察事实：已评分事实：Q001 1\/2/)).toBeTruthy();
+    expect(screen.getByText(/适用边界：结论仅限列出的题目得分/)).toBeTruthy();
+    expect(screen.getByText(/来源行：3/)).toBeTruthy();
   });
 });

@@ -28,9 +28,10 @@ def cases(use_cases: WorkbenchUseCases = Depends(get_use_cases)) -> list[dict]:
 def rule_draft(
     student: str = Query(min_length=1),
     indicator: str = Query(min_length=1),
+    node: str | None = Query(default=None, min_length=1),
     use_cases: WorkbenchUseCases = Depends(get_use_cases),
 ) -> dict:
-    return use_cases.rule_draft.execute(student, indicator)
+    return use_cases.rule_draft.execute(student, indicator, node)
 
 
 @router.get("/api/source", tags=["sources"])

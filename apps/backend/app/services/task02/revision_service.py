@@ -1,6 +1,7 @@
 """Select the unique highest revision for each response event."""
 
-from collections import defaultdict
+import re
+from collections import Counter, defaultdict
 
 
 def select_revisions(
@@ -47,14 +48,38 @@ def select_revisions(
             continue
 
         parsed = []
+        invalid_version = False
         for row in revisions:
+            raw_version = str(row["修订版本"]).strip()
             try:
-                version = int(row["修订版本"])
-            except ValueError:
-                issue("invalid_revision", row, "修订版本不是整数")
-                excluded.append(row["记录编号"])
-                continue
-            parsed.append((version, row))
+                if not re.fullmatch(r"[0-9]+", raw_version):
+                    raise ValueError
+                version = int(raw_version)
+                if version < 1:
+                    raise ValueError
+            except (TypeError, ValueError):
+                issue("invalid_revision", row, "修订版本必须是正整数")
+                invalid_version = True
+            else:
+                parsed.append((version, row))
+        if invalid_version:
+            # A malformed version makes ordering unknowable. Do not silently
+            # select an older parseable revision for the same event.
+            excluded.extend(row["记录编号"] for row in revisions)
+            continue
+        version_counts = Counter(version for version, _ in parsed)
+        repeated = [
+            (version, row) for version, row in parsed if version_counts[version] > 1
+        ]
+        if repeated:
+            for version, row in repeated:
+                issue(
+                    "revision_conflict",
+                    row,
+                    f"事件 {event_id} 修订版本 {version} 重复",
+                )
+            excluded.extend(row["记录编号"] for row in revisions)
+            continue
         if not parsed:
             continue
         max_version = max(version for version, _ in parsed)

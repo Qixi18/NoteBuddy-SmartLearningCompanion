@@ -3,9 +3,9 @@ import json
 import os
 import zipfile
 from pathlib import Path
-from unittest.mock import patch
+import pytest
 
-from app.infrastructure.llm.deepseek_client import DeepSeekClientError
+from app.application.ports.llm import LLMError
 from app.services.analysis import analyze, read_bundle
 from app.services.exports import package
 from app.services.recommendations import deepseek_draft, draft
@@ -100,6 +100,7 @@ def sample_tables():
 
 def test_version_and_denominator():
     run = analyze(sample_tables(), {})
+    assert run["rule_version"] == "3"
     assert run["quality"]["raw_rows"] == 4
     assert run["quality"]["events"] == 3
     assert run["quality"]["eligible_scored"] == 1
@@ -124,6 +125,95 @@ def test_event_identity_conflict_is_excluded():
     assert "R1" in run["quality"]["excluded_record_ids"]
     assert "R2" in run["quality"]["excluded_record_ids"]
     assert not any(r["作答事件编号"] == "E1" for r in run["responses"])
+
+
+def test_invalid_revision_quarantines_event_without_fallback():
+    tables = sample_tables()
+    newest = dict(tables["作答记录"][1])
+    newest.update({"记录编号": "R5", "修订版本": "bad", "_source_line": 6})
+    tables["作答记录"].append(newest)
+    run = analyze(tables, {})
+    assert "R1" in run["quality"]["excluded_record_ids"]
+    assert "R2" in run["quality"]["excluded_record_ids"]
+    assert "R5" in run["quality"]["excluded_record_ids"]
+    assert not any(row["作答事件编号"] == "E1" for row in run["responses"])
+    assert any(
+        finding["code"] == "invalid_revision"
+        and finding["detail"] == "修订版本必须是正整数"
+        for finding in run["quality"]["findings"]
+    )
+
+
+def test_revision_with_leading_zero_is_valid_positive_integer():
+    tables = sample_tables()
+    row = dict(tables["作答记录"][1])
+    row.update(
+        {
+            "记录编号": "R5",
+            "作答事件编号": "E5",
+            "修订版本": "01",
+            "_source_line": 6,
+        }
+    )
+    tables["作答记录"].append(row)
+    run = analyze(tables, {})
+    assert any(response["记录编号"] == "R5" for response in run["responses"])
+
+
+def test_duplicate_lower_revision_quarantines_whole_event():
+    tables = sample_tables()
+    duplicate = dict(tables["作答记录"][0])
+    duplicate.update({"记录编号": "R5", "_source_line": 6})
+    tables["作答记录"].append(duplicate)
+    run = analyze(tables, {})
+    assert "R1" in run["quality"]["excluded_record_ids"]
+    assert "R2" in run["quality"]["excluded_record_ids"]
+    assert "R5" in run["quality"]["excluded_record_ids"]
+    assert run["quality"]["finding_counts"]["revision_conflict"] == 2
+    assert not any(row["作答事件编号"] == "E1" for row in run["responses"])
+
+
+def test_task03_requires_scope_when_indicator_spans_nodes():
+    tables = sample_tables()
+    tables["测验节点"].append({"节点编号": "N02", "可用题目编号": "Q001"})
+    second = dict(tables["作答记录"][0])
+    second.update(
+        {
+            "记录编号": "R5",
+            "作答事件编号": "E5",
+            "修订版本": "1",
+            "节点编号": "N02",
+            "得分": "2",
+            "_source_line": 6,
+        }
+    )
+    tables["作答记录"].append(second)
+    run = analyze(tables, {})
+    baseline = draft(run, "D01", "T01I1")
+    assert baseline["scope_required"] is True
+    assert baseline["node_id"] is None
+    assert baseline["unknown_reason"] == "scope_required"
+    scoped = draft(run, "D01", "T01I1", "N02")
+    assert scoped["scope_required"] is False
+    assert scoped["node_id"] == "N02"
+    assert scoped["evidence_record_ids"] == ["R5"]
+
+
+def test_source_index_keeps_unverified_indicator_mapping_pending(tmp_path: Path):
+    from app.services.task01.source_index_service import build_source_index
+
+    (tmp_path / "source_checks.json").write_text(
+        json.dumps(
+            {
+                "T01": {"textbook_slices": ["B05.pdf"]},
+                "indicator_checks": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    index, _ = build_source_index([{"主题编号": "T01", "指标编号": "T01I1"}], tmp_path)
+    assert index[0]["verification"] == "pending"
+    assert index[0]["indicator_check"] == {}
 
 
 def test_csv_multiline_source_line(tmp_path: Path):
@@ -202,7 +292,9 @@ def test_review_and_export(tmp_path: Path):
     store = make_store(tmp_path)
     persist_run(store, run)
     baseline = draft(run, "D01", "T01I1")
-    assert baseline["evidence_record_ids"] == ["R2"]
+    assert baseline["rule_id"] == "TR-08"
+    assert baseline["unknown_reason"] == "evidence_conflict"
+    assert baseline["evidence_record_ids"] == ["R4"]
     saved = store.save_review(
         run["run_id"],
         "D01",
@@ -226,6 +318,77 @@ def test_review_and_export(tmp_path: Path):
         cases = json.loads(archive.read("student_cases.json"))
         assert len(cases) == 3
         assert "student_indicator" in archive.read("metrics.csv").decode("utf-8-sig")
+        assert {
+            "learning_objectives.json",
+            "items.json",
+            "source_index.json",
+            "data_quality.json",
+            "recommendations.json",
+            "pending_review.json",
+            "rubric_observations.json",
+        }.issubset(set(archive.namelist()))
+        relations = json.loads(archive.read("course_relations.json"))
+        assert relations[0]["material_ids"] == ["Q001"]
+        assert relations[0]["verification"] == "pending"
+        assert archive.read("course_relations.csv").startswith(b"\xef\xbb\xbf")
+        assert json.loads(archive.read("node_observations.json"))
+        assert json.loads(archive.read("rubric_observations.json")) == run.get(
+            "rubric_observations", []
+        )
+        methods = archive.read("字段与口径说明.md").decode()
+        assert "应测完成率" in methods
+
+
+def test_review_citations_must_match_valid_records_and_draft_node_scope(tmp_path: Path):
+    tables = sample_tables()
+    tables["作答记录"] = [
+        row for row in tables["作答记录"] if row["记录编号"] in {"R1", "R2"}
+    ]
+    tables["测验节点"].append(
+        {"节点编号": "N02", "可用题目编号": "Q001", "模拟测验日期": "2026-06-17"}
+    )
+    other_node = dict(tables["作答记录"][1])
+    other_node.update(
+        {
+            "记录编号": "R5",
+            "作答事件编号": "E5",
+            "修订版本": "1",
+            "节点编号": "N02",
+            "得分": "2",
+            "_source_line": 6,
+            "评分点得分": "",
+        }
+    )
+    tables["作答记录"].append(other_node)
+    run = analyze(tables, {})
+    store = make_store(tmp_path)
+    persist_run(store, run)
+
+    payload = {
+        "status": "accepted",
+        "diagnosis": "已复核",
+        "recommendation": "继续观察",
+        "evidence_record_ids": ["R2"],
+        "original_draft": {
+            "run_id": run["run_id"],
+            "student_id": "D01",
+            "indicator_id": "T01I1",
+            "node_id": "N02",
+            "scope_required": False,
+            "evidence_record_ids": ["R5"],
+        },
+    }
+    with pytest.raises(ValueError, match="范围外或无效记录"):
+        store.save_review(run["run_id"], "D01", "T01I1", payload)
+
+    payload["evidence_record_ids"] = ["R5"]
+    payload["original_draft"]["evidence_record_ids"] = ["R2"]
+    with pytest.raises(ValueError, match="原草稿证据引用无效"):
+        store.save_review(run["run_id"], "D01", "T01I1", payload)
+
+    payload["original_draft"]["evidence_record_ids"] = ["R5"]
+    saved = store.save_review(run["run_id"], "D01", "T01I1", payload)
+    assert saved["version"] == 1
 
 
 def test_concurrent_review_versions_are_unique(tmp_path: Path):
@@ -296,81 +459,78 @@ def test_public_bundle_if_available():
     assert {c["type"] for c in cases} == {"部分得分", "表现较好", "记录较少"}
 
 
-def test_deepseek_rejects_fabricated_evidence(monkeypatch):
-    run = analyze(sample_tables(), {})
-    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-only-key")
+def _task03_run_without_unrelated_invalid_record():
+    tables = sample_tables()
+    tables["作答记录"] = [row for row in tables["作答记录"] if row["记录编号"] != "R4"]
+    for row in tables["作答记录"]:
+        if row["记录编号"] == "R2":
+            row["评分点得分"] = ""
+    return analyze(tables, {})
 
-    class FakeResponse:
-        def __enter__(self):
-            return self
 
-        def __exit__(self, *_):
-            return None
+def test_deepseek_returns_tr08_without_calling_model_for_conflicted_scope():
+    class UnexpectedLLM:
+        def complete(self, body):
+            raise AssertionError("TR-08 冲突闸门不应调用模型")
 
-        def read(self, *_):
+    result = deepseek_draft(
+        analyze(sample_tables(), {}), "D01", "T01I1", client=UnexpectedLLM()
+    )
+    assert result["rule_id"] == "TR-08"
+    assert result["unknown_reason"] == "evidence_conflict"
+    assert result["evidence_record_ids"] == ["R4"]
+    assert result["source"] == "rule"
+
+
+def test_deepseek_rejects_fabricated_evidence():
+    run = _task03_run_without_unrelated_invalid_record()
+
+    class FakeLLM:
+        def complete(self, body):
             content = {
                 "diagnosis": "需要练习",
                 "recommendation": "分步提示",
                 "adjustment_condition": "再次观察",
                 "evidence_record_ids": ["OTHER_STUDENT_RECORD"],
             }
-            return json.dumps(
-                {
-                    "choices": [
-                        {
-                            "finish_reason": "stop",
-                            "message": {"content": json.dumps(content)},
-                        }
-                    ]
-                }
-            ).encode()
+            return {
+                "choices": [
+                    {
+                        "finish_reason": "stop",
+                        "message": {"content": json.dumps(content)},
+                    }
+                ]
+            }
 
-    with patch(
-        "app.infrastructure.llm.deepseek_client.urllib.request.urlopen",
-        return_value=FakeResponse(),
-    ):
-        try:
-            deepseek_draft(run, "D01", "T01I1")
-        except DeepSeekClientError as exc:
-            assert "无效证据" in str(exc)
-        else:
-            raise AssertionError("伪造证据应被拒绝")
+    try:
+        deepseek_draft(run, "D01", "T01I1", client=FakeLLM())
+    except LLMError as exc:
+        assert "无效证据" in str(exc)
+    else:
+        raise AssertionError("伪造证据应被拒绝")
 
 
-def test_deepseek_accepts_valid_structured_draft(monkeypatch):
-    run = analyze(sample_tables(), {})
-    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-only-key")
+def test_deepseek_accepts_valid_structured_draft():
+    run = _task03_run_without_unrelated_invalid_record()
 
-    class FakeResponse:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *_):
-            return None
-
-        def read(self, *_):
+    class FakeLLM:
+        def complete(self, body):
             content = {
                 "diagnosis": "需复核第一步",
                 "recommendation": "先提示数量关系，再独立作答",
                 "adjustment_condition": "完成后检查同类题",
                 "evidence_record_ids": ["R2"],
             }
-            return json.dumps(
-                {
-                    "choices": [
-                        {
-                            "finish_reason": "stop",
-                            "message": {"content": json.dumps(content)},
-                        }
-                    ]
-                }
-            ).encode()
+            return {
+                "choices": [
+                    {
+                        "finish_reason": "stop",
+                        "message": {"content": json.dumps(content)},
+                    }
+                ]
+            }
 
-    with patch(
-        "app.infrastructure.llm.deepseek_client.urllib.request.urlopen",
-        return_value=FakeResponse(),
-    ):
-        result = deepseek_draft(run, "D01", "T01I1")
+    result = deepseek_draft(run, "D01", "T01I1", client=FakeLLM())
     assert result["source"] == "deepseek"
     assert result["evidence_record_ids"] == ["R2"]
     assert result["recommendation"] == "先提示数量关系，再独立作答"

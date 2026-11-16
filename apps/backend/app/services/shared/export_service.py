@@ -59,6 +59,27 @@ def package(run: dict, reviews: dict, case_ids: list[str] | None = None) -> byte
     }
     metric = run["metrics"]
     suggested = {c["student_id"]: c for c in suggest_cases(run)}
+    course_relations = [
+        {
+            "indicator_id": entry.get("indicator_id"),
+            "topic_id": entry.get("topic_id"),
+            "material_ids": [
+                item.get("材料编号")
+                for item in run.get("items", [])
+                if item.get("指标编号") == entry.get("indicator_id")
+            ],
+            "curriculum_reference": entry.get("curriculum_reference"),
+            "textbook_reference": entry.get("textbook_reference"),
+            "verification": entry.get("verification", "pending"),
+            "indicator_check": entry.get("indicator_check", {}),
+            "integrity_issues": entry.get("integrity_issues", []),
+        }
+        for entry in run.get("source_index", [])
+    ]
+    node_scoped_metrics = [entry for entry in metric if entry.get("node_id")]
+    node_observations = [
+        entry for entry in run.get("observations", []) if entry.get("node_id")
+    ]
     files = {
         "manifest.json": manifest,
         "learning_objectives.json": run["objectives"],
@@ -99,6 +120,7 @@ def package(run: dict, reviews: dict, case_ids: list[str] | None = None) -> byte
         ],
         "all_metrics.json": metric,
         "observations.json": run["observations"],
+        "rubric_observations.json": run.get("rubric_observations", []),
         "responses.json": run["responses"],
         "raw_responses.json": run["raw_responses"],
         "evidence_index.json": [
@@ -114,6 +136,10 @@ def package(run: dict, reviews: dict, case_ids: list[str] | None = None) -> byte
         ],
         "items.json": run["items"],
         "source_index.json": run["source_index"],
+        # Add structured mappings and node-scoped views without changing legacy members.
+        "course_relations.json": course_relations,
+        "node_scoped_metrics.json": node_scoped_metrics,
+        "node_observations.json": node_observations,
         "recommendations.json": accepted,
         "pending_review.json": pending,
     }
@@ -139,6 +165,29 @@ def package(run: dict, reviews: dict, case_ids: list[str] | None = None) -> byte
         for row in metric:
             writer.writerow({**row, "record_ids": "|".join(row["record_ids"])})
         archive.writestr("metrics.csv", "\ufeff" + metric_csv.getvalue())
+        relations_csv = io.StringIO(newline="")
+        relation_fields = [
+            "indicator_id",
+            "topic_id",
+            "material_ids",
+            "curriculum_reference",
+            "textbook_reference",
+            "verification",
+            "integrity_issues",
+        ]
+        relation_writer = csv.DictWriter(
+            relations_csv, fieldnames=relation_fields, extrasaction="ignore"
+        )
+        relation_writer.writeheader()
+        for relation in course_relations:
+            relation_writer.writerow(
+                {
+                    **relation,
+                    "material_ids": "|".join(relation["material_ids"]),
+                    "integrity_issues": "|".join(relation["integrity_issues"]),
+                }
+            )
+        archive.writestr("course_relations.csv", "\ufeff" + relations_csv.getvalue())
         objective_csv = io.StringIO(newline="")
         objective_fields = (
             [key for key in run["objectives"][0] if not key.startswith("_")]
@@ -157,6 +206,10 @@ def package(run: dict, reviews: dict, case_ids: list[str] | None = None) -> byte
             "# 字段与统计口径\n\n"
             "`run_id` 由导入文件哈希生成；`record_ids` 为实际进入得分统计的修订记录。\n"
             "`score/maximum` 是有效已评分记录的得分率；待评分、未作答及异常记录不进入分母。\n"
+            "`class_summary.json` 和 `student_summary.json` 保留跨节点旧汇总；节点分层数据见 `node_scoped_metrics.json` 与 `node_observations.json`。\n"
+            "`data_quality.json` 中逐行 disposition 覆盖原始作答行；`pending`、`unanswered`、`superseded` 与 `excluded` 不作为有效计分。\n"
+            "`course_relations.json/csv` 从当前快照生成；`pending`/`invalid` 表示关系尚未签核，不得当作已核验教学资源。\n"
+            "覆盖状态表示可观察到的记录/评分覆盖；没有逐生任务分配表时，不代表应测完成率。\n"
             "`pending_review.json` 单列未接受的建议；`recommendations.json` 仅含已接受或修改项。\n"
             "来源文件哈希与规则版本见 `manifest.json`。\n",
         )

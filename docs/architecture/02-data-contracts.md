@@ -21,17 +21,19 @@
 - **Objective**：`主题编号`、`指标编号`、`观察指标`；可包含课标/教材页字段。
 - **Item**：`材料编号`、`主题编号`、`指标编号`、`满分`；其他题干、评分点列随 CSV 保留。
 - **Response**：记录、学生、材料、节点、作答事件、修订、评分状态、得分、满分、解答/评分点及 `_source_line`。导入时从 CSV 行生成行号。
-- **AnalysisRun**：`run_id`、`created_at`、`rule_version`、源文件哈希/行数、`quality`、目标、材料、学生、节点、选定 responses、raw_responses、metrics、observations 和 `source_index`。
-- **Metric**：`kind`、`key`、`score`、`maximum`、`ratio`、`count`、可追溯 `record_ids` 与 `event_ids`。
-- **RecommendationDraft**：学生与指标、诊断、建议、调整条件、材料 ID、证据 ID、来源、模型/prompt 版本和 `needs_review` 状态。
-- **TeacherReview**：学生/指标组合下追加递增 `version`，保存状态、修改字段、来源、模型、原草稿、引用、理由、复核者和时间。
+- **AnalysisRun**：`run_id`、`created_at`、`rule_version`、源文件哈希/行数、`quality`（finding 与逐行处置）、目标、材料、学生、节点、选定 responses、raw_responses、metrics、node-aware observations、结构化 `rubric_observations` 和 `source_index`。
+- **Metric**：兼容的 `kind`/`key` 及 `score`、`maximum`、`ratio`、`count`、`record_ids`、`event_ids`；新增可选 `node_id`、`indicator_id`、`student_id`、`class_id` 维度。
+- **RecommendationDraft**：学生、指标、单一节点、TR rule/evidence kind、观察事实、推断边界、unknown reason、步骤/活动、来源定位、证据 ID/源行、旧诊断建议字段、来源与 `needs_review` 状态。
+- **TeacherReview**：学生/指标组合下追加递增 `version`，保存状态、修改字段、来源、模型、原草稿、引用、理由、复核者和时间。复核引用可包含同一运行、学生、指标及草稿节点内的已选记录（例如待评分/冲突记录供教师核查）；这些引用不会让记录进入有效得分分母。跨范围或非当前分析快照记录仍拒绝保存。
 
 ## 统计和复核状态
 
 当前赛事评分状态为 `已评分`、`待评分`、`未作答`；异常记录通过质量 finding 隔离，不会擅自转换成赛事状态。复核状态为 `accepted`、`edited`、`rejected`、`needs_observation`；建议来源为 `rule`、`deepseek`。
 
-同一事件选唯一最高修订；最高版本冲突隔离。只有合法已评分记录进入得分分母；待评分、未作答和非法记录不进入得分率。记录编号、学生、材料、节点关联及材料可用范围都会核验。没有有效记录时建议明确数据不足，不推断未掌握。
+同一事件先校验身份和正整数版本；任意重复版本、身份冲突、非法版本或唯一最高版本内容无效时隔离整个事件，绝不回退。只有合法已评分记录进入得分分母；得分率为同一分组有效总分之和/有效满分之和，待评分、未作答、超范围和非法记录不进入分母。节点指标分开计算；无逐生任务分配表时覆盖只表示观察/评分覆盖，不表示应测完成率。Quality dispositions 覆盖每条原始作答行，区分已计分、待评分、未作答、被更新版本替代和排除。
+
+TASK03 默认不跨节点汇总。省略节点时仅在证据唯一落在一个节点时自动解析；多节点需显式选择。TR-01 至 TR-08 不设置 mastery 标签或固定得分率阈值；缺失/冲突证据返回 unknown/needs_review。TR-06 必须有显式标记为 `verified` 的共享评分点映射；缺少状态或未审核时按未核验处理，题目/材料映射未审核时不得作为教学资源。
 
 ## 兼容
 
-分析规则版本当前为 `2`；运行 ID 由既有 CSV/规则/source-check 哈希生成，再与可用来源文件哈希组合。修改这些字段或 ZIP 清单需要兼容评估，并以真实赛事数据映射为准。
+分析规则版本为 `3`，覆盖修订、质量处置、节点观察和指标计算变化；运行 ID 由 CSV、规则/source-check 哈希生成，再与可用来源文件哈希组合。修改这些字段或 ZIP 清单需要兼容评估，并以真实赛事数据映射为准。旧指标键和历史快照可继续读取；新增节点维度与逐行处置字段为 additive。

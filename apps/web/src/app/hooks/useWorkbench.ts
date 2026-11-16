@@ -8,12 +8,13 @@ export function useWorkbench() {
   const [suggestions, setSuggestions] = useState<CaseSuggestion[]>([]);
   const [student, setStudent] = useState('');
   const [indicator, setIndicator] = useState('');
+  const [node, setNode] = useState('');
   const [draft, setDraft] = useState<Draft | null>(null);
   const [message, setMessage] = useState('正在连接本地分析服务…');
   const [error, setError] = useState(false);
   const reviewKey = `${student}:${indicator}`;
 
-  useEffect(() => { setDraft(null); }, [reviewKey]);
+  useEffect(() => { setDraft(null); setNode(''); }, [reviewKey, run?.run_id]);
 
   const refresh = useCallback(async () => {
     try {
@@ -39,12 +40,17 @@ export function useWorkbench() {
   useEffect(() => { void refresh(); }, [refresh]);
   const announce = (text: string, failed = false) => { setMessage(text); setError(failed); };
 
-  const makeDraft = async (provider: 'rule' | 'deepseek') => {
+  const selectNode = (nodeId: string) => {
+    setNode(nodeId);
+    setDraft(null);
+  };
+
+  const makeDraft = async (provider: 'rule' | 'deepseek', selectedNode = node) => {
     try {
       announce(provider === 'rule' ? '正在生成规则草稿…' : '正在请求 DeepSeek…');
       const result = provider === 'rule'
-        ? await learningApi.ruleDraft(student, indicator)
-        : await learningApi.modelDraft(student, indicator);
+        ? await learningApi.ruleDraft(student, indicator, selectedNode || undefined)
+        : await learningApi.modelDraft(student, indicator, selectedNode || undefined);
       setDraft(result);
       announce('草稿已生成，请结合原始记录复核。');
     } catch (reason) {
@@ -76,7 +82,7 @@ export function useWorkbench() {
   };
 
   return {
-    run, reviews, suggestions, student, indicator, draft, message, error, reviewKey,
-    setStudent, setIndicator, refresh, announce, makeDraft, saveReview, exportCases,
+    run, reviews, suggestions, student, indicator, node, draft, message, error, reviewKey,
+    setStudent, setIndicator, setNode: selectNode, refresh, announce, makeDraft, saveReview, exportCases,
   };
 }

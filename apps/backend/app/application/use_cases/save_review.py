@@ -32,13 +32,37 @@ class SaveReview:
                 for row in run["responses"]
                 if row["学生编号"] == student_id and row["材料编号"] in item_ids
             }
+            original = payload.get("original_draft")
+            if original is not None and not isinstance(original, dict):
+                raise ValueError("原草稿格式无效")
+            scoped_allowed = allowed
+            if original is not None:
+                if original.get("run_id") not in {None, run_id}:
+                    raise ValueError("原草稿不属于当前分析运行")
+                if original.get("student_id") not in {None, student_id} or (
+                    original.get("indicator_id") not in {None, indicator_id}
+                ):
+                    raise ValueError("原草稿学生或指标范围无效")
+                if original.get("scope_required") is True:
+                    raise ValueError("原草稿尚未确定测验节点范围")
+                node_id = original.get("node_id")
+                if node_id is not None:
+                    if node_id not in {row["节点编号"] for row in run.get("nodes", [])}:
+                        raise ValueError("原草稿测验节点无效")
+                    scoped_allowed = {
+                        row["记录编号"]
+                        for row in run["responses"]
+                        if row["学生编号"] == student_id
+                        and row["材料编号"] in item_ids
+                        and row["节点编号"] == node_id
+                    }
             cited = payload.get("evidence_record_ids", [])
             if (
                 not isinstance(cited, list)
                 or any(not isinstance(record_id, str) for record_id in cited)
-                or not set(cited).issubset(allowed)
+                or not set(cited).issubset(scoped_allowed)
             ):
-                raise ValueError("复核引用了无效记录")
+                raise ValueError("复核引用了范围外或无效记录")
             draft = RecommendationDraft(
                 student_id=student_id,
                 indicator_id=indicator_id,
@@ -59,15 +83,12 @@ class SaveReview:
                 reason=str(payload.get("reason", "")),
             )
             review.validate_next(history[-1] if history else None)
-            original = payload.get("original_draft")
             if original is not None:
-                if not isinstance(original, dict):
-                    raise ValueError("原草稿格式无效")
                 original_ids = original.get("evidence_record_ids", [])
                 if (
                     not isinstance(original_ids, list)
                     or any(not isinstance(record_id, str) for record_id in original_ids)
-                    or not set(original_ids).issubset(allowed)
+                    or not set(original_ids).issubset(scoped_allowed)
                 ):
                     raise ValueError("原草稿证据引用无效")
             return uow.reviews.append(

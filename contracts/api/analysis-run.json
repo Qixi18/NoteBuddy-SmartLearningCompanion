@@ -1,0 +1,46 @@
+{
+  "run_id": "fixture-run",
+  "created_at": "2026-11-16T00:00:00+00:00",
+  "rule_version": "2",
+  "quality": {
+    "raw_rows": 3,
+    "events": 1,
+    "selected_revisions": 1,
+    "eligible_scored": 1,
+    "excluded_record_ids": [],
+    "finding_counts": {},
+    "findings": [],
+    "record_dispositions": [
+      {"record_id": "R1", "event_id": "E1", "source_file": "作答记录.csv", "source_line": 2, "disposition": "scored"},
+      {"record_id": "R0", "event_id": "E1", "source_file": "作答记录.csv", "source_line": 3, "disposition": "superseded"}
+    ],
+    "disposition_counts": {"scored": 1, "superseded": 1},
+    "raw_status_counts": {"已评分": 2},
+    "event_disposition_counts": {"scored": 1}
+  },
+  "rubric_observations": [
+    {
+      "record_id": "R1",
+      "event_id": "E1",
+      "student_id": "D01",
+      "item_id": "Q001",
+      "node_id": "N01",
+      "state": "valid",
+      "reason": "评分点编号、得分范围及总分校验一致。",
+      "conflicts": [],
+      "points": [{"point_id": "Q001P1", "earned": 1, "maximum": 1}],
+      "total_score": 1,
+      "total_maximum": 1
+    }
+  ],
+  "objectives": [],
+  "items": [],
+  "students": [],
+  "nodes": [],
+  "field_dictionary": [],
+  "source_index": [],
+  "raw_responses": [],
+  "responses": [],
+  "metrics": [],
+  "observations": []
+}

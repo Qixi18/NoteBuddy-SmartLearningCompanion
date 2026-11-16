@@ -12,4 +12,6 @@ def model_draft(
     payload: DraftRequest,
     use_cases: WorkbenchUseCases = Depends(get_use_cases),
 ) -> dict:
-    return use_cases.deepseek_draft.execute(payload.student_id, payload.indicator_id)
+    return use_cases.deepseek_draft.execute(
+        payload.student_id, payload.indicator_id, payload.node_id
+    )
