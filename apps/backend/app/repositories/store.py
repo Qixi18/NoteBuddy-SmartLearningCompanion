@@ -6,17 +6,35 @@ from ..config import settings
 from ..services.task01.source_service import SourceService
 from ..services.task02.import_service import ImportService
 from ..services.task03.review_service import ReviewService
+from ..infrastructure.database.engine import make_engine
+from ..infrastructure.database.session import Database
 from .analysis_run_repository import AnalysisRunRepository
 from .review_repository import ReviewRepository
+from .student_repository import StudentRepository
+from .subject_repository import SubjectRepository
+from .response_repository import ResponseRepository
 
 
 class Store:
     """Wire repositories and use cases while retaining the existing call surface."""
 
-    def __init__(self, root: Path, resources_dir: Path | None = None):
+    def __init__(
+        self,
+        root: Path,
+        resources_dir: Path | None = None,
+        database_url: str | None = None,
+    ):
         self.root = Path(root)
-        self.run_repository = AnalysisRunRepository(self.root)
-        self.review_repository = ReviewRepository(self.root)
+        self.database_url = (
+            database_url
+            or f"sqlite:///{(self.root / 'smart_learning.db').resolve().as_posix()}"
+        )
+        self.database = Database(make_engine(self.database_url))
+        self.run_repository = AnalysisRunRepository(self.root, database=self.database)
+        self.review_repository = ReviewRepository(self.root, database=self.database)
+        self.student_repository = StudentRepository(self.database)
+        self.subject_repository = SubjectRepository(self.database)
+        self.response_repository = ResponseRepository(self.database)
         self.sources = SourceService(resources_dir or settings.resources_dir)
         self.imports = ImportService(self.run_repository, self.sources)
         self.review_service = ReviewService(self.run_repository, self.review_repository)
