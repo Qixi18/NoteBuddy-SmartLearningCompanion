@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 from ...infrastructure.ingestion.csv_reader import read_bundle
-from ...repositories.analysis_run_repository import AnalysisRunRepository
+from ...application.ports.repositories import AnalysisRuns
 from ..analysis import analyze
 from ..task01.source_service import SourceService
 
@@ -13,11 +13,13 @@ from ..task01.source_service import SourceService
 class ImportService:
     def __init__(
         self,
-        runs: AnalysisRunRepository,
+        runs: AnalysisRuns,
         sources: SourceService,
+        uow_factory=None,
     ):
         self.runs = runs
         self.sources = sources
+        self.uow_factory = uow_factory
 
     def import_folder(self, folder: Path) -> dict:
         folder = Path(folder)
@@ -34,9 +36,19 @@ class ImportService:
                 sort_keys=True,
             ).encode()
         ).hexdigest()[:16]
-        if result["run_id"] in set(self.runs.list_run_ids()):
+        runs = self.runs
+        if self.uow_factory is not None:
+            with self.uow_factory(immediate=False) as uow:
+                existing_run_ids = set(uow.runs.list_run_ids())
+        else:
+            existing_run_ids = set(self.runs.list_run_ids())
+        if result["run_id"] in existing_run_ids:
             result["run_id"] = hashlib.sha256(
                 f"{result['run_id']}:{result['created_at']}".encode()
             ).hexdigest()[:16]
-        self.runs.save(result)
+        if self.uow_factory is not None:
+            with self.uow_factory() as uow:
+                uow.runs.save(result)
+        else:
+            runs.save(result)
         return result

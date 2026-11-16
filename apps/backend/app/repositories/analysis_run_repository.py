@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import json
 import hashlib
-import threading
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from ..infrastructure.database.models import (
     AnalysisRunRow,
@@ -21,19 +20,17 @@ from ..infrastructure.database.models import (
     ResponseRow,
     StudentRow,
 )
-from ..infrastructure.database.session import Database
+from .base import SqlAlchemyRepository
 
 
 def _json(value: object) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
-class AnalysisRunRepository:
-    _save_lock = threading.RLock()
-
-    def __init__(self, root=None, *, database: Database):
+class AnalysisRunRepository(SqlAlchemyRepository):
+    def __init__(self, root=None, *, database, session=None):
         self.root = root
-        self.database = database
+        super().__init__(database, session=session)
 
     def save(self, run: dict) -> None:
         self.save_snapshot(_json(run), set_current=True)
@@ -41,7 +38,7 @@ class AnalysisRunRepository:
     def save_snapshot(self, snapshot_text: str, *, set_current: bool = True) -> None:
         run = json.loads(snapshot_text)
         run_id = str(run["run_id"])
-        with self._save_lock, self.database.session() as session, session.begin():
+        with self.session_scope(write=True) as session:
             existing = session.get(AnalysisRunRow, run_id)
             if existing is None:
                 session.add(
@@ -115,7 +112,9 @@ class AnalysisRunRepository:
                 )
         session.flush()
         objective_ids = {
-            str(row.get("指标编号", "")) for row in run.get("objectives", [])
+            str(row.get("指标编号", ""))
+            for row in run.get("objectives", [])
+            if str(row.get("指标编号", ""))
         }
         item_links = []
         for row in run.get("items", []):
@@ -219,7 +218,7 @@ class AnalysisRunRepository:
         return run
 
     def current(self) -> dict:
-        with self.database.session() as session:
+        with self.session_scope() as session:
             state = session.get(AppStateRow, "current_run_id")
             if state is None:
                 raise FileNotFoundError("尚未导入赛事数据")
@@ -231,14 +230,46 @@ class AnalysisRunRepository:
     def load(self, run_id: str) -> dict:
         if not run_id or any(char not in "0123456789abcdef" for char in run_id):
             raise ValueError("无效运行编号")
-        with self.database.session() as session:
-            run = session.get(AnalysisRunRow, run_id)
+        with self.session_scope() as active_session:
+            run = active_session.get(AnalysisRunRow, run_id)
             if run is None:
                 raise FileNotFoundError("分析运行不存在")
             return self.compatibility_projection(run.snapshot_json)
 
+    def load_snapshot(self, run_id: str) -> str:
+        with self.session_scope() as session:
+            row = session.get(AnalysisRunRow, run_id)
+            if row is None:
+                raise FileNotFoundError("分析运行不存在")
+            return row.snapshot_json
+
+    def projection_counts(self, run_id: str) -> dict[str, int]:
+        tables = {
+            "runs": AnalysisRunRow,
+            "classes": ClassRow,
+            "students": StudentRow,
+            "objectives": ObjectiveRow,
+            "items": ItemRow,
+            "item_objectives": ItemObjectiveRow,
+            "nodes": NodeRow,
+            "response_events": ResponseEventRow,
+            "responses": ResponseRow,
+        }
+        with self.session_scope() as session:
+            return {
+                name: int(
+                    session.scalar(
+                        select(func.count())
+                        .select_from(model)
+                        .where(model.run_id == run_id)
+                    )
+                    or 0
+                )
+                for name, model in tables.items()
+            }
+
     def list_run_ids(self) -> list[str]:
-        with self.database.session() as session:
+        with self.session_scope() as session:
             return list(
                 session.scalars(
                     select(AnalysisRunRow.run_id).order_by(AnalysisRunRow.created_at)
@@ -246,7 +277,7 @@ class AnalysisRunRepository:
             )
 
     def set_current(self, run_id: str) -> None:
-        with self.database.session() as session, session.begin():
+        with self.session_scope(write=True) as session:
             if session.get(AnalysisRunRow, run_id) is None:
                 raise ValueError(f"当前运行不存在：{run_id}")
             state = session.get(AppStateRow, "current_run_id")

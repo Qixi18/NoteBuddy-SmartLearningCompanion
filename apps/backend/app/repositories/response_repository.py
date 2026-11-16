@@ -5,45 +5,19 @@ import json
 from sqlalchemy import select
 
 from ..domain.assessment.models import Response
-from ..domain.common.enums import ScoringStatus
 from ..infrastructure.database.models import ResponseEventRow, ResponseRow
-from ..infrastructure.database.session import Database
+from .base import SqlAlchemyRepository
+from ..infrastructure.database.mappers import response_from_row
 
 
-class ResponseRepository:
-    def __init__(self, database: Database):
-        self.database = database
-
-    @staticmethod
-    def _domain(row: ResponseRow) -> Response:
-        value = json.loads(row.data_json)
-        raw_status = str(value.get("评分状态", "异常"))
-        try:
-            status = ScoringStatus(raw_status)
-        except ValueError:
-            status = ScoringStatus.INVALID
-        raw_score = value.get("得分")
-        score = float(raw_score) if raw_score not in (None, "") else None
-        return Response(
-            record_id=str(value.get("记录编号", row.record_id)),
-            event_id=str(value.get("作答事件编号", row.event_key or "")),
-            student_id=str(value.get("学生编号", row.student_id or "")),
-            material_id=str(value.get("材料编号", row.material_id or "")),
-            node_id=str(value.get("节点编号", row.node_id or "")),
-            revision_no=int(value.get("修订版本", 1)),
-            scoring_status=status,
-            score=score,
-            max_score=float(value.get("满分", 1) or 1),
-            work_steps=str(value.get("解答过程", "")),
-            rubric_scores=str(value.get("评分点得分", "")),
-            source_file="作答记录.csv",
-            source_line=row.source_line,
-        )
+class ResponseRepository(SqlAlchemyRepository):
+    def __init__(self, database, *, session=None):
+        super().__init__(database, session=session)
 
     def get_by_id(self, run_id: str, record_id: str) -> Response | None:
-        with self.database.session() as session:
+        with self.session_scope() as session:
             row = session.get(ResponseRow, (run_id, record_id))
-            return self._domain(row) if row else None
+            return response_from_row(row) if row else None
 
     def list_by_student(
         self, run_id: str, student_id: str, *, selected_only: bool = False
@@ -53,12 +27,12 @@ class ResponseRepository:
         )
         if selected_only:
             statement = statement.where(ResponseRow.is_selected.is_(True))
-        with self.database.session() as session:
+        with self.session_scope() as session:
             rows = session.scalars(statement.order_by(ResponseRow.source_line)).all()
             results = []
             for row in rows:
                 try:
-                    results.append(self._domain(row))
+                    results.append(response_from_row(row))
                 except (TypeError, ValueError):
                     # Invalid source rows stay available in the immutable run snapshot.
                     continue
@@ -80,7 +54,7 @@ class ResponseRepository:
             "评分点得分": response.rubric_scores,
             "_source_line": response.source_line,
         }
-        with self.database.session() as session, session.begin():
+        with self.session_scope(write=True) as session:
             if session.get(ResponseEventRow, (run_id, event_key)) is None:
                 session.add(
                     ResponseEventRow(

@@ -29,6 +29,11 @@ def ready_store(path):
     return store
 
 
+def persist_run(store, run):
+    with store.uow_factory() as uow:
+        uow.runs.save(run)
+
+
 def test_domain_response_score_revision_evidence_and_review_rules():
     scored = Response(
         "R1",
@@ -61,6 +66,10 @@ def test_domain_response_score_revision_evidence_and_review_rules():
     assert ResponseRevision("E1", (scored, pending)).unique_highest() == pending
     with pytest.raises(InvalidScore):
         Response("R3", "E3", "S1", "M1", "N1", 1, ScoringStatus.SCORED, 3, 2)
+    with pytest.raises(InvalidScore):
+        Response("R4", "E4", "S1", "M1", "N1", 1, ScoringStatus.SCORED, float("nan"), 2)
+    with pytest.raises(InvalidScore):
+        Response("R5", "E5", "S1", "M1", "N1", 1, ScoringStatus.SCORED, 1, float("inf"))
     with pytest.raises(InvalidEvidence):
         Evidence("S1", "I1", "R1", "M1", "source.csv", 0, 1, 2)
     review = TeacherReview("S1", "I1", ReviewStatus.ACCEPTED, 1)
@@ -74,14 +83,21 @@ def test_domain_response_score_revision_evidence_and_review_rules():
 def test_database_has_normalized_run_scoped_rows_and_enforces_foreign_keys(tmp_path):
     store = ready_store(tmp_path)
     run = analyze(sample_tables(), {})
-    store.run_repository.save(run)
+    persist_run(store, run)
     assert store.run_repository.current()["run_id"] == run["run_id"]
     assert store.student_repository.get_by_id(run["run_id"], "D01").class_id == "C1"
     assert (
         store.subject_repository.get_objective(run["run_id"], "T01I1").topic_id == "T01"
     )
+    item = store.subject_repository.get_assessment_item(run["run_id"], "Q001")
+    assert item is not None and item.max_score == 2 and item.objective_ids == ("T01I1",)
+    materials = store.subject_repository.list_materials_for_objective(
+        run["run_id"], "T01I1"
+    )
+    assert [material.material_id for material in materials] == ["Q001"]
     response = store.response_repository.get_by_id(run["run_id"], "R2")
     assert response is not None and response.ratio == 0.5
+    assert response.source_file == "作答记录.csv" and response.source_line == 3
     assert set(inspect(store.database.engine).get_table_names()) >= {
         "analysis_runs",
         "classes",
@@ -109,14 +125,16 @@ def test_database_has_normalized_run_scoped_rows_and_enforces_foreign_keys(tmp_p
 def test_database_review_history_appends_consecutive_versions(tmp_path):
     store = ready_store(tmp_path)
     run = analyze(sample_tables(), {})
-    store.run_repository.save(run)
+    persist_run(store, run)
     payload = {
         "status": "accepted",
         "recommendation": "继续练习",
         "evidence_record_ids": ["R2"],
     }
-    first = store.review_repository.append(run["run_id"], "D01:T01I1", payload)
-    second = store.review_repository.append(run["run_id"], "D01:T01I1", payload)
+    with store.uow_factory() as uow:
+        first = uow.reviews.append(run["run_id"], "D01:T01I1", payload)
+    with store.uow_factory() as uow:
+        second = uow.reviews.append(run["run_id"], "D01:T01I1", payload)
     assert [item["version"] for item in store.reviews(run["run_id"])["D01:T01I1"]] == [
         1,
         2,
@@ -185,8 +203,8 @@ def test_json_migration_is_idempotent_lossless_and_restores_current(tmp_path):
     assert backup["file_count"] == 3
 
     store = ready_store(tmp_path / "database")
-    first = migrate_json_to_sqlite(data_dir, store)
-    second = migrate_json_to_sqlite(data_dir, store)
+    first = migrate_json_to_sqlite(data_dir, store.uow_factory)
+    second = migrate_json_to_sqlite(data_dir, store.uow_factory)
     assert first["runs"] == 1 and first["reviews"] == 1
     assert second["new_reviews_inserted"] == 0
     assert store.run_repository.current()["observations"] == []

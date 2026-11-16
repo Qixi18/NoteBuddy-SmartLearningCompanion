@@ -10,6 +10,9 @@
 | `services/task02/` | 版本选择、质量校验、指标与观察、导入编排、案例筛选 | HTTP 路由和持久化格式 |
 | `services/task03/` | 规则/DeepSeek 草稿、证据校验、教师复核规则 | HTTP 与文件格式 |
 | `services/shared/export_service.py` | 从分析及复核快照生成成果 ZIP | HTTP 响应发送 |
+| `application/ports/` | Repository、UoW、FileStorage、LLM 的框架无关 Protocol | SQLAlchemy Session/ORM 和具体 adapter |
+| `infrastructure/database/unit_of_work.py` | 绑定单个 Session 并拥有提交、回滚、关闭的 SQLAlchemy UoW | Domain 规则或 HTTP |
+| `infrastructure/files/local_file_storage.py` | 当前 CSV/PDF 读取及 SHA-256 文件访问 adapter | 文件资产数据库或 ZIP 持久化 |
 | `services/analysis.py`、`cases.py`、`recommendations.py`、`exports.py` | 兼容旧导入路径的轻量 re-export | 新业务逻辑 |
 | `domain/` | 框架无关的教育对象、状态和值规则 | HTTP、ORM、文件 I/O 与统计算法编排 |
 | `infrastructure/database/` | SQLAlchemy Engine、Session、ORM 映射和 SQLite 约束 | 教育业务判断与 API 契约 |
@@ -27,4 +30,4 @@ TASK 依赖方向：TASK 01 课程数据 → TASK 02 质量/统计/案例 → TA
 
 ## 持久化
 
-SQLAlchemy Repository 通过 run-scoped 表保存核心对象、分析快照和复核历史；`app_state.current_run_id` 维护当前运行。Repository 不计算统计、不推断教学建议，也不向 API 暴露 ORM。旧 JSON 只由显式迁移工具读取，不作为双写运行时数据源。
+SQLAlchemy Repository 通过 run-scoped 表保存核心对象、分析快照和复核历史；`app_state.current_run_id` 维护当前运行。Repository 不计算统计、不推断教学建议，也不向 API 暴露 ORM。事务由 UoW 拥有；Review 使用同一 SQLite 写事务读取最新版本并追加。旧 JSON 只由显式迁移工具读取，不作为双写运行时数据源。

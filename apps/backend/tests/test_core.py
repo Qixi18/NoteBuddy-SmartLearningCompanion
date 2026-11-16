@@ -19,6 +19,11 @@ def make_store(path: Path) -> Store:
     return store
 
 
+def persist_run(store: Store, run: dict) -> None:
+    with store.uow_factory() as uow:
+        uow.runs.save(run)
+
+
 def sample_tables():
     return {
         "课程要求": [{"主题编号": "T01", "指标编号": "T01I1", "观察指标": "代数式"}],
@@ -195,7 +200,7 @@ def test_non_sample_bundle_import(tmp_path: Path):
 def test_review_and_export(tmp_path: Path):
     run = analyze(sample_tables(), {})
     store = make_store(tmp_path)
-    store.run_repository.save(run)
+    persist_run(store, run)
     baseline = draft(run, "D01", "T01I1")
     assert baseline["evidence_record_ids"] == ["R2"]
     saved = store.save_review(
@@ -228,7 +233,7 @@ def test_concurrent_review_versions_are_unique(tmp_path: Path):
 
     run = analyze(sample_tables(), {})
     store = make_store(tmp_path)
-    store.run_repository.save(run)
+    persist_run(store, run)
     payload = {
         "status": "accepted",
         "diagnosis": "已核对",
@@ -251,9 +256,15 @@ def test_concurrent_run_snapshot_writes_use_independent_temp_files(tmp_path: Pat
     from concurrent.futures import ThreadPoolExecutor
 
     run = analyze(sample_tables(), {})
-    repository = make_store(tmp_path).run_repository
+    store = make_store(tmp_path)
+    repository = store.run_repository
+
+    def persist(_):
+        with store.uow_factory() as uow:
+            uow.runs.save(run)
+
     with ThreadPoolExecutor(max_workers=8) as pool:
-        list(pool.map(lambda _: repository.save(run), range(8)))
+        list(pool.map(persist, range(8)))
     assert repository.current()["run_id"] == run["run_id"]
     assert not list(tmp_path.rglob("*.tmp"))
 

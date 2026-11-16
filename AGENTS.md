@@ -17,6 +17,15 @@
 - 前端网络请求统一经 `apps/web/src/api/client.ts`；TASK 页面分别归入 `features/task01`、`task02`、`task03`，通用控件留在 `components/`。
 - TASK 01 不依赖 TASK 02/03；TASK 02 可读取 TASK 01；TASK 03 可读取 TASK 01/02；禁止循环依赖。
 
+### Phase 02.5 Application 与事务边界
+
+- Repository/UoW/FileStorage/LLM Protocol 放在 `app/application/ports/`；SQLAlchemy 与本地文件、DeepSeek 实现属于 Infrastructure adapter。兼容期的 `app/repositories/` 可继续放 SQLAlchemy 实现。
+- Application 用例只依赖 Ports、Domain 与现有纯业务服务；不得暴露 Session/ORM。单个 UoW 负责提交、回滚和关闭；Repository 不自行提交。
+- Review 的最新版本读取、校验和追加必须在同一个 SQLite 写事务中完成；保留复合唯一约束和有限 busy timeout。不得以进程内锁代替数据库跨进程一致性。
+- 每项变更说明原因、影响模块与兼容风险；只新增真实调用需要的抽象，不建空模块或无用表。每个修改模块需有对应测试。
+- SQLite schema 只通过显式 Alembic 命令升级。JSON 迁移必须分别解析 source/database/backup，扫描异常目录，拒绝未确认的已存在数据库和默认非空数据库；备份源 JSON 且不得删除或修改源文件。
+- 完成后同步 `docs/architecture/`、README（运行/运维变化时）与本文件；记录实际运行的后端、Ruff、前端和迁移/备份验证，不得把未运行项目写成通过。
+
 ## 安全与兼容
 
 - 默认监听 `127.0.0.1`。密钥仅从后端环境读取，日志不得写密钥、完整学生作答或整段模型上下文。

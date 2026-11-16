@@ -1,38 +1,104 @@
-"""应用运行配置。"""
+"""Validated application settings with repository-root path semantics."""
 
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+
+from sqlalchemy.engine import make_url
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+
+
+def resolve_path(value: str | Path, *, base: Path = PROJECT_ROOT) -> Path:
+    """Resolve configured and CLI paths independently of the process CWD."""
+    path = Path(value).expanduser()
+    root = Path(base).expanduser().resolve()
+    return (path if path.is_absolute() else root / path).resolve()
+
+
+def resolve_database_url(value: str, *, base: Path = PROJECT_ROOT) -> str:
+    url = make_url(value)
+    if url.get_backend_name() != "sqlite":
+        raise ValueError("本项目仅支持 SQLite 数据库 URL")
+    if not url.database or url.database == ":memory:":
+        return value
+    database = Path(url.database).expanduser()
+    if not database.is_absolute():
+        url = url.set(
+            database=str(resolve_path(database, base=base)).replace("\\", "/")
+        )
+    return url.render_as_string(hide_password=False)
 
 
 @dataclass(frozen=True)
 class Settings:
-    project_root: Path = Path(__file__).resolve().parents[3]
-    data_dir: Path = Path(
-        os.getenv("SMART_LEARNING_DATA_DIR", str(project_root / "data"))
+    project_root: Path = field(default_factory=lambda: PROJECT_ROOT)
+    data_dir: Path | None = None
+    resources_dir: Path | None = None
+    web_dist_dir: Path | None = None
+    host: str = field(
+        default_factory=lambda: os.getenv("SMART_LEARNING_HOST", "127.0.0.1")
     )
-    resources_dir: Path = Path(
-        os.getenv("SMART_LEARNING_RESOURCES_DIR", str(project_root / "resources"))
+    port: int = field(
+        default_factory=lambda: int(os.getenv("SMART_LEARNING_PORT", "8765"))
     )
-    web_dist_dir: Path = Path(
-        os.getenv(
-            "SMART_LEARNING_WEB_DIST_DIR",
-            str(Path(__file__).resolve().parent / "web" / "dist"),
+    database_url_override: str = field(
+        default_factory=lambda: os.getenv("SMART_LEARNING_DATABASE_URL", "")
+    )
+    backup_dir: Path | None = None
+    deepseek_api_key: str = field(
+        default_factory=lambda: os.getenv("DEEPSEEK_API_KEY", "")
+    )
+    deepseek_model: str = field(
+        default_factory=lambda: os.getenv("DEEPSEEK_MODEL", "deepseek-flash")
+    )
+    deepseek_timeout_seconds: int = field(
+        default_factory=lambda: int(os.getenv("DEEPSEEK_TIMEOUT_SECONDS", "30"))
+    )
+
+    def __post_init__(self) -> None:
+        root = Path(self.project_root).expanduser().resolve()
+        object.__setattr__(self, "project_root", root)
+        if not self.host.strip():
+            raise ValueError("SMART_LEARNING_HOST 不能为空")
+        if not 1 <= self.port <= 65535:
+            raise ValueError("SMART_LEARNING_PORT 必须在 1 到 65535 之间")
+        if not 1 <= self.deepseek_timeout_seconds <= 120:
+            raise ValueError("DEEPSEEK_TIMEOUT_SECONDS 必须在 1 到 120 之间")
+        path_values = {
+            "data_dir": self.data_dir or os.getenv("SMART_LEARNING_DATA_DIR", "data"),
+            "resources_dir": self.resources_dir
+            or os.getenv("SMART_LEARNING_RESOURCES_DIR", "resources"),
+            "web_dist_dir": self.web_dist_dir
+            or os.getenv(
+                "SMART_LEARNING_WEB_DIST_DIR", str(root / "apps/backend/app/web/dist")
+            ),
+        }
+        for name, value in path_values.items():
+            object.__setattr__(self, name, resolve_path(value, base=root))
+        backup = self.backup_dir or os.getenv("SMART_LEARNING_BACKUP_DIR")
+        object.__setattr__(
+            self, "backup_dir", resolve_path(backup, base=root) if backup else None
         )
-    )
-    host: str = os.getenv("SMART_LEARNING_HOST", "127.0.0.1")
-    port: int = int(os.getenv("SMART_LEARNING_PORT", "8765"))
-    database_url_override: str = os.getenv("SMART_LEARNING_DATABASE_URL", "")
-    deepseek_api_key: str = os.getenv("DEEPSEEK_API_KEY", "")
-    deepseek_model: str = os.getenv("DEEPSEEK_MODEL", "deepseek-flash")
+        if self.database_url_override:
+            object.__setattr__(
+                self,
+                "database_url_override",
+                resolve_database_url(self.database_url_override, base=root),
+            )
 
     @property
     def database_url(self) -> str:
         if self.database_url_override:
             return self.database_url_override
-        return f"sqlite:///{(self.data_dir / 'smart_learning.db').resolve().as_posix()}"
+        return f"sqlite:///{(self.project_root / 'data' / 'smart_learning.db').resolve().as_posix()}"
+
+    @property
+    def default_backup_root(self) -> Path:
+        return self.project_root.parent / "_backups" / "smart-learning"
 
 
 settings = Settings()

@@ -1,44 +1,43 @@
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 
-from ..dependencies import get_store
-from ...repositories.store import Store
+from ..dependencies import get_use_cases
+from ...application.use_cases.workbench import WorkbenchUseCases
 from ...schemas.http import (
     AnalysisRunResponse,
     CaseSuggestionResponse,
     DraftResponse,
 )
-from ...services.cases import suggest_cases
-from ...services.recommendations import draft
 
 router = APIRouter()
 
 
 @router.get("/api/run", response_model=AnalysisRunResponse, tags=["analysis"])
-def current_run(store: Store = Depends(get_store)) -> dict:
-    return store.current()
+def current_run(use_cases: WorkbenchUseCases = Depends(get_use_cases)) -> dict:
+    return use_cases.current_run.execute()
 
 
 @router.get(
     "/api/cases", response_model=list[CaseSuggestionResponse], tags=["analysis"]
 )
-def cases(store: Store = Depends(get_store)) -> list[dict]:
-    return suggest_cases(store.current())
+def cases(use_cases: WorkbenchUseCases = Depends(get_use_cases)) -> list[dict]:
+    return use_cases.list_cases.execute()
 
 
 @router.get("/api/draft", response_model=DraftResponse, tags=["recommendations"])
 def rule_draft(
     student: str = Query(min_length=1),
     indicator: str = Query(min_length=1),
-    store: Store = Depends(get_store),
+    use_cases: WorkbenchUseCases = Depends(get_use_cases),
 ) -> dict:
-    return draft(store.current(), student, indicator)
+    return use_cases.rule_draft.execute(student, indicator)
 
 
 @router.get("/api/source", tags=["sources"])
 def source(
-    file: str = Query(min_length=1), store: Store = Depends(get_store)
+    file: str = Query(min_length=1),
+    use_cases: WorkbenchUseCases = Depends(get_use_cases),
 ) -> Response:
     return Response(
-        store.read_source(store.current(), file), media_type="application/pdf"
+        use_cases.read_source_pdf.execute(file), media_type="application/pdf"
     )

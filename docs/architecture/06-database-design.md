@@ -2,7 +2,7 @@
 
 ## 技术与生命周期
 
-SQLite + SQLAlchemy 2.x + Alembic。Domain、ORM 和 Pydantic API schema 分离。数据库 URL 由 `SMART_LEARNING_DATABASE_URL` 配置，默认使用数据目录下 `smart_learning.db`；路径按 URL 编码规则传入，Windows 绝对路径示例：`sqlite:///D:/workspace/project/data/smart_learning.db`。没有环境变量时按 `SMART_LEARNING_DATA_DIR` 定位。
+SQLite + SQLAlchemy 2.x + Alembic。Domain、ORM 和 Pydantic API schema 分离。数据库 URL 由 `SMART_LEARNING_DATABASE_URL` 配置；未设置时固定为仓库根目录 `data/smart_learning.db`，不随 `SMART_LEARNING_DATA_DIR` 改变。相对配置路径以仓库根目录为基准，与进程 CWD 无关。Windows 绝对路径示例：`sqlite:///D:/workspace/project/data/smart_learning.db`。
 
 应用不自动建表或升级 schema。首次启动前在后端目录执行 `python -m app.cli db-upgrade`。SQLite 每个连接执行 `PRAGMA foreign_keys=ON` 和 `PRAGMA busy_timeout=5000`；本阶段未启用 WAL。开发及用户数据各自使用本地文件，不支持多用户高并发写入。
 
@@ -97,6 +97,8 @@ erDiagram
 
 ## 事务及 Repository
 
-`AnalysisRunRepository` 原子保存 run 元信息、规范化投影与当前指针；run ID 已存在且快照不同会拒绝覆盖。导入失败不会切换当前指针。`ReviewService` 先校验学生、目标和允许证据，Repository 再追加新版本。Repository 返回当前服务需要的 dict 兼容投影，不将 ORM 暴露给 API；业务统计仍由 TASK services 负责。
+`AnalysisRunRepository` 原子保存 run 元信息、规范化投影与当前指针；run ID 已存在且快照不同会拒绝覆盖。导入失败不会切换当前指针。`SaveReview` Application Use Case 通过 UoW，在同一写事务中读取运行与历史、校验学生/目标/允许证据并追加新版本。SQLite 在读最新 Review 版本前取得 `BEGIN IMMEDIATE` 写锁；唯一键仍作为最终冲突保护。Repository 返回当前服务需要的 dict 兼容投影，不将 ORM 暴露给 API；业务统计仍由 TASK services 负责。
 
-Repository 文件：`analysis_run_repository.py`、`review_repository.py`；`protocols.py` 声明读写边界，`Store` 装配 SQLAlchemy Database 与服务。schema 初始版本在 `apps/backend/alembic/versions/`。数据库约束、跨连接读写和事务失败用临时 SQLite 测试。
+`SessionFactory` 管理 Session 生命周期，FastAPI shutdown 会 dispose Engine。SQLite 一致性备份使用 SQLite backup API，恢复拒绝覆盖已有目标并校验 integrity、foreign keys、schema revision 与表计数。恢复演练覆盖多个 run 的同名实体、多版本 Review、current pointer、快照 hash，并在恢复库上执行成果 ZIP 导出。Alembic 是正式 schema 初始化和升级入口；应用启动不自动建表/迁移。
+
+Repository 文件：`analysis_run_repository.py`、`review_repository.py` 等保留在兼容目录；接口在 `application/ports/repositories.py` 与 `unit_of_work.py`，SQLAlchemy adapter 经 `infrastructure/database/unit_of_work.py` 注入共享 Session。`Store` 是 CLI/兼容调用的组合根，不承担新的业务事务。Domain/ORM 映射集中于 `infrastructure/database/mappers.py`。schema 初始版本在 `apps/backend/alembic/versions/`。数据库约束、跨连接读写和事务失败用临时 SQLite 测试。

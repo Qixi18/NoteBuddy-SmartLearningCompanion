@@ -1,12 +1,15 @@
 """Resolve allowlisted curriculum and textbook PDF sources."""
 
-import hashlib
 from pathlib import Path
+
+from ...application.ports.file_storage import FileStorage
+from ...infrastructure.files.local_file_storage import LocalFileStorage
 
 
 class SourceService:
-    def __init__(self, resources_dir: Path):
+    def __init__(self, resources_dir: Path, storage: FileStorage | None = None):
         self.resources_dir = Path(resources_dir)
+        self.storage = storage or LocalFileStorage()
 
     def allowed_names(self, run: dict) -> set[str]:
         names = {"课程标准_2022.pdf"}
@@ -27,7 +30,7 @@ class SourceService:
         path = self.resolve(run, name)
         if path is None:
             raise FileNotFoundError("本机来源文件不存在")
-        return path.read_bytes()
+        return self.storage.read_bytes(path)
 
     def fingerprints(self, run: dict) -> dict:
         results = {}
@@ -35,9 +38,8 @@ class SourceService:
             path = self.resolve(run, name)
             if path is None:
                 continue
-            digest = hashlib.sha256()
-            with path.open("rb") as source:
-                for chunk in iter(lambda: source.read(1024 * 1024), b""):
-                    digest.update(chunk)
-            results[name] = {"sha256": digest.hexdigest(), "bytes": path.stat().st_size}
+            results[name] = {
+                "sha256": self.storage.sha256(path),
+                "bytes": path.stat().st_size,
+            }
         return results

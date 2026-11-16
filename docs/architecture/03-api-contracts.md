@@ -23,6 +23,6 @@ API 错误及静态页面/资源错误统一返回包含 `error`、`code`、`req
 {"error":"请求参数无效","code":"VALIDATION_ERROR","request_id":"…"}
 ```
 
-Pydantic 参数校验当前使用 HTTP 422；业务输入错误 400；未找到分析运行 400；DeepSeek 供应方失败统一映射为 502。当前复杂分析响应保留已有字段并使用对象型响应模型，字段级契约后续可随稳定业务 DTO 继续细化。健康、导入、复核、来源、模型失败、统一错误和导出路径均有 TestClient 覆盖。API 路由禁止直接操作文件；导入/复核/来源/导出通过 Store、Repository 和 Service 完成。
+Pydantic 参数校验当前使用 HTTP 422；业务输入错误 400；未找到分析运行 400；DeepSeek 供应方失败统一映射为 502。Review 唯一键冲突返回 409 `REVIEW_VERSION_CONFLICT`，SQLite busy/locked 返回 503 `DATABASE_BUSY`，均不回传数据库异常参数。健康和安全错误 envelope 的共享 JSON fixture 由 pytest 与 Vitest 同时校验。当前复杂分析响应保留已有字段并使用对象型响应模型，字段级契约后续可随稳定业务 DTO 继续细化。健康、导入、复核、来源、模型失败、并发数据库错误、统一错误和导出路径均有 TestClient 覆盖。所有 API 路由经 Application Use Cases 访问业务能力；路由不直接依赖 Store、Session、文件系统或模型 HTTP 客户端。
 
 `/api/subject/*`、`/api/analysis/*`、`/api/teaching/*` 是未来扩展命名建议，不是当前已实现接口。

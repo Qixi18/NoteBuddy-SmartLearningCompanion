@@ -6,6 +6,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from app.api.app import create_app
 from app.config import settings
@@ -19,7 +20,8 @@ def client_for(tmp_path, config=None):
     run = analyze(sample_tables(), {})
     store = Store(tmp_path)
     store.database.create_schema_for_tests()
-    store.run_repository.save(run)
+    with store.uow_factory() as uow:
+        uow.runs.save(run)
     return TestClient(create_app(store, config or settings))
 
 
@@ -78,6 +80,16 @@ def test_api_not_found_uses_common_error_contract(tmp_path):
     assert response.status_code == 404
     assert response.json()["code"] == "NOT_FOUND"
     assert response.json()["request_id"]
+
+
+def test_application_lifespan_disposes_engine_on_shutdown(tmp_path, monkeypatch):
+    store = Store(tmp_path)
+    store.database.create_schema_for_tests()
+    disposed = []
+    monkeypatch.setattr(store.database, "dispose", lambda: disposed.append(True))
+    with TestClient(create_app(store)) as client:
+        assert client.get("/api/health").status_code == 200
+    assert disposed == [True]
 
 
 def test_http_import_through_review_and_export(tmp_path: Path):
@@ -225,6 +237,53 @@ def test_review_rejects_unhashable_original_draft_evidence(tmp_path: Path):
     assert response.json()["error"] == "原草稿证据引用无效"
 
 
+def test_database_review_conflict_and_busy_errors_are_safe(tmp_path: Path):
+    from app.api.dependencies import get_use_cases
+
+    store = Store(tmp_path)
+    store.database.create_schema_for_tests()
+    with store.uow_factory() as uow:
+        uow.runs.save(analyze(sample_tables(), {}))
+    app = create_app(store)
+
+    class Failure:
+        error = IntegrityError(
+            "insert",
+            {},
+            RuntimeError("UNIQUE constraint failed: teacher_reviews.version"),
+        )
+
+        def execute(self, *_args):
+            raise self.error
+
+    original_use_cases = app.state.use_cases
+
+    class UseCases:
+        current_run = original_use_cases.current_run
+        save_review = Failure()
+
+    app.dependency_overrides[get_use_cases] = lambda: UseCases()
+    client = TestClient(app)
+    body = {"student_id": "D01", "indicator_id": "T01I1", "status": "accepted"}
+    conflict = client.post("/api/review", json=body)
+    assert conflict.status_code == 409
+    assert conflict.json()["code"] == "REVIEW_VERSION_CONFLICT"
+    assert "private database detail" not in conflict.text
+
+    UseCases.save_review = type(
+        "Busy",
+        (),
+        {
+            "execute": lambda self, *_args: (_ for _ in ()).throw(
+                OperationalError("write", {}, RuntimeError("database is locked"))
+            )
+        },
+    )()
+    busy = client.post("/api/review", json=body)
+    assert busy.status_code == 503
+    assert busy.json()["code"] == "DATABASE_BUSY"
+
+
 def test_source_route_enforces_allowlist_and_reports_missing_files(tmp_path: Path):
     resources = tmp_path / "resources"
     resources.mkdir()
@@ -237,7 +296,8 @@ def test_source_route_enforces_allowlist_and_reports_missing_files(tmp_path: Pat
     state = tmp_path / "state"
     store = Store(state, resources)
     store.database.create_schema_for_tests()
-    store.run_repository.save(run)
+    with store.uow_factory() as uow:
+        uow.runs.save(run)
     client = TestClient(create_app(store))
 
     allowed = client.get("/api/source", params={"file": "allowed.pdf"})

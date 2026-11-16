@@ -7,7 +7,8 @@ import os
 import re
 
 from ...config import settings
-from ...infrastructure.llm.deepseek_client import DeepSeekClientError, complete
+from ...application.ports.llm import LLMClient
+from ...infrastructure.llm.deepseek_client import DeepSeekAdapter, DeepSeekClientError
 
 
 def _evidence(
@@ -103,6 +104,7 @@ def deepseek_draft(
     indicator_id: str,
     api_key: str | None = None,
     model: str | None = None,
+    client: LLMClient | None = None,
 ) -> dict:
     baseline = draft(run, student_id, indicator_id)
     key = (
@@ -110,7 +112,7 @@ def deepseek_draft(
         if api_key is not None
         else settings.deepseek_api_key or os.getenv("DEEPSEEK_API_KEY", "")
     )
-    if not key:
+    if not key and client is None:
         raise ValueError("未配置 DEEPSEEK_API_KEY")
     selected_model = model or os.getenv("DEEPSEEK_MODEL", settings.deepseek_model)
     metric, records = _evidence(run, student_id, indicator_id)
@@ -150,7 +152,7 @@ def deepseek_draft(
             },
         ],
     }
-    output = complete(body, key, timeout=30)
+    output = (client or DeepSeekAdapter(key, timeout=30)).complete(body)
     choices = output.get("choices")
     if (
         not isinstance(choices, list)

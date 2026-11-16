@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from math import isfinite
 
 from ..common.exceptions import DomainError
 
@@ -26,7 +27,11 @@ class AssessmentItem:
     source_refs: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        if not self.item_id.strip() or self.max_score <= 0:
+        if (
+            not self.item_id.strip()
+            or not isfinite(self.max_score)
+            or self.max_score <= 0
+        ):
             raise DomainError("题目编号不能为空且满分必须大于零")
 
 

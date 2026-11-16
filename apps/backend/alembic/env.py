@@ -34,17 +34,21 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     connectable = make_engine(database_url)
-    with connectable.connect() as connection:
-        if connection.dialect.name == "sqlite":
-            connection.exec_driver_sql("PRAGMA foreign_keys=ON")
-            connection.exec_driver_sql("PRAGMA busy_timeout=5000")
-        context.configure(
-            connection=connection, target_metadata=target_metadata, render_as_batch=True
-        )
-        with context.begin_transaction():
-            context.run_migrations()
-        connection.commit()
-    connectable.dispose()
+    try:
+        with connectable.connect() as connection:
+            if connection.dialect.name == "sqlite":
+                connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+                connection.exec_driver_sql("PRAGMA busy_timeout=5000")
+            context.configure(
+                connection=connection,
+                target_metadata=target_metadata,
+                render_as_batch=True,
+            )
+            with context.begin_transaction():
+                context.run_migrations()
+            connection.commit()
+    finally:
+        connectable.dispose()
 
 
 if context.is_offline_mode():

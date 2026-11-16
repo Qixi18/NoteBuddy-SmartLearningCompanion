@@ -1,19 +1,16 @@
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 
-from ..dependencies import get_store
-from ...repositories.store import Store
-from ...services.exports import package
+from ..dependencies import get_use_cases
+from ...application.use_cases.workbench import WorkbenchUseCases
 
 router = APIRouter()
 
 
 @router.get("/api/export", tags=["exports"])
 def export(
-    cases: str = Query(default=""), store: Store = Depends(get_store)
+    cases: str = Query(default=""),
+    use_cases: WorkbenchUseCases = Depends(get_use_cases),
 ) -> Response:
-    run = store.current()
-    payload = package(
-        run, store.reviews(run["run_id"]), cases.split(",") if cases else []
-    )
+    payload = use_cases.export_package.execute(cases.split(",") if cases else [])
     return Response(payload, media_type="application/zip")

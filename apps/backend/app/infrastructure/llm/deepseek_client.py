@@ -3,6 +3,8 @@
 import json
 import urllib.request
 
+from ...application.ports.llm import LLMClient
+
 
 class DeepSeekClientError(RuntimeError):
     """Transport or provider response failure safe to expose as a category."""
@@ -25,3 +27,14 @@ def complete(body: dict, api_key: str, timeout: int = 30) -> dict:
     if not isinstance(result, dict):
         raise DeepSeekClientError("invalid response")
     return result
+
+
+class DeepSeekAdapter(LLMClient):
+    """Configured implementation of the single structured completion port."""
+
+    def __init__(self, api_key: str, timeout: int = 30):
+        self.api_key = api_key
+        self.timeout = timeout
+
+    def complete(self, body: dict) -> dict:
+        return complete(body, self.api_key, timeout=self.timeout)

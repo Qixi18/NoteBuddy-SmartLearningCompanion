@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import logging
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
+from sqlalchemy.exc import IntegrityError, OperationalError
 from starlette.exceptions import HTTPException
 
 from ..config import Settings, settings
@@ -23,10 +25,20 @@ logger = logging.getLogger("smart_learning.api")
 
 def create_app(store: Store | None = None, config: Settings = settings) -> FastAPI:
     configure_logging()
-    application = FastAPI(title="智慧学伴本地 API", version="0.1.0")
+
+    @asynccontextmanager
+    async def lifespan(application: FastAPI):
+        try:
+            yield
+        finally:
+            application.state.store.database.dispose()
+
+    application = FastAPI(title="智慧学伴本地 API", version="0.1.0", lifespan=lifespan)
     application.state.store = store or Store(
-        config.data_dir, config.resources_dir, config.database_url
+        config.data_dir, config.resources_dir, config.database_url, config=config
     )
+    application.state.store.bind_config(config)
+    application.state.use_cases = application.state.store.use_cases
     application.state.settings = config
 
     @application.middleware("http")
@@ -78,6 +90,37 @@ def create_app(store: Store | None = None, config: Settings = settings) -> FastA
             extra={"request_id": request.state.request_id},
         )
         return error(request, 502, "模型服务调用失败", "MODEL_SERVICE_ERROR")
+
+    @application.exception_handler(IntegrityError)
+    async def integrity_error(request: Request, exc: IntegrityError) -> JSONResponse:
+        # Keep database details/parameters out of the public contract and logs.
+        message = str(getattr(exc, "orig", "")).lower()
+        is_unique_violation = (
+            "unique constraint" in message or "duplicate key" in message
+        )
+        if (
+            request.url.path == "/api/review"
+            and is_unique_violation
+            and "teacher_reviews" in message
+        ):
+            return error(
+                request,
+                409,
+                "复核版本发生冲突，请刷新历史后重试",
+                "REVIEW_VERSION_CONFLICT",
+            )
+        return error(request, 409, "数据冲突", "DATA_CONFLICT")
+
+    @application.exception_handler(OperationalError)
+    async def operational_error(
+        request: Request, exc: OperationalError
+    ) -> JSONResponse:
+        if "locked" in str(exc.orig).lower() or "busy" in str(exc.orig).lower():
+            return error(request, 503, "数据库正忙，请稍后重试", "DATABASE_BUSY")
+        logger.error(
+            "database operation failed", extra={"request_id": request.state.request_id}
+        )
+        return error(request, 500, "数据库操作失败", "DATABASE_ERROR")
 
     @application.exception_handler(Exception)
     async def unexpected_error(request: Request, exc: Exception) -> JSONResponse:

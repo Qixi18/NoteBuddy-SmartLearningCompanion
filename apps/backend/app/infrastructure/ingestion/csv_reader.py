@@ -7,6 +7,9 @@ import hashlib
 import io
 from pathlib import Path
 
+from ...application.ports.file_storage import FileStorage
+from ..files.local_file_storage import LocalFileStorage
+
 TABLES = {
     "课程要求": ["主题编号", "指标编号", "观察指标"],
     "题目与材料": ["材料编号", "主题编号", "指标编号", "满分"],
@@ -28,14 +31,15 @@ TABLES = {
 }
 
 
-def read_bundle(folder: Path) -> tuple[dict, dict]:
+def read_bundle(folder: Path, storage: FileStorage | None = None) -> tuple[dict, dict]:
     folder = Path(folder)
+    storage = storage or LocalFileStorage()
     tables, files = {}, {}
     for name, required in TABLES.items():
         path = folder / f"{name}.csv"
         if not path.is_file():
             raise ValueError(f"缺少文件：{path}")
-        raw = path.read_bytes()
+        raw = storage.read_bytes(path)
         try:
             text = raw.decode("utf-8-sig")
         except UnicodeDecodeError as exc:

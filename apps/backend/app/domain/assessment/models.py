@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from math import isfinite
 
 from ..common.enums import ScoringStatus
 from ..common.exceptions import DomainError, InvalidScore
@@ -33,8 +34,10 @@ class Response:
             raise DomainError("作答记录标识不能为空")
         if self.revision_no < 1:
             raise DomainError("修订版本必须为正整数")
-        if self.max_score <= 0:
+        if not isfinite(self.max_score) or self.max_score <= 0:
             raise InvalidScore("满分必须大于零")
+        if self.score is not None and not isfinite(self.score):
+            raise InvalidScore("得分必须是有限数值")
         if self.scoring_status == ScoringStatus.SCORED:
             if self.score is None or self.score < 0 or self.score > self.max_score:
                 raise InvalidScore("已评分记录得分必须在 0 到满分之间")
@@ -76,7 +79,13 @@ class Metric:
     record_ids: tuple[str, ...]
 
     def __post_init__(self) -> None:
-        if self.maximum < 0 or self.count < 0 or self.score < 0:
+        if (
+            not isfinite(self.score)
+            or not isfinite(self.maximum)
+            or self.maximum < 0
+            or self.count < 0
+            or self.score < 0
+        ):
             raise DomainError("指标值和计数不得为负")
         if self.score > self.maximum:
             raise DomainError("指标得分不得超过总分")

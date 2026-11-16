@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from math import isfinite
 
 from ..common.enums import ReviewStatus
 from ..common.exceptions import InvalidEvidence, InvalidReview
@@ -26,7 +27,12 @@ class Evidence:
             )
         ):
             raise InvalidEvidence("Evidence 必须可追溯到学生、目标、记录及来源")
-        if self.source_line < 1 or self.max_score <= 0:
+        if (
+            self.source_line < 1
+            or not isfinite(self.max_score)
+            or self.max_score <= 0
+            or (self.score is not None and not isfinite(self.score))
+        ):
             raise InvalidEvidence("Evidence 来源行号或满分无效")
 
 
@@ -74,6 +80,13 @@ class TeacherReview:
     def __post_init__(self) -> None:
         if not self.student_id or not self.indicator_id or self.version < 1:
             raise InvalidReview("复核主体和正整数版本不能为空")
+        if self.status not in {
+            "accepted",
+            "edited",
+            "rejected",
+            "needs_observation",
+        }:
+            raise InvalidReview("建议草稿状态无效")
         if self.status == ReviewStatus.EDITED and not self.recommendation.strip():
             raise InvalidReview("修改后的建议不能为空")
 
