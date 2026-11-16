@@ -1,0 +1,1 @@
+"""Teaching support domain."""

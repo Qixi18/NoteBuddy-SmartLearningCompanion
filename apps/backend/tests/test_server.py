@@ -17,13 +17,10 @@ from test_core import sample_tables
 
 def client_for(tmp_path, config=None):
     run = analyze(sample_tables(), {})
-    folder = tmp_path / run["run_id"]
-    folder.mkdir()
-    (folder / "analysis.json").write_text(
-        json.dumps(run, ensure_ascii=False), encoding="utf-8"
-    )
-    (tmp_path / "current.txt").write_text(run["run_id"], encoding="utf-8")
-    return TestClient(create_app(Store(tmp_path), config or settings))
+    store = Store(tmp_path)
+    store.database.create_schema_for_tests()
+    store.run_repository.save(run)
+    return TestClient(create_app(store, config or settings))
 
 
 def test_http_review_to_export(tmp_path):
@@ -99,7 +96,9 @@ def test_http_import_through_review_and_export(tmp_path: Path):
             writer.writeheader()
             writer.writerows(rows)
 
-    client = TestClient(create_app(Store(tmp_path / "state")))
+    store = Store(tmp_path / "state")
+    store.database.create_schema_for_tests()
+    client = TestClient(create_app(store))
     imported = client.post("/api/import", json={"folder": str(source)})
     assert imported.status_code == 200
     run = client.get("/api/run").json()
@@ -236,8 +235,10 @@ def test_source_route_enforces_allowlist_and_reports_missing_files(tmp_path: Pat
         "missing.pdf",
     ]
     state = tmp_path / "state"
-    Store(state, resources).run_repository.save(run)
-    client = TestClient(create_app(Store(state, resources)))
+    store = Store(state, resources)
+    store.database.create_schema_for_tests()
+    store.run_repository.save(run)
+    client = TestClient(create_app(store))
 
     allowed = client.get("/api/source", params={"file": "allowed.pdf"})
     assert allowed.status_code == 200
@@ -251,7 +252,9 @@ def test_source_route_enforces_allowlist_and_reports_missing_files(tmp_path: Pat
 
 def test_static_asset_errors_use_common_error_contract(tmp_path: Path):
     config = replace(settings, web_dist_dir=tmp_path / "empty-dist")
-    client = TestClient(create_app(Store(tmp_path / "state"), config))
+    store = Store(tmp_path / "state")
+    store.database.create_schema_for_tests()
+    client = TestClient(create_app(store, config))
     response = client.get("/")
     assert response.status_code == 503
     assert response.json()["code"] == "WEB_ASSETS_UNAVAILABLE"

@@ -24,7 +24,9 @@ logger = logging.getLogger("smart_learning.api")
 def create_app(store: Store | None = None, config: Settings = settings) -> FastAPI:
     configure_logging()
     application = FastAPI(title="智慧学伴本地 API", version="0.1.0")
-    application.state.store = store or Store(config.data_dir, config.resources_dir)
+    application.state.store = store or Store(
+        config.data_dir, config.resources_dir, config.database_url
+    )
     application.state.settings = config
 
     @application.middleware("http")

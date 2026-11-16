@@ -34,5 +34,9 @@ class ImportService:
                 sort_keys=True,
             ).encode()
         ).hexdigest()[:16]
+        if result["run_id"] in set(self.runs.list_run_ids()):
+            result["run_id"] = hashlib.sha256(
+                f"{result['run_id']}:{result['created_at']}".encode()
+            ).hexdigest()[:16]
         self.runs.save(result)
         return result

@@ -2,6 +2,8 @@
 
 from ...repositories.analysis_run_repository import AnalysisRunRepository
 from ...repositories.review_repository import ReviewRepository
+from ...domain.common.enums import ReviewStatus
+from ...domain.teaching.models import RecommendationDraft, TeacherReview
 
 
 class ReviewService:
@@ -17,18 +19,10 @@ class ReviewService:
             raise ValueError("学生编号不存在")
         if indicator_id not in {row["指标编号"] for row in run["objectives"]}:
             raise ValueError("指标编号不存在")
-        if payload.get("status") not in {
-            "accepted",
-            "edited",
-            "rejected",
-            "needs_observation",
-        }:
+        try:
+            status = ReviewStatus(payload.get("status"))
+        except ValueError:
             raise ValueError("复核状态无效")
-        if (
-            payload["status"] == "edited"
-            and not str(payload.get("recommendation", "")).strip()
-        ):
-            raise ValueError("修改后的建议不能为空")
 
         item_ids = {
             row["材料编号"] for row in run["items"] if row["指标编号"] == indicator_id
@@ -45,6 +39,26 @@ class ReviewService:
             or not set(cited).issubset(allowed)
         ):
             raise ValueError("复核引用了无效记录")
+        draft = RecommendationDraft(
+            student_id=student_id,
+            indicator_id=indicator_id,
+            diagnosis=str(payload.get("diagnosis", "")),
+            recommendation=str(payload.get("recommendation", "")),
+            material_ids=tuple(sorted(item_ids)),
+            evidence_record_ids=tuple(cited),
+        )
+        draft.validate_evidence(allowed)
+        history = self.reviews.list_domain(run_id, student_id, indicator_id)
+        review = TeacherReview(
+            student_id=student_id,
+            indicator_id=indicator_id,
+            status=status,
+            version=len(history) + 1,
+            recommendation=str(payload.get("recommendation", "")),
+            evidence_record_ids=tuple(cited),
+            reason=str(payload.get("reason", "")),
+        )
+        review.validate_next(history[-1] if history else None)
         original = payload.get("original_draft")
         if original is not None:
             if not isinstance(original, dict):
@@ -62,7 +76,7 @@ class ReviewService:
             run_id,
             key,
             {
-                "status": payload["status"],
+                "status": status.value,
                 "diagnosis": str(payload.get("diagnosis", "")),
                 "recommendation": str(payload.get("recommendation", "")),
                 "adjustment_condition": str(payload.get("adjustment_condition", "")),

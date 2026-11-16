@@ -13,6 +13,12 @@ from app.repositories.store import Store
 from app.services.cases import suggest_cases
 
 
+def make_store(path: Path) -> Store:
+    store = Store(path)
+    store.database.create_schema_for_tests()
+    return store
+
+
 def sample_tables():
     return {
         "课程要求": [{"主题编号": "T01", "指标编号": "T01I1", "观察指标": "代数式"}],
@@ -174,25 +180,22 @@ def test_non_sample_bundle_import(tmp_path: Path):
             writer = csv.DictWriter(file, fieldnames=headers, extrasaction="ignore")
             writer.writeheader()
             writer.writerows(rows)
-    run = Store(tmp_path / "state").import_folder(source)
+    store = make_store(tmp_path / "state")
+    run = store.import_folder(source)
     assert run["quality"]["raw_rows"] == 4
     assert len(run["students"]) == 3
     assert len(run["objectives"]) == 1
     assert run["quality"]["eligible_scored"] == 1
-    assert (tmp_path / "state" / "current.txt").read_text(encoding="utf-8") == run[
-        "run_id"
-    ]
-    assert not list((tmp_path / "state" / run["run_id"]).glob("*.tmp"))
+    assert store.run_repository.current()["run_id"] == run["run_id"]
+    repeated = store.import_folder(source)
+    assert repeated["run_id"] != run["run_id"]
+    assert len(store.run_repository.list_run_ids()) == 2
 
 
 def test_review_and_export(tmp_path: Path):
     run = analyze(sample_tables(), {})
-    store = Store(tmp_path)
-    path = tmp_path / run["run_id"]
-    path.mkdir()
-    (path / "analysis.json").write_text(
-        json.dumps(run, ensure_ascii=False), encoding="utf-8"
-    )
+    store = make_store(tmp_path)
+    store.run_repository.save(run)
     baseline = draft(run, "D01", "T01I1")
     assert baseline["evidence_record_ids"] == ["R2"]
     saved = store.save_review(
@@ -224,12 +227,8 @@ def test_concurrent_review_versions_are_unique(tmp_path: Path):
     from concurrent.futures import ThreadPoolExecutor
 
     run = analyze(sample_tables(), {})
-    store = Store(tmp_path)
-    folder = tmp_path / run["run_id"]
-    folder.mkdir()
-    (folder / "analysis.json").write_text(
-        json.dumps(run, ensure_ascii=False), encoding="utf-8"
-    )
+    store = make_store(tmp_path)
+    store.run_repository.save(run)
     payload = {
         "status": "accepted",
         "diagnosis": "已核对",
@@ -251,10 +250,8 @@ def test_concurrent_review_versions_are_unique(tmp_path: Path):
 def test_concurrent_run_snapshot_writes_use_independent_temp_files(tmp_path: Path):
     from concurrent.futures import ThreadPoolExecutor
 
-    from app.repositories.analysis_run_repository import AnalysisRunRepository
-
     run = analyze(sample_tables(), {})
-    repository = AnalysisRunRepository(tmp_path)
+    repository = make_store(tmp_path).run_repository
     with ThreadPoolExecutor(max_workers=8) as pool:
         list(pool.map(lambda _: repository.save(run), range(8)))
     assert repository.current()["run_id"] == run["run_id"]

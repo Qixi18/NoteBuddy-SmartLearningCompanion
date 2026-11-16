@@ -4,7 +4,7 @@
 
 ## 技术与架构
 
-- 后端：Python 3.12+、FastAPI、Pydantic、Uvicorn；JSON 本地存储。
+- 后端：Python 3.12+、FastAPI、Pydantic、SQLAlchemy 2.x、Alembic、Uvicorn；SQLite 本地存储。
 - 前端：React 19、TypeScript、Vite。
 - 架构：本地单用户模块化单体，默认只监听 `127.0.0.1`。
 - 当前能力：六类 CSV 导入、版本与质量检查、统计与观察、三类案例建议、规则/可选 DeepSeek 草稿、教师复核历史、PDF 来源 allowlist、ZIP 导出。
@@ -29,6 +29,8 @@ Pop-Location
 $env:SMART_LEARNING_HOST = "127.0.0.1"
 $env:SMART_LEARNING_PORT = "8765"
 $env:SMART_LEARNING_DATA_DIR = (Join-Path (Get-Location) "data")
+# 可选；不设置时按 SMART_LEARNING_DATA_DIR 自动定位 SQLite 文件。
+# $env:SMART_LEARNING_DATABASE_URL = "sqlite:///D:/workspace/project/data/smart_learning.db"
 $env:SMART_LEARNING_RESOURCES_DIR = (Join-Path (Get-Location) "resources")
 # 可选；仅启用模型草稿时配置。不要提交密钥。
 $env:DEEPSEEK_API_KEY = ""
@@ -39,6 +41,7 @@ $env:DEEPSEEK_MODEL = "deepseek-flash"
 
 ```powershell
 Set-Location apps/backend
+python -m app.cli db-upgrade
 python -m app.main
 ```
 
@@ -51,6 +54,13 @@ npm run dev
 
 浏览器地址由 Vite 显示，API `/api` 请求代理到 `http://127.0.0.1:8765`。如需调整代理，可在启动 Vite 前设置 `SMART_LEARNING_API_TARGET`。不使用 Vite 时，先在 `apps/web` 执行 `npm run build`，再运行后端；通过 `http://localhost:8765` 访问同源前端。
 
+首次启动先执行 Alembic schema 升级。旧版 JSON 用户应先备份再显式运行迁移命令；命令会在仓库外创建并校验备份：
+
+```powershell
+Set-Location apps/backend
+python -m app.cli migrate-json-to-sqlite
+```
+
 命令行导入和读取摘要：
 
 ```powershell
@@ -59,7 +69,7 @@ python -m app.cli import "D:\path\to\模拟学情数据"
 python -m app.cli summary
 ```
 
-运行数据保存在 `data/<run_id>/`，不会覆盖原始 CSV。复核版本独立追加保存。导入成功后当前运行指针才会更新。
+数据库默认位于 `data/smart_learning.db`。分析快照、学生/目标/材料/节点/作答投影、当前运行指针和追加式复核历史保存在 SQLite；旧 JSON 保持原样用于备份与校验。导入成功后当前运行指针才会更新。
 
 ## 可选 DeepSeek
 
@@ -78,4 +88,4 @@ npm run test
 Pop-Location
 ```
 
-GitHub Actions 对 pull request 和 `main` 分支运行相同检查。配置说明见 [架构文档](docs/architecture/00-system-overview.md)、[API 契约](docs/architecture/03-api-contracts.md)、[第一阶段实施计划](docs/development/phase-01-foundation-plan.md) 与 [阶段报告](docs/development/phase-01-implementation-report.md)。
+本项目不使用 GitHub Actions；请在本地运行上述测试与构建命令。配置说明见 [系统总览](docs/architecture/00-system-overview.md)、[Domain 模型](docs/architecture/05-domain-models.md)、[数据库设计](docs/architecture/06-database-design.md)、[JSON 迁移计划](docs/architecture/07-json-migration-plan.md) 与 [API 契约](docs/architecture/03-api-contracts.md)。

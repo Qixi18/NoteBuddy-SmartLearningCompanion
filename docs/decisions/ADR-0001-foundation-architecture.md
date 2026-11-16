@@ -2,6 +2,7 @@
 
 - 状态：Accepted for phase 01
 - 日期：2026-11-16
+- 后续：JSON 持久化及 CI 决定已由 [ADR-0002](ADR-0002-domain-sqlite-local-workflow.md) 取代；本文件记录第一阶段当时选择。
 
 ## 背景
 

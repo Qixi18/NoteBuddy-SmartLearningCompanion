@@ -11,8 +11,10 @@
 | `services/task03/` | 规则/DeepSeek 草稿、证据校验、教师复核规则 | HTTP 与文件格式 |
 | `services/shared/export_service.py` | 从分析及复核快照生成成果 ZIP | HTTP 响应发送 |
 | `services/analysis.py`、`cases.py`、`recommendations.py`、`exports.py` | 兼容旧导入路径的轻量 re-export | 新业务逻辑 |
-| `repositories/analysis_run_repository.py` | 保存/读取 JSON 快照及当前指针 | 质量分析或建议生成 |
-| `repositories/review_repository.py` | 追加复核版本、原子替换历史文件 | 业务校验、HTTP 或 ZIP 编排 |
+| `domain/` | 框架无关的教育对象、状态和值规则 | HTTP、ORM、文件 I/O 与统计算法编排 |
+| `infrastructure/database/` | SQLAlchemy Engine、Session、ORM 映射和 SQLite 约束 | 教育业务判断与 API 契约 |
+| `repositories/analysis_run_repository.py` | 保存不可变运行快照、关系投影与 current pointer | 质量分析或建议生成 |
+| `repositories/review_repository.py` | 追加式复核历史及版本读取 | 证据业务校验、HTTP 或 ZIP 编排 |
 | `infrastructure/ingestion/csv_reader.py` | 六类 CSV 编码、表头、行号和哈希读取 | 指标计算 |
 | `infrastructure/llm/deepseek_client.py` | DeepSeek HTTP 请求与提供方响应读取 | 提示策略、教学判断 |
 | `repositories/store.py` | 兼容门面，组织导入服务与两个 Repository | 长期新增持久化职责 |
@@ -25,4 +27,4 @@ TASK 依赖方向：TASK 01 课程数据 → TASK 02 质量/统计/案例 → TA
 
 ## 持久化
 
-AnalysisRunRepository 处理 `analysis.json` 与 `current.txt`；ReviewRepository 单独追加 `reviews.json` 版本。写入用临时文件再替换。Repository 不计算统计、不推断教学建议。文件存储适用于当前离线单用户范围。
+SQLAlchemy Repository 通过 run-scoped 表保存核心对象、分析快照和复核历史；`app_state.current_run_id` 维护当前运行。Repository 不计算统计、不推断教学建议，也不向 API 暴露 ORM。旧 JSON 只由显式迁移工具读取，不作为双写运行时数据源。
