@@ -1,6 +1,6 @@
-import type { AnalysisRun } from '../api/types';
-import { MetricBar } from '../components/MetricBar';
-import { Panel } from '../components/Panel';
+import type { AnalysisRun } from '../../../api/types';
+import { MetricBar } from '../../../components/MetricBar';
+import { Panel } from '../../../components/Panel';
 export function ClassPanel({ run }: { run: AnalysisRun }) {
   const classes = run.metrics.filter(m => m.kind === 'class');
   const byIndicator = run.metrics.filter(m => m.kind === 'class_indicator');

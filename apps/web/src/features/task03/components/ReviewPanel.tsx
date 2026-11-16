@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { learningApi, isReviewStatus } from '../api/client';
-import type { Draft, Review, ReviewStatus } from '../api/types';
-import { Panel } from '../components/Panel';
+import { learningApi, isReviewStatus } from '../../../api/client';
+import type { Draft, Review, ReviewStatus } from '../../../api/types';
+import { Panel } from '../../../components/Panel';
 type ReviewFields = { status: ReviewStatus; diagnosis: string; recommendation: string; adjustment_condition: string; reason: string };
 export function ReviewPanel({ student, indicator, review, draft, onDraft, onSave }: { student: string; indicator: string; review?: Review; draft: Draft | null; onDraft: (provider: 'rule' | 'deepseek') => Promise<void>; onSave: (payload: ReviewFields) => Promise<void> }) {
   const [fields, setFields] = useState<ReviewFields>({ status: 'accepted', diagnosis: '', recommendation: '', adjustment_condition: '', reason: '' });

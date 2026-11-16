@@ -1,6 +1,6 @@
-import type { AnalysisRun } from '../api/types';
-import { learningApi } from '../api/client';
-import { Panel } from '../components/Panel';
+import type { AnalysisRun } from '../../../api/types';
+import { learningApi } from '../../../api/client';
+import { Panel } from '../../../components/Panel';
 export function ObjectivesPanel({ run }: { run: AnalysisRun }) {
   return <Panel title="学习要求">{run.objectives.map(objective => {
     const source = run.source_index.find(item => item.indicator_id === objective['指标编号']);
