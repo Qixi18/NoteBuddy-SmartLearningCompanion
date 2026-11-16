@@ -1,5 +1,5 @@
-import type { AnalysisRun } from '../api/types';
-import { Panel } from '../components/Panel';
+import type { AnalysisRun } from '../../../api/types';
+import { Panel } from '../../../components/Panel';
 export function QualityPanel({ run }: { run: AnalysisRun }) {
   const q = run.quality;
   return <Panel title="数据质量"><div className="stat">{q.raw_rows} 行 / {q.events} 事件</div><p>有效已评分 {q.eligible_scored} 条 · 选中版本 {q.selected_revisions} 条</p>

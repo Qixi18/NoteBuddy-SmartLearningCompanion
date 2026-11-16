@@ -1,4 +1,5 @@
 """教师复核接口的数据契约。"""
+
 from typing import Literal, TypedDict
 
 
@@ -26,6 +27,8 @@ def validate_review_request(payload: dict) -> dict:
     if payload["status"] == "edited" and not payload.get("recommendation", "").strip():
         raise ValueError("修改后的建议不能为空")
     evidence = payload.get("evidence_record_ids", [])
-    if not isinstance(evidence, list) or any(not isinstance(item, str) for item in evidence):
+    if not isinstance(evidence, list) or any(
+        not isinstance(item, str) for item in evidence
+    ):
         raise ValueError("evidence_record_ids 必须是字符串数组")
     return payload

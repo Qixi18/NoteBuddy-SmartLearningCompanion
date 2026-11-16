@@ -1,4 +1,5 @@
 """前端 HTTP 接口的共享请求与响应契约。"""
+
 from __future__ import annotations
 
 from typing import TypedDict

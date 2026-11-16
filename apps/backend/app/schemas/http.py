@@ -1,0 +1,129 @@
+"""Pydantic models for stable HTTP request and response contracts."""
+
+from pathlib import Path
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+class ImportRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    folder: str = Field(min_length=1)
+
+    @field_validator("folder")
+    @classmethod
+    def folder_must_be_absolute(cls, value: str) -> str:
+        value = value.strip()
+        if not value or not Path(value).is_absolute():
+            raise ValueError("folder 必须是本地绝对路径")
+        return value
+
+
+class DraftRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    student_id: str = Field(min_length=1)
+    indicator_id: str = Field(min_length=1)
+
+
+class ReviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    student_id: str = Field(min_length=1)
+    indicator_id: str = Field(min_length=1)
+    status: Literal["accepted", "edited", "rejected", "needs_observation"]
+    diagnosis: str = ""
+    recommendation: str = ""
+    adjustment_condition: str = ""
+    reason: str = ""
+    source: Literal["rule", "deepseek"] = "rule"
+    model: str | None = None
+    prompt_version: str | None = None
+    evidence_record_ids: list[str] = Field(default_factory=list)
+    original_draft: dict[str, Any] | None = None
+    reviewer: str = "教师"
+
+
+class ImportResponse(BaseModel):
+    run_id: str
+    quality: dict[str, Any]
+
+
+class QualityReportResponse(BaseModel):
+    raw_rows: int
+    events: int
+    selected_revisions: int
+    eligible_scored: int
+    excluded_record_ids: list[str]
+    finding_counts: dict[str, int]
+    findings: list[dict[str, Any]]
+
+
+class AnalysisRunResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    run_id: str
+    created_at: str
+    rule_version: str
+    quality: QualityReportResponse
+    objectives: list[dict[str, Any]]
+    items: list[dict[str, Any]]
+    students: list[dict[str, Any]]
+    nodes: list[dict[str, Any]]
+    field_dictionary: list[dict[str, Any]]
+    source_index: list[dict[str, Any]]
+    raw_responses: list[dict[str, Any]]
+    responses: list[dict[str, Any]]
+    metrics: list[dict[str, Any]]
+    observations: list[dict[str, Any]]
+
+
+class CaseSuggestionResponse(BaseModel):
+    student_id: str
+    type: Literal["部分得分", "表现较好", "记录较少"]
+    reason: str
+    evidence_record_ids: list[str]
+
+
+class DraftResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    student_id: str
+    indicator_id: str
+    objective: str
+    diagnosis: str
+    recommendation: str
+    adjustment_condition: str
+    material_ids: list[str]
+    score_points_to_review: list[str]
+    observation_point: str
+    evidence_record_ids: list[str]
+    observed_record_ids: list[str]
+    source: Literal["rule", "deepseek"]
+    status: Literal["needs_review"]
+    prompt_version: str | None
+    model: str | None
+
+
+class ReviewRecordResponse(BaseModel):
+    status: Literal["accepted", "edited", "rejected", "needs_observation"]
+    diagnosis: str
+    recommendation: str
+    adjustment_condition: str
+    source: Literal["rule", "deepseek"]
+    model: str | None
+    prompt_version: str | None
+    original_draft: dict[str, Any] | None
+    evidence_record_ids: list[str]
+    reason: str
+    reviewer: str
+    version: int
+    updated_at: str
+
+
+class ErrorResponse(BaseModel):
+    error: str
+    code: str
+    request_id: str
+
+
+class HealthResponse(BaseModel):
+    status: Literal["ok"]

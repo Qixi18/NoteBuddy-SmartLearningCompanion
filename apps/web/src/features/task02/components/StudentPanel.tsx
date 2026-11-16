@@ -1,5 +1,5 @@
-import type { AnalysisRun } from '../api/types';
-import { Panel } from '../components/Panel';
+import type { AnalysisRun } from '../../../api/types';
+import { Panel } from '../../../components/Panel';
 export function StudentPanel({ run, student, indicator, onStudent, onIndicator }: { run: AnalysisRun; student: string; indicator: string; onStudent: (id: string) => void; onIndicator: (id: string) => void }) {
   const metric = run.metrics.find(item => item.kind === 'student_indicator' && item.key === `${student}:${indicator}`);
   const observation = run.observations.find(item => item.student_id === student && item.indicator_id === indicator);

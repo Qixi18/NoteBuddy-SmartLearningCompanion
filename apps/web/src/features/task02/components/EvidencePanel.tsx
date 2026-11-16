@@ -1,5 +1,5 @@
-import type { AnalysisRun } from '../api/types';
-import { Panel } from '../components/Panel';
+import type { AnalysisRun } from '../../../api/types';
+import { Panel } from '../../../components/Panel';
 export function EvidencePanel({ run, student, indicator }: { run: AnalysisRun; student: string; indicator: string }) {
   const ids = new Set(run.items.filter(item => item['指标编号'] === indicator).map(item => item['材料编号']));
   const records = run.responses.filter(row => row['学生编号'] === student && ids.has(row['材料编号']));
