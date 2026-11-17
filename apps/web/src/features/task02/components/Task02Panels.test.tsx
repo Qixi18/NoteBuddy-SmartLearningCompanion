@@ -86,6 +86,15 @@ describe('TASK02 result panels', () => {
     expect(screen.queryByText(/other student/)).toBeNull();
   });
 
+  it('does not mark a duplicate record ID from another source row as selected', () => {
+    const duplicateIdRun = {
+      ...run,
+      responses: [...run.responses, { ...run.responses[0], _source_line: 99 }],
+    } as AnalysisRun;
+    render(<EvidencePanel run={duplicateIdRun} student="D01" indicator="I1" />);
+    expect(screen.getByText('该修订未进入当前分析版本；逐点评分未知。')).toBeTruthy();
+  });
+
   it('resets evidence node when the student/indicator changes', () => {
     const { rerender } = render(<EvidencePanel run={run} student="D01" indicator="I1" />);
     fireEvent.change(screen.getByLabelText('证据节点'), { target: { value: 'N02' } });

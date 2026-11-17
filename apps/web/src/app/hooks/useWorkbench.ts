@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { learningApi } from '../../api/client';
 import type { AnalysisRun, CaseSuggestion, Draft, Review, ReviewMap, ReviewPayload, ReviewStatus } from '../../api/types';
 
@@ -12,55 +12,85 @@ export function useWorkbench() {
   const [run, setRun] = useState<AnalysisRun | null>(null);
   const [reviews, setReviews] = useState<ReviewMap>({});
   const [suggestions, setSuggestions] = useState<CaseSuggestion[]>([]);
-  const [student, setStudent] = useState('');
-  const [indicator, setIndicator] = useState('');
+  const [student, setStudentState] = useState('');
+  const [indicator, setIndicatorState] = useState('');
   const [node, setNode] = useState('');
   const [draft, setDraft] = useState<Draft | null>(null);
   const [message, setMessage] = useState('正在连接本地分析服务…');
   const [error, setError] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const draftRequest = useRef(0);
+  const refreshRequest = useRef(0);
   const reviewKey = `${student}:${indicator}`;
 
-  useEffect(() => { setDraft(null); setNode(''); }, [reviewKey, run?.run_id]);
+  useEffect(() => { draftRequest.current += 1; setDraft(null); setNode(''); }, [reviewKey, run?.run_id]);
 
   const refresh = useCallback(async () => {
+    const requestId = ++refreshRequest.current;
+    setLoading(true);
     try {
       const [nextRun, nextReviews, nextCases] = await Promise.all([
         learningApi.run(), learningApi.reviews(), learningApi.cases(),
       ]);
-      setRun(nextRun);
-      setReviews(nextReviews);
-      setSuggestions(nextCases);
-      setStudent(current => nextRun.students.some(item => item['学生编号'] === current)
-        ? current : nextRun.students[0]?.['学生编号'] ?? '');
-      setIndicator(current => nextRun.objectives.some(item => item['指标编号'] === current)
-        ? current : nextRun.objectives[0]?.['指标编号'] ?? '');
-      setMessage(`已加载分析运行 ${nextRun.run_id}`);
-      setError(false);
+      if (requestId === refreshRequest.current) {
+        setRun(nextRun);
+        setReviews(nextReviews);
+        setSuggestions(nextCases);
+        setStudentState(current => nextRun.students.some(item => item['学生编号'] === current)
+          ? current : nextRun.students[0]?.['学生编号'] ?? '');
+        setIndicatorState(current => nextRun.objectives.some(item => item['指标编号'] === current)
+          ? current : nextRun.objectives[0]?.['指标编号'] ?? '');
+        setMessage(`已加载分析运行 ${nextRun.run_id}`);
+        setError(false);
+      }
+      return true;
     } catch (reason) {
-      setRun(null);
-      setMessage(reason instanceof Error ? reason.message : String(reason));
-      setError(true);
+      const failure = reason instanceof Error ? reason.message : String(reason);
+      if (requestId === refreshRequest.current) {
+        setRun(null);
+        setMessage(failure);
+        setError(true);
+        return failure;
+      }
+      return true;
+    } finally {
+      if (requestId === refreshRequest.current) setLoading(false);
     }
   }, []);
 
   useEffect(() => { void refresh(); }, [refresh]);
   const announce = (text: string, failed = false) => { setMessage(text); setError(failed); };
 
+  const setStudent = (studentId: string) => {
+    if (studentId !== student) { draftRequest.current += 1; setDraft(null); setNode(''); }
+    setStudentState(studentId);
+  };
+  const setIndicator = (indicatorId: string) => {
+    if (indicatorId !== indicator) { draftRequest.current += 1; setDraft(null); setNode(''); }
+    setIndicatorState(indicatorId);
+  };
   const selectNode = (nodeId: string) => {
+    if (nodeId !== node) draftRequest.current += 1;
     setNode(nodeId);
     setDraft(null);
   };
 
   const makeDraft = async (provider: 'rule' | 'deepseek', selectedNode = node) => {
+    const requestId = ++draftRequest.current;
+    const scope = `${student}:${indicator}:${selectedNode}`;
     try {
       announce(provider === 'rule' ? '正在生成规则草稿…' : '正在请求 DeepSeek…');
       const result = provider === 'rule'
         ? await learningApi.ruleDraft(student, indicator, selectedNode || undefined)
         : await learningApi.modelDraft(student, indicator, selectedNode || undefined);
-      setDraft(result);
-      announce('草稿已生成，请结合原始记录复核。');
+      if (requestId === draftRequest.current && scope === `${student}:${indicator}:${node}`) {
+        setDraft(result);
+        announce('草稿已生成，请结合原始记录复核。');
+      }
     } catch (reason) {
-      announce(reason instanceof Error ? reason.message : String(reason), true);
+      if (requestId === draftRequest.current && scope === `${student}:${indicator}:${node}`) {
+        announce(reason instanceof Error ? reason.message : String(reason), true);
+      }
     }
   };
 
@@ -69,6 +99,7 @@ export function useWorkbench() {
     adjustment_condition: string; reason: string;
   }) => {
     if (!draft) throw new Error('请先生成诊断草稿');
+    if (draft.scope_required || (draft.node_id && draft.node_id !== node)) throw new Error('当前草稿范围不匹配，请重新选择单一测验节点并生成草稿。');
     const request: ReviewPayload = {
       student_id: student, indicator_id: indicator, ...payload,
       source: draft.source, model: draft.model, prompt_version: draft.prompt_version,
@@ -88,7 +119,7 @@ export function useWorkbench() {
   };
 
   return {
-    run, reviews, suggestions, student, indicator, node, draft, message, error, reviewKey,
+    run, reviews, suggestions, student, indicator, node, draft, message, error, loading, reviewKey,
     setStudent, setIndicator, setNode: selectNode, refresh, announce, makeDraft, saveReview, exportCases,
   };
 }

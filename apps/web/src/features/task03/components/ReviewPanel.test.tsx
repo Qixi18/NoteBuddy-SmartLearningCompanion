@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useState } from 'react';
 import type { Draft } from '../../../api/types';
@@ -9,15 +9,13 @@ import draftFixture from '../../../../../../contracts/api/draft.json';
 afterEach(cleanup);
 
 describe('ReviewPanel', () => {
-  it('accepts review status changes and keeps saving disabled without a draft', () => {
+  it('keeps the review form hidden until a draft exists', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', {
       status: 200, headers: { 'content-type': 'application/json' },
     })));
     render(<ReviewPanel student="S1" indicator="I1" node="" nodes={[]} onNode={vi.fn()} draft={null} onDraft={vi.fn()} onSave={vi.fn()} />);
-    const select = screen.getByLabelText('复核状态');
-    fireEvent.change(select, { target: { value: 'needs_observation' } });
-    expect((select as HTMLSelectElement).value).toBe('needs_observation');
-    expect((screen.getByRole('button', { name: '保存复核' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByLabelText('复核状态')).toBeNull();
+    expect(screen.queryByRole('button', { name: '保存复核' })).toBeNull();
   });
 
   it('passes the selected node when requesting a draft', () => {
@@ -32,13 +30,23 @@ describe('ReviewPanel', () => {
     expect(onDraft).toHaveBeenCalledWith('rule', 'N02');
   });
 
+  it('prevents duplicate draft generation while a request is pending', async () => {
+    let resolveDraft!: () => void;
+    const onDraft = vi.fn(() => new Promise<void>(resolve => { resolveDraft = resolve; }));
+    render(<ReviewPanel student="S1" indicator="I1" node="N01" nodes={['N01']} onNode={vi.fn()} draft={null} onDraft={onDraft} onSave={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: '生成规则草稿' }));
+    expect(screen.getAllByRole('button', { name: '正在生成草稿…' }).every(button => (button as HTMLButtonElement).disabled)).toBe(true);
+    expect(onDraft).toHaveBeenCalledTimes(1);
+    await act(async () => resolveDraft());
+  });
+
   it('does not allow saving a draft that still requires node scope', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', {
       status: 200, headers: { 'content-type': 'application/json' },
     })));
     render(<ReviewPanel student="S1" indicator="I1" node="" nodes={['N01', 'N02']} onNode={vi.fn()} draft={{ ...draftFixture, scope_required: true, node_id: null }} onDraft={vi.fn()} onSave={vi.fn()} />);
-    expect(screen.getByText(/多个节点有记录/)).toBeTruthy();
-    expect((screen.getByRole('button', { name: '保存复核' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole('alert').textContent).toMatch(/多个节点有记录/);
+    expect(screen.queryByRole('button', { name: '保存复核' })).toBeNull();
   });
 
   it('shows rule evidence and inference limits with the editable draft', () => {
@@ -47,9 +55,20 @@ describe('ReviewPanel', () => {
     })));
     render(<ReviewPanel student="D01" indicator="T01I1" node="N01" nodes={["N01"]} onNode={vi.fn()} draft={draftFixture as Draft} onDraft={vi.fn()} onSave={vi.fn()} />);
     expect(screen.getByText(/规则：TR-05/)).toBeTruthy();
-    expect(screen.getByText(/观察事实：已评分事实：Q001 1\/2/)).toBeTruthy();
+    expect(screen.getByText('已评分事实：Q001 1/2')).toBeTruthy();
     expect(screen.getByText(/适用边界：结论仅限列出的题目得分/)).toBeTruthy();
-    expect(screen.getByText(/来源行：3/)).toBeTruthy();
+    expect(screen.getByText(/原始来源行：3/)).toBeTruthy();
+  });
+
+  it('prevents duplicate review saves while one is pending', async () => {
+    let resolveSave!: () => void;
+    const onSave = vi.fn(() => new Promise<void>(resolve => { resolveSave = resolve; }));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } })));
+    render(<ReviewPanel student="D01" indicator="T01I1" node="N01" nodes={['N01']} onNode={vi.fn()} draft={draftFixture as Draft} onDraft={vi.fn()} onSave={onSave} />);
+    fireEvent.click(screen.getByRole('button', { name: '保存复核' }));
+    expect((screen.getByRole('button', { name: '正在保存…' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(onSave).toHaveBeenCalledTimes(1);
+    await act(async () => resolveSave());
   });
 
   it('labels each historical review with its node, including legacy draft fallback', async () => {
