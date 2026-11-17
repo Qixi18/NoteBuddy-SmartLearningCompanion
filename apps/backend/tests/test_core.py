@@ -301,6 +301,7 @@ def test_review_and_export(tmp_path: Path):
         "T01I1",
         {
             "status": "edited",
+            "node_id": "N01",
             "diagnosis": "复核后诊断",
             "recommendation": "先做基础练习",
             "adjustment_condition": "完成后再测",
@@ -309,12 +310,16 @@ def test_review_and_export(tmp_path: Path):
         },
     )
     assert saved["version"] == 1
+    assert saved["node_id"] == "N01"
     with zipfile.ZipFile(
         io.BytesIO(package(run, store.reviews(run["run_id"]), ["D01", "D02", "D03"]))
     ) as archive:
         accepted = json.loads(archive.read("recommendations.json"))
         assert accepted[0]["recommendation"] == "先做基础练习"
         assert accepted[0]["evidence_record_ids"] == ["R2"]
+        assert accepted[0]["node_id"] == "N01"
+        history = json.loads(archive.read("teacher_review_history.json"))
+        assert history["D01:T01I1"][0]["node_id"] == "N01"
         cases = json.loads(archive.read("student_cases.json"))
         assert len(cases) == 3
         assert "student_indicator" in archive.read("metrics.csv").decode("utf-8-sig")
@@ -389,6 +394,8 @@ def test_review_citations_must_match_valid_records_and_draft_node_scope(tmp_path
     payload["original_draft"]["evidence_record_ids"] = ["R5"]
     saved = store.save_review(run["run_id"], "D01", "T01I1", payload)
     assert saved["version"] == 1
+    assert saved["node_id"] == "N02"
+    assert store.reviews(run["run_id"])["D01:T01I1"][0]["node_id"] == "N02"
 
 
 def test_concurrent_review_versions_are_unique(tmp_path: Path):

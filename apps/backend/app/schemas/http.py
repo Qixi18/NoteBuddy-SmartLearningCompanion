@@ -124,6 +124,7 @@ class DraftResponse(BaseModel):
 
 class ReviewRecordResponse(BaseModel):
     status: Literal["accepted", "edited", "rejected", "needs_observation"]
+    node_id: str | None = None
     diagnosis: str
     recommendation: str
     adjustment_condition: str

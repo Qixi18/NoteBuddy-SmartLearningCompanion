@@ -40,7 +40,7 @@ from app.infrastructure.migration.json_to_sqlite import (
 from app.domain.student.models import Student
 from app.services.analysis import analyze
 from app.services.task03.recommendation_service import deepseek_draft
-from test_core import sample_tables
+from test_core import _task03_run_without_unrelated_invalid_record, sample_tables
 
 
 def test_sqlalchemy_domain_mappers_preserve_fields_and_source_line():
@@ -243,7 +243,7 @@ def test_deepseek_application_port_accepts_only_validated_structured_output():
             }
 
     result = deepseek_draft(
-        analyze(sample_tables(), {}),
+        _task03_run_without_unrelated_invalid_record(),
         "D01",
         "T01I1",
         api_key="test-only",
@@ -386,6 +386,7 @@ def test_alembic_empty_upgrade_repeat_and_consistent_restore(tmp_path, monkeypat
             run_id: hashlib.sha256(text.encode("utf-8")).hexdigest()
             for run_id, text in snapshots.items()
         }
+    assert store.reviews(first_run["run_id"])["D01:T01I1"][0]["node_id"] is None
     before = store.run_repository.current()
     backup_info = backup_database(url, backup)
     restore_info = restore_database(backup, restored)

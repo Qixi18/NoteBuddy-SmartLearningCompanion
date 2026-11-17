@@ -17,6 +17,7 @@ export interface ReviewPayload {
 }
 
 export interface Review extends Omit<ReviewPayload, 'student_id' | 'indicator_id' | 'original_draft'> {
+  node_id: string | null;
   version: number;
   original_draft: Draft | null;
   reviewer: string;

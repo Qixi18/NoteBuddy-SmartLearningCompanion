@@ -1,6 +1,6 @@
 """Focused policy tests for deterministic TASK03 rules TR-01 through TR-08."""
 
-from app.services.task03.recommendation_service import draft
+from app.services.task03.recommendation_service import _rubric, draft
 
 
 def _response(
@@ -343,3 +343,40 @@ def test_tr08_conflicting_evidence_fails_closed_and_all_rules_keep_legacy_fields
         ),
     ):
         _assert_legacy_contract(rule_result)
+
+
+def test_rubric_point_id_is_not_used_as_its_maximum():
+    item = {
+        "材料编号": "Q015",
+        "满分": "3",
+        "评分点": (
+            "Q015P1 正确去两个括号 1分\n"
+            "Q015P2 分别合并a项和b项 1分\n"
+            "Q015P3 写出正确结果 1分"
+        ),
+    }
+    row = {
+        "评分点得分": "Q015P1=1；Q015P2=1；Q015P3=0",
+        "得分": "2",
+        "满分": "3",
+    }
+
+    scores, maxima, coherent = _rubric(row, item)
+
+    assert coherent is True
+    assert scores == {"Q015P1": 1.0, "Q015P2": 1.0, "Q015P3": 0.0}
+    assert maxima == {"Q015P1": 1.0, "Q015P2": 1.0, "Q015P3": 1.0}
+
+
+def test_missing_rubric_definition_keeps_point_evidence_unknown_not_conflicting():
+    row = {
+        "评分点得分": "P1=1",
+        "得分": "1",
+        "满分": "2",
+    }
+
+    scores, maxima, coherent = _rubric(row, {"材料编号": "Q001", "评分点": ""})
+
+    assert coherent is True
+    assert scores == {}
+    assert maxima == {}

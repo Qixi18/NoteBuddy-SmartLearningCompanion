@@ -36,6 +36,7 @@ class SaveReview:
             if original is not None and not isinstance(original, dict):
                 raise ValueError("原草稿格式无效")
             scoped_allowed = allowed
+            review_node_id = payload.get("node_id")
             if original is not None:
                 if original.get("run_id") not in {None, run_id}:
                     raise ValueError("原草稿不属于当前分析运行")
@@ -56,6 +57,11 @@ class SaveReview:
                         and row["材料编号"] in item_ids
                         and row["节点编号"] == node_id
                     }
+                review_node_id = node_id
+            if review_node_id is not None and review_node_id not in {
+                row["节点编号"] for row in run.get("nodes", [])
+            }:
+                raise ValueError("复核测验节点无效")
             cited = payload.get("evidence_record_ids", [])
             if (
                 not isinstance(cited, list)
@@ -96,6 +102,7 @@ class SaveReview:
                 f"{student_id}:{indicator_id}",
                 {
                     "status": status.value,
+                    "node_id": review_node_id,
                     "diagnosis": str(payload.get("diagnosis", "")),
                     "recommendation": str(payload.get("recommendation", "")),
                     "adjustment_condition": str(

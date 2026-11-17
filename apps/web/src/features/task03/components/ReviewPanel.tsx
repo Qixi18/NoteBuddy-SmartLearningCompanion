@@ -35,6 +35,6 @@ export function ReviewPanel({ student, indicator, node, nodes, onNode, review, d
     <label>复核状态<select value={fields.status} onChange={event => { if (isReviewStatus(event.target.value)) set('status', event.target.value); }}><option value="accepted">接受</option><option value="edited">已修改</option><option value="needs_observation">待观察</option><option value="rejected">驳回</option></select></label>
     <label>复核理由<textarea placeholder="记录接受、修改或驳回的依据" value={fields.reason} onChange={event => set('reason', event.target.value)} /></label>
     {failure && <p className="error" role="alert">{failure}</p>}<button disabled={!draft || draft.scope_required} onClick={() => void save()}>保存复核</button>
-    {history.length > 0 && <><h3>复核历史</h3>{history.map(item => <details className="row" key={item.version}><summary>版本 {item.version} · {item.status} · {item.updated_at}</summary><p>诊断：{item.diagnosis}</p><p>建议：{item.recommendation}</p><p>理由：{item.reason}</p>{item.original_draft && <p>原草稿（{item.original_draft.source}）：{item.original_draft.recommendation}</p>}</details>)}</>}
+    {history.length > 0 && <><h3>复核历史</h3>{history.map(item => <details className="row" key={item.version}><summary>版本 {item.version} · 节点 {item.node_id ?? item.original_draft?.node_id ?? '范围未记录'} · {item.status} · {item.updated_at}</summary><p>诊断：{item.diagnosis}</p><p>建议：{item.recommendation}</p><p>理由：{item.reason}</p>{item.original_draft && <p>原草稿（{item.original_draft.source}；节点 {item.original_draft.node_id ?? '范围未记录'}）：{item.original_draft.recommendation}</p>}</details>)}</>}
   </Panel>;
 }

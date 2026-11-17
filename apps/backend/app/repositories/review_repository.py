@@ -30,7 +30,13 @@ class ReviewRepository(SqlAlchemyRepository):
             result: dict[str, list] = {}
             for row in rows:
                 key = f"{row.student_id}:{row.indicator_id}"
-                result.setdefault(key, []).append(json.loads(row.payload_json))
+                record = json.loads(row.payload_json)
+                if "node_id" not in record:
+                    original = record.get("original_draft")
+                    record["node_id"] = (
+                        original.get("node_id") if isinstance(original, dict) else None
+                    )
+                result.setdefault(key, []).append(record)
             return result
 
     def append(self, run_id: str, key: str, payload: dict) -> dict:

@@ -28,7 +28,16 @@ def package(run: dict, reviews: dict, case_ids: list[str] | None = None) -> byte
             baseline = draft(run, student_id, indicator_id)
             history = reviews.get(f"{student_id}:{indicator_id}", [])
             final = history[-1] if history else None
-            entry = {**baseline, "review": final}
+            review_node_id = final.get("node_id") if final else None
+            if final and review_node_id is None:
+                original = final.get("original_draft")
+                if isinstance(original, dict):
+                    review_node_id = original.get("node_id")
+            entry = {
+                **baseline,
+                "node_id": review_node_id or baseline.get("node_id"),
+                "review": final,
+            }
             if final and final["status"] in {"accepted", "edited"}:
                 entry.update(
                     {
@@ -142,6 +151,11 @@ def package(run: dict, reviews: dict, case_ids: list[str] | None = None) -> byte
         "node_observations.json": node_observations,
         "recommendations.json": accepted,
         "pending_review.json": pending,
+        "teacher_review_history.json": {
+            key: value
+            for key, value in reviews.items()
+            if key.partition(":")[0] in case_ids
+        },
     }
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:

@@ -52,11 +52,24 @@ def _rubric(row: dict, item: dict) -> tuple[dict[str, float], dict[str, float], 
     rubric_text = str(item.get("评分点", "") or "")
     score_text = str(row.get("评分点得分", "") or "")
     expected: dict[str, float] = {}
-    for section in re.split(r"(?=[A-Z]+\d+P\d+)", rubric_text):
-        point = re.match(r"([A-Z]+\d+P\d+)", section.strip())
-        maximum = re.search(r"(\d+(?:\.\d+)?)\s*分", section)
-        if point and maximum:
-            expected[point.group(1)] = float(maximum.group(1))
+    rubric_lines = [
+        line.strip() for line in re.split(r"[\r\n]+", rubric_text) if line.strip()
+    ]
+    if not rubric_lines:
+        # Missing rubric definitions mean point-level evidence is unknown, not
+        # contradictory. Valid total-score evidence can still be used.
+        return {}, {}, True
+    rubric_pattern = re.compile(
+        r"^\s*([A-Z]+\d+P\d+)\s+(.+?)\s+(\d+(?:\.\d+)?)\s*分\s*$"
+    )
+    for line in rubric_lines:
+        match = rubric_pattern.fullmatch(line)
+        if not match:
+            return {}, {}, False
+        point_id, _description, maximum_text = match.groups()
+        if point_id in expected:
+            return {}, {}, False
+        expected[point_id] = float(maximum_text)
     if not score_text.strip():
         return {}, expected, True
     scores = {

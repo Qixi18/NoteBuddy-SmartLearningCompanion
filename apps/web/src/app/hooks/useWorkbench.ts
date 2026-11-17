@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { learningApi } from '../../api/client';
-import type { AnalysisRun, CaseSuggestion, Draft, ReviewMap, ReviewPayload, ReviewStatus } from '../../api/types';
+import type { AnalysisRun, CaseSuggestion, Draft, Review, ReviewMap, ReviewPayload, ReviewStatus } from '../../api/types';
+
+export function reviewForNode(history: Review[], nodeId: string | null): Review | undefined {
+  return history
+    .filter(item => (item.node_id ?? item.original_draft?.node_id ?? null) === nodeId)
+    .at(-1);
+}
 
 export function useWorkbench() {
   const [run, setRun] = useState<AnalysisRun | null>(null);

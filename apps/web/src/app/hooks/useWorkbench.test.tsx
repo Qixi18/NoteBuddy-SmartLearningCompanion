@@ -2,7 +2,8 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import draftFixture from '../../../../../contracts/api/draft.json';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { useWorkbench } from './useWorkbench';
+import { reviewForNode, useWorkbench } from './useWorkbench';
+import type { Review } from '../../api/types';
 
 const apiMocks = vi.hoisted(() => ({
   run: vi.fn(),
@@ -20,6 +21,15 @@ vi.mock('../../api/client', () => ({
 afterEach(() => vi.clearAllMocks());
 
 describe('useWorkbench node scope', () => {
+  it('selects review history for the active node and supports legacy draft scope', () => {
+    const n01 = { node_id: 'N01', original_draft: { node_id: 'N01' }, version: 1 } as unknown as Review;
+    const legacyN02 = { original_draft: { node_id: 'N02' }, version: 2 } as unknown as Review;
+    const n02 = { node_id: 'N02', original_draft: { node_id: 'N02' }, version: 3 } as unknown as Review;
+    expect(reviewForNode([n01, legacyN02, n02], 'N01')).toBe(n01);
+    expect(reviewForNode([n01, legacyN02, n02], 'N02')).toBe(n02);
+    expect(reviewForNode([n01, legacyN02, n02], null)).toBeUndefined();
+  });
+
   it('forwards selected node and clears an old draft when node changes', async () => {
     apiMocks.run.mockResolvedValue({
       run_id: 'run-1', students: [], objectives: [], responses: [], items: [],

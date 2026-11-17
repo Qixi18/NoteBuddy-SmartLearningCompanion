@@ -51,4 +51,27 @@ describe('ReviewPanel', () => {
     expect(screen.getByText(/适用边界：结论仅限列出的题目得分/)).toBeTruthy();
     expect(screen.getByText(/来源行：3/)).toBeTruthy();
   });
+
+  it('labels each historical review with its node, including legacy draft fallback', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      'D01:T01I1': [
+        {
+          status: 'edited', diagnosis: 'N01 diagnosis', recommendation: 'N01 recommendation',
+          adjustment_condition: '', source: 'rule', model: null, prompt_version: null,
+          original_draft: { ...draftFixture, node_id: 'N01' }, evidence_record_ids: ['R1'],
+          reason: 'reviewed in N01', reviewer: '教师', version: 1, updated_at: '2026-11-17',
+        },
+        {
+          status: 'accepted', node_id: 'N02', diagnosis: 'N02 diagnosis', recommendation: 'N02 recommendation',
+          adjustment_condition: '', source: 'rule', model: null, prompt_version: null,
+          original_draft: { ...draftFixture, node_id: 'N02' }, evidence_record_ids: ['R2'],
+          reason: 'reviewed in N02', reviewer: '教师', version: 2, updated_at: '2026-11-17',
+        },
+      ],
+    }), { status: 200, headers: { 'content-type': 'application/json' } })));
+    render(<ReviewPanel student="D01" indicator="T01I1" node="N02" nodes={['N01', 'N02']} onNode={vi.fn()} draft={null} onDraft={vi.fn()} onSave={vi.fn()} />);
+
+    expect(await screen.findByText(/版本 1 · 节点 N01/)).toBeTruthy();
+    expect(await screen.findByText(/版本 2 · 节点 N02/)).toBeTruthy();
+  });
 });
