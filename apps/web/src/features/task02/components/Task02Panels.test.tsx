@@ -55,7 +55,7 @@ describe('TASK02 result panels', () => {
   it('renders class scores by node without using an empty denominator as zero', () => {
     const onNode = vi.fn();
     const { rerender } = render(<ClassPanel run={run} node="" onNode={onNode} />);
-    expect(screen.getByText(/未选节点时不比较得分/)).toBeTruthy();
+    expect(screen.getByText(/选择一个测验节点，查看各班在该节点的有效评分/)).toBeTruthy();
     fireEvent.change(screen.getByLabelText('测验节点'), { target: { value: 'N01' } });
     expect(onNode).toHaveBeenCalledWith('N01');
     rerender(<ClassPanel run={run} node="N01" onNode={onNode} />);

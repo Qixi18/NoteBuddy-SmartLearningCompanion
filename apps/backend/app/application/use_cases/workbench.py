@@ -1,6 +1,7 @@
 """Thin use cases for the existing HTTP and CLI workbench operations."""
 
 from pathlib import Path
+import tempfile
 
 from ...services.cases import suggest_cases
 from ...services.exports import package
@@ -24,6 +25,17 @@ class ImportFolder:
 
     def execute(self, folder: Path) -> dict:
         return self.import_service.import_folder(folder)
+
+    def execute_files(self, files: dict[str, str]) -> dict:
+        expected = {"课程要求.csv", "题目与材料.csv", "模拟学生.csv", "测验节点.csv", "作答记录.csv", "字段说明.csv"}
+        if set(files) != expected:
+            missing = sorted(expected - set(files))
+            raise ValueError(f"所选文件不完整，缺少：{'、'.join(missing)}")
+        with tempfile.TemporaryDirectory(prefix="smart-learning-import-") as temporary:
+            folder = Path(temporary)
+            for name, content in files.items():
+                (folder / name).write_text(content, encoding="utf-8-sig", newline="")
+            return self.import_service.import_folder(folder)
 
 
 class ListReviews:

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { AnalysisRun, CaseSuggestion, Draft, Review, ReviewStatus, StructuredPlan } from '../api/types';
 import { Panel } from '../components/Panel';
+import { ImportPanel } from '../features/import/ImportPanel';
 import { ObjectivesPanel } from '../features/task01/components/ObjectivesPanel';
 import { ClassPanel } from '../features/task02/components/ClassPanel';
 import { StudentPanel } from '../features/task02/components/StudentPanel';
@@ -28,10 +29,19 @@ type PageProps = {
   onSave: (fields: ReviewFields) => Promise<void>;
   onExport: (ids: string[]) => void;
   onNavigate: (path: RoutePath) => void;
+  onImported?: (id: string) => Promise<void>;
+  onMessage?: (text: string, error?: boolean) => void;
 };
 
-function EmptyRun({ onNavigate }: { onNavigate: (path: RoutePath) => void }) {
-  return <section className="empty-state"><h2>还没有可查看的分析运行</h2><p>导入包含六类 CSV 的目录后，概览和业务页面会读取当前接口返回的数据。</p><button onClick={() => onNavigate('/home')}>返回全局概览</button></section>;
+function EmptyRun({ onImported, onMessage }: Pick<PageProps, 'onImported' | 'onMessage'>) {
+  return <div className="first-run">
+    <section className="first-run-copy">
+      <h1>先导入一份学情数据</h1>
+      <p>从课程指标、题目关联和学生作答开始，查看学科依据、班级与学生证据，再进入教学建议复核。</p>
+      <p className="muted">数据只在本机处理。原始 CSV 文件不会移动或修改。</p>
+    </section>
+    <ImportPanel onImported={onImported ?? (async () => undefined)} onMessage={onMessage ?? (() => undefined)} />
+  </div>;
 }
 
 function Overview({ run, onNavigate }: { run: AnalysisRun; onNavigate: (path: RoutePath) => void }) {
@@ -45,11 +55,14 @@ function Overview({ run, onNavigate }: { run: AnalysisRun; onNavigate: (path: Ro
   return <>
     <section className="stat-grid" aria-label="当前运行摘要">{summary.map(([label, value, note]) => <div className="stat-block" key={String(label)}><span>{label}</span><strong>{value}</strong><small>{note}</small></div>)}
     </section>
-    <section className="overview-meta"><p>当前运行 <strong>{run.run_id}</strong> · 规则版本 {run.rule_version} · 创建于 {run.created_at}</p><p>数据范围仅限此快照；各节点分别统计，不能据此推断跨节点进步。</p></section>
-    <section className="entry-list" aria-label="业务入口">
-      {routes.filter(route => ['/knowledge/indicators', '/insights/classes', '/plan/reviews'].includes(route.path)).map(route => <button className="entry-link" key={route.path} onClick={() => onNavigate(route.path)}><strong>{route.section}</strong><span>{route.description}</span><span aria-hidden="true">查看 →</span></button>)}
+    <section className="overview-meta"><p>规则版本 {run.rule_version} · 创建于 {new Date(run.created_at).toLocaleString('zh-CN', { dateStyle: 'medium', timeStyle: 'short' })}</p><p>范围仅限当前快照；不同测验节点分别统计，不能据此推断进步。</p></section>
+    <section className="overview-routes" aria-labelledby="overview-routes-title">
+      <h2 id="overview-routes-title">继续查看</h2>
+      <div className="entry-list">
+        {routes.filter(route => ['/knowledge/indicators', '/insights/classes', '/plan/reviews'].includes(route.path)).map(route => <button className="entry-link" key={route.path} onClick={() => onNavigate(route.path)}><strong>{route.section}</strong><span>{route.description}</span><span aria-hidden="true">查看　→</span></button>)}
+      </div>
     </section>
-    <Panel title="数据质量提示"><p>原始作答 {run.quality.raw_rows} 行；有效已评分 {run.quality.eligible_scored} 条。其余记录需按处置状态核查，不能直接视为未掌握。</p><p>质量问题 {run.quality.findings.length} 项；请在学情洞察的“数据质量”页核对原始行和异常处置。</p><button className="secondary" onClick={() => onNavigate('/insights/quality')}>查看数据质量</button></Panel>
+    <section className="quality-summary" aria-label="数据质量摘要"><div><h2>数据质量</h2><p>{run.quality.findings.length ? `发现 ${run.quality.findings.length} 项问题；核对原始行和处置状态后，再解释统计结果。` : '当前运行没有数据质量问题。'}</p></div><button className="secondary" onClick={() => onNavigate('/insights/quality')}>查看详情</button></section>
   </>;
 }
 
@@ -84,7 +97,7 @@ function CaseEvidence({ run, suggestions, reviews, draft, onOpenReview }: { run:
 export function WorkbenchPage(props: PageProps) {
   const [reviewEdits, setReviewEdits] = useState<Record<string, ReviewFields>>({});
   const { path, run, onNavigate } = props;
-  if (!run) return <EmptyRun onNavigate={onNavigate} />;
+  if (!run) return <EmptyRun onImported={props.onImported} onMessage={props.onMessage} />;
   const reviewNodes = [...new Set(run.responses.filter(row => row['学生编号'] === props.student && run.items.some(item => item['材料编号'] === row['材料编号'] && item['指标编号'] === props.indicator)).map(row => row['节点编号']))];
   const reviewKey = `${props.student}:${props.indicator}`;
   const review = (props.reviews[reviewKey] ?? []).filter(item => (item.node_id ?? item.original_draft?.node_id ?? null) === (props.node || (reviewNodes.length === 1 ? reviewNodes[0] : null))).at(-1);
@@ -107,10 +120,10 @@ export function WorkbenchPage(props: PageProps) {
     case '/insights/quality': return <QualityPanel run={run} />;
     case '/plan/reviews': return <>
       <Panel title="教学范围与证据"><div className="scope-fields"><label>学生<select value={props.student} onChange={event => props.onStudent(event.target.value)}>{run.students.map(item => <option key={item['学生编号']} value={item['学生编号']}>{item['学生编号']} · {item['模拟班级编号']}</option>)}</select></label><label>观察指标<select value={props.indicator} onChange={event => props.onIndicator(event.target.value)}>{run.objectives.map(item => <option key={item['指标编号']} value={item['指标编号']}>{item['指标编号']} · {item['观察指标']}</option>)}</select></label><label>测验节点<select value={props.node} onChange={event => props.onNode(event.target.value)}><option value="">请选择测验节点</option>{run.nodes.map(item => <option key={item['节点编号']} value={item['节点编号']}>{item['节点编号']}</option>)}</select></label></div>
-        <p>当前范围：{props.student || '未选学生'} · {props.indicator || '未选指标'} · 节点 {props.node || '未选'}。</p>{props.node && (() => { const observation = run.observations.find(item => item.student_id === props.student && item.indicator_id === props.indicator && item.node_id === props.node); return <p className="muted">选中事件 {observation?.selected_count ?? 0} · 有效已评分 {observation?.scored_count ?? 0} · 待评分 {observation?.pending_count ?? 0} · 未作答 {observation?.unanswered_count ?? 0} · 排除 {observation?.excluded_count ?? 0}。{!observation && '当前范围无观察记录，不能据此判断未掌握。'}</p>; })()}{props.node && <button className="secondary" onClick={() => onNavigate('/insights/evidence')}>查看此范围作答证据</button>}
+        {props.node && (() => { const observation = run.observations.find(item => item.student_id === props.student && item.indicator_id === props.indicator && item.node_id === props.node); return <p className="muted">选中事件 {observation?.selected_count ?? 0} · 有效已评分 {observation?.scored_count ?? 0} · 待评分 {observation?.pending_count ?? 0} · 未作答 {observation?.unanswered_count ?? 0} · 排除 {observation?.excluded_count ?? 0}。{!observation && '当前范围无观察记录，不能据此判断未掌握。'}</p>; })()}{props.node && <button className="secondary" onClick={() => onNavigate('/insights/evidence')}>查看此范围作答证据</button>}
       </Panel>
       <ReviewPanel run={run} student={props.student} indicator={props.indicator} node={props.node} review={review} draft={props.draft} onDraft={props.onDraft} onSave={props.onSave} initialFields={initialReviewFields} onFieldsChange={fields => setReviewEdits(old => ({ ...old, [reviewScope]: fields }))} />
-      <p className="scope-summary">复核版本可保存诊断、建议、调整条件、结构化方案与证据引用；完整方案仅在来源签核仍有效时进入正式导出。不推断跨节点进步。</p>
+      <details className="review-save-note"><summary>复核保存与导出说明</summary><p>复核版本保存诊断、建议、调整条件、结构化方案与证据引用。完整方案只在材料来源签核仍有效时进入导出。</p></details>
     </>;
     case '/plan/cases': return <><CaseEvidence run={run} suggestions={props.suggestions} reviews={props.reviews} draft={props.draft} onOpenReview={(studentId, indicatorId, nodeId) => { props.onStudent(studentId); props.onIndicator(indicatorId); props.onNode(nodeId); onNavigate('/plan/reviews'); }} /><TeacherCaseEditor run={run} reviews={props.reviews} /><ExportPanel students={run.students} suggestions={props.suggestions} onExport={props.onExport} /></>;
     default: return <Overview run={run} onNavigate={onNavigate} />;

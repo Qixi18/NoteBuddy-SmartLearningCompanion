@@ -50,7 +50,7 @@ export function useWorkbench() {
         setIndicatorState(current => nextRun.objectives.some(item => item['指标编号'] === current)
           ? current : nextRun.objectives[0]?.['指标编号'] ?? '');
         const failed = [reviewsResult.status === 'rejected' ? '复核历史' : '', casesResult.status === 'rejected' ? '案例候选' : ''].filter(Boolean);
-        setMessage(failed.length ? `已加载分析运行 ${nextRun.run_id}；${failed.join('、')}读取失败，可重试读取。` : `已加载分析运行 ${nextRun.run_id}`);
+        setMessage(failed.length ? `当前运行已加载；${failed.join('、')}读取失败，可重试读取。` : '');
         setError(failed.length > 0);
         if (failed.length) return `${failed.join('、')}读取失败`;
       }
@@ -58,9 +58,10 @@ export function useWorkbench() {
     } catch (reason) {
       const failure = reason instanceof Error ? reason.message : String(reason);
       if (requestId === refreshRequest.current) {
-        setMessage(failure);
-        setError(true);
-        return failure;
+        const noImportedRun = failure === '尚未导入赛事数据';
+        setMessage(noImportedRun ? '' : failure);
+        setError(!noImportedRun);
+        return noImportedRun ? true : failure;
       }
       return true;
     } finally {

@@ -1,0 +1,28 @@
+{
+  "name": "notebuddy-smartlearningcompanion",
+  "version": "1.0.0",
+  "description": "本仓库独立实现赛事的 TASK 01（理解学科）、TASK 02（理解学生）和 TASK 03（理解教学）。NoteBuddy 仅作工程参考；数据模型、业务规则和界面以本赛事为准。",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test:e2e": "playwright test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Qixi18/NoteBuddy-SmartLearningCompanion.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Qixi18/NoteBuddy-SmartLearningCompanion/issues"
+  },
+  "homepage": "https://github.com/Qixi18/NoteBuddy-SmartLearningCompanion#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.65.1",
+    "@types/node": "^26.6.6"
+  }
+}

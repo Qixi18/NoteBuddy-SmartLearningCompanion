@@ -34,14 +34,15 @@ const defaults = {
 describe('WorkbenchPage empty state', () => {
   it('does not show analysis figures when no run is available', () => {
     render(<WorkbenchPage path="/home" run={null} reviews={{}} suggestions={[]} student="" indicator="" node="" draft={null} onStudent={() => undefined} onIndicator={() => undefined} onNode={() => undefined} onDraft={async () => undefined} onSave={async () => undefined} onExport={() => undefined} onNavigate={() => undefined} />);
-    expect(screen.getByRole('heading', { name: '还没有可查看的分析运行' })).not.toBeNull();
+    expect(screen.getByRole('heading', { name: '先导入一份学情数据' })).not.toBeNull();
+    expect(screen.getByRole('button', { name: '选择数据文件夹' })).not.toBeNull();
     expect(screen.queryByText('学生')).toBeNull();
   });
 
   it('keeps the home focused on current run and task entry points', () => {
     render(<WorkbenchPage {...defaults} />);
     expect(screen.getByLabelText('当前运行摘要').children).toHaveLength(4);
-    expect(screen.getByRole('button', { name: '查看数据质量' })).not.toBeNull();
+    expect(screen.getByRole('button', { name: '查看详情' })).not.toBeNull();
     expect(screen.queryByText(/方案 PDF/)).toBeNull();
   });
 

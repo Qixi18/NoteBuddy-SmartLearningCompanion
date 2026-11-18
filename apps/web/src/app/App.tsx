@@ -17,6 +17,7 @@ export function App() {
   const [importOpen, setImportOpen] = useState(false);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const initialRoute = useRef(true);
   const page = routeFor(path);
 
   useEffect(() => {
@@ -31,7 +32,10 @@ export function App() {
     return () => window.removeEventListener('hashchange', sync);
   }, []);
 
-  useEffect(() => { titleRef.current?.focus(); }, [path]);
+  useEffect(() => {
+    if (initialRoute.current) initialRoute.current = false;
+    else titleRef.current?.focus();
+  }, [path]);
   useEffect(() => {
     if (importOpen) {
       if (!dialogRef.current?.open) dialogRef.current?.showModal();
@@ -48,10 +52,10 @@ export function App() {
     setImportOpen(false);
     navigate('/home');
     if (refreshed !== true) {
-      workbench.announce(`导入已完成（${id}）；读取提示：${refreshed}。可重试读取。`, true);
+      workbench.announce(`数据已导入（运行 ${id}），但当前视图未能刷新：${refreshed}。`, true);
       return;
     }
-    workbench.announce(`导入完成：${id}`);
+    workbench.announce('数据已导入，当前运行已更新。');
   };
 
   return <div className="workbench-shell">
@@ -71,13 +75,12 @@ export function App() {
     </aside>
 
     <div className="workspace">
-      <header className="topbar"><div className="breadcrumb">智慧学伴 <span aria-hidden="true">/</span> {page.section}{page.title !== page.section && <> <span aria-hidden="true">/</span> {page.title}</>}</div><button onClick={() => setImportOpen(true)}>导入数据</button></header>
+      <header className="topbar"><div className="breadcrumb">智慧学伴 <span aria-hidden="true">/</span> {page.section}{page.title !== page.section && <> <span aria-hidden="true">/</span> {page.title}</>}</div>{workbench.run && <button onClick={() => setImportOpen(true)}>导入数据</button>}</header>
       <main className="page-content">
-        <div className="page-heading"><div><h1 ref={titleRef} tabIndex={-1}>{page.title}</h1><p>{page.description}</p></div>{workbench.run && <div className="run-badge"><span>当前运行</span><strong>{workbench.run.run_id}</strong></div>}</div>
-        <p id="message" className={`global-message${workbench.error ? ' error' : ''}`} role={workbench.error ? 'alert' : 'status'} aria-live={workbench.error ? 'assertive' : 'polite'}>{workbench.message}</p>
+        {workbench.run && <div className="page-heading"><div><h1 ref={titleRef} tabIndex={-1}>{page.title}</h1><p>{page.description}</p></div><div className="run-badge"><span>当前运行</span><strong>{workbench.run.run_id}</strong></div></div>}
+        {workbench.message && <p id="message" className={`global-message${workbench.error ? ' error' : ''}`} role={workbench.error ? 'alert' : 'status'} aria-live={workbench.error ? 'assertive' : 'polite'}>{workbench.message}</p>}
         {workbench.error && workbench.run && <div className="retry-row"><button className="secondary" onClick={() => void workbench.refresh()}>重试读取当前运行</button></div>}
-        {workbench.loading && !workbench.run ? <div className="loading-state" role="status">正在读取当前分析运行…</div> : <WorkbenchPage key={workbench.run?.run_id ?? 'empty'} path={path} run={workbench.run} reviews={workbench.reviews} suggestions={workbench.suggestions} student={workbench.student} indicator={workbench.indicator} node={workbench.node} draft={workbench.draft} onStudent={workbench.setStudent} onIndicator={workbench.setIndicator} onNode={workbench.setNode} onDraft={workbench.makeDraft} onSave={workbench.saveReview} onExport={workbench.exportCases} onNavigate={navigate} />}
-        {!workbench.run && !workbench.loading && <div className="retry-row"><button className="secondary" onClick={() => void workbench.refresh()}>重试读取</button></div>}
+        {workbench.loading && !workbench.run ? <div className="loading-state" role="status">正在读取本机分析服务…</div> : workbench.error && !workbench.run ? <section className="empty-state connection-error"><h1>无法读取分析数据</h1><p role="alert">{workbench.message}</p><button className="secondary" onClick={() => void workbench.refresh()}>重试连接</button></section> : <WorkbenchPage key={workbench.run?.run_id ?? 'empty'} path={path} run={workbench.run} reviews={workbench.reviews} suggestions={workbench.suggestions} student={workbench.student} indicator={workbench.indicator} node={workbench.node} draft={workbench.draft} onStudent={workbench.setStudent} onIndicator={workbench.setIndicator} onNode={workbench.setNode} onDraft={workbench.makeDraft} onSave={workbench.saveReview} onExport={workbench.exportCases} onNavigate={navigate} onImported={imported} onMessage={workbench.announce} />}
       </main>
     </div>
 

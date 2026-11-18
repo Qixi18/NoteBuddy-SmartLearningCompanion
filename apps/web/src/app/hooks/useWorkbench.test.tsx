@@ -21,6 +21,15 @@ vi.mock('../../api/client', () => ({
 afterEach(() => vi.clearAllMocks());
 
 describe('useWorkbench node scope', () => {
+  it('treats a missing first run as a normal first-use state', async () => {
+    apiMocks.run.mockRejectedValue(new Error('尚未导入赛事数据'));
+    const { result } = renderHook(() => useWorkbench());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.run).toBeNull();
+    expect(result.current.error).toBe(false);
+    expect(result.current.message).toBe('');
+  });
+
   it('selects review history for the active node and supports legacy draft scope', () => {
     const n01 = { node_id: 'N01', original_draft: { node_id: 'N01' }, version: 1 } as unknown as Review;
     const legacyN02 = { original_draft: { node_id: 'N02' }, version: 2 } as unknown as Review;

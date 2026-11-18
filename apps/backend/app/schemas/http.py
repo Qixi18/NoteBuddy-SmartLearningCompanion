@@ -19,6 +19,11 @@ class ImportRequest(BaseModel):
         return value
 
 
+class ImportFilesRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    files: dict[str, str]
+
+
 class DraftRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     student_id: str = Field(min_length=1)

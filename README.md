@@ -92,6 +92,14 @@ python -m app.cli summary
 
 ## 验证
 
+浏览器端到端流程测试使用 Playwright Chromium。它会自动在 loopback 上启动独立前后端，创建带唯一运行标识的 SQLite 数据库和数据目录，并从后端测试用例生成六类模拟 CSV；不读取或修改日常开发数据库，不调用真实模型 API。运行：
+
+```powershell
+npm run test:e2e
+```
+
+失败时可在 `playwright-report/` 查看 HTML 报告，在 `test-results/` 查看截图、视频和 trace。测试临时数据库与 CSV 保留在 `data/playwright-*`，该目录受 Git 忽略；确认不再需要诊断数据后可手动清理对应本轮目录和数据库文件。
+
 ```powershell
 python -m pytest
 ruff check apps/backend

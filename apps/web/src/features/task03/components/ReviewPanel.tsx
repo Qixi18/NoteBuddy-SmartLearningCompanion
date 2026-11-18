@@ -55,25 +55,30 @@ export function ReviewPanel({ run, student, indicator, node, review, draft, onDr
     try { await onSave(fields); } catch (reason) { setFailure(reason instanceof Error ? reason.message : String(reason)); }
     finally { setSaving(false); }
   };
+  const activityDiffersFromRecommendation = draft?.activity?.trim() && draft.activity.trim() !== draft.recommendation.trim();
   return <Panel title="诊断与教学建议复核"><p className="muted">规则与 AI 结果均为待复核草稿。核对原始作答和材料后保存复核结论。</p>
     {!node && <p className="warn">请先在上方选择单一测验节点。</p>}
     <div className="actions"><button disabled={drafting || saving || !node} onClick={() => void generate('rule')}>{drafting ? '正在生成草稿…' : '生成规则草稿'}</button><button className="secondary" disabled={drafting || saving || !node} onClick={() => void generate('deepseek')}>{drafting ? '正在生成草稿…' : '使用模型生成草稿'}</button></div><p className="muted">{source}</p>
     {draft?.scope_required && <p className="scope-error" role="alert">范围错误：该指标在多个节点有记录，请明确选择单一测验节点后重新生成。当前草稿不可保存。</p>}
     {draft && !draft.scope_required && <>
       <section className="draft-content" aria-label="只读教学方案草稿">
-        <h3>教学对象与目标</h3><p>{draft.objective || '草稿未提供目标。'}</p>
-        {draft.observed_fact && <><h3>观察事实</h3><p>{draft.observed_fact}</p></>}
-        <h3>诊断与建议（只读草稿）</h3><p>{draft.diagnosis}</p><p>{draft.recommendation}</p>
-        {draft.activity && <><h3>学习活动</h3><p>{draft.activity}</p></>}
-        {draft.steps?.length ? <><h3>活动步骤（按草稿顺序）</h3><ol>{draft.steps.map((step, index) => <li key={`${index}-${step}`}>{step}</li>)}</ol></> : null}
-        {draft.material_ids.length > 0 && <p>材料编号：{draft.material_ids.join('、')}。材料选择理由字段尚未提供。</p>}
-        {draft.observation_point && <p>观察点：{draft.observation_point}</p>}
-        {draft.score_points_to_review.length > 0 && <p>待核验评分点：{draft.score_points_to_review.join('、')}</p>}
-        {draft.source_locator && <p>来源定位：{draft.source_locator}</p>}
-        <p>证据记录：{draft.evidence_record_ids.join('、') || '无有效记录'}；原始来源行：{draft.evidence_source_lines?.join('、') || '未提供'}</p>
-        {draft.rule_id && <p>规则：{draft.rule_id} · 证据类型：{draft.evidence_kind || '未分类'}</p>}
-        {draft.inference_limit && <p>适用边界：{draft.inference_limit}</p>}
-        {draft.unknown_reason && <p className="warn">未决原因：{draft.unknown_reason}</p>}
+        <div className="draft-section"><h3>教学对象与目标</h3><p>{draft.objective || '草稿未提供目标。'}</p></div>
+        {draft.observed_fact && <div className="draft-section"><h3>观察事实</h3><p>{draft.observed_fact}</p></div>}
+        <div className="draft-section draft-recommendation"><h3>诊断与建议 <span>只读草稿</span></h3><p>{draft.diagnosis}</p><p>{draft.recommendation}</p></div>
+        {(activityDiffersFromRecommendation || draft.steps?.length || draft.material_ids.length || draft.observation_point) && <div className="draft-section"><h3>教学安排</h3>
+          {activityDiffersFromRecommendation && <p>{draft.activity}</p>}
+          {draft.steps?.length ? <><h4>活动步骤</h4><ol>{draft.steps.map((step, index) => <li key={`${index}-${step}`}>{step}</li>)}</ol></> : null}
+          {draft.material_ids.length > 0 && <p>材料编号：{draft.material_ids.join('、')}。材料选择理由字段尚未提供。</p>}
+          {draft.observation_point && <p>观察点：{draft.observation_point}</p>}
+        </div>}
+        <details className="draft-evidence"><summary>证据来源与适用边界</summary>
+          <p>证据记录：{draft.evidence_record_ids.join('、') || '无有效记录'}；原始来源行：{draft.evidence_source_lines?.join('、') || '未提供'}</p>
+          {draft.score_points_to_review.length > 0 && <p>待核验评分点：{draft.score_points_to_review.join('、')}</p>}
+          {draft.source_locator && <p>来源定位：{draft.source_locator}</p>}
+          {draft.rule_id && <p>规则：{draft.rule_id} · 证据类型：{draft.evidence_kind || '未分类'}</p>}
+          {draft.inference_limit && <p>适用边界：{draft.inference_limit}</p>}
+          {draft.unknown_reason && <p className="warn">未决原因：{draft.unknown_reason}</p>}
+        </details>
         <p className="muted">草稿保持只读；需要调整材料、步骤、练习或观察点时，在下方完整方案中编辑并随复核版本保存。</p>
       </section>
       <div className="review-fields"><h3>可持久化的教师复核字段</h3>
