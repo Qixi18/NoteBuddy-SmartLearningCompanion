@@ -1,42 +1,51 @@
 ---
-name: 智慧学伴白底证据工作台
-description: 纯白画布、浅蓝强调、结构克制的桌面教学分析应用。
-status: draft
-updated: 2026-11-17
+name: 智慧学伴彩色证据工作台
+description: 面向比赛演示的成熟教学证据工作台，以清晰任务结构和语义化色彩呈现真实数据。
+status: active
+updated: 2026-11-18
 colors:
-  canvas: '#FFFFFF'
+  canvas: '#F3F6FB'
   surface: '#FFFFFF'
-  surface-soft: '#F7FAFE'
-  sidebar: '#FFFFFF'
-  primary: '#246BCE'
-  primary-hover: '#1859B5'
-  primary-soft: '#EAF3FF'
-  ink: '#172B45'
-  muted: '#5F7187'
-  border: '#DCE5EF'
-  success: '#197553'
-  warning: '#A76618'
-  error: '#B54748'
+  surface-soft: '#EEF3FA'
+  sidebar: '#182B49'
+  sidebar-active: '#263F67'
+  primary: '#315FCE'
+  primary-hover: '#244DAF'
+  primary-soft: '#E9F0FF'
+  teal: '#16877F'
+  teal-soft: '#E5F5F1'
+  amber: '#B86D18'
+  amber-soft: '#FFF2DE'
+  coral: '#C65358'
+  coral-soft: '#FCEBED'
+  violet: '#7059B8'
+  violet-soft: '#F0ECFA'
+  ink: '#182B49'
+  muted: '#5C6E86'
+  border: '#D9E2EF'
+  success: '#137568'
+  warning: '#9A5A12'
+  error: '#B6424B'
 typography:
   heading:
     fontFamily: 'system-ui, "Microsoft YaHei", sans-serif'
-    fontSize: 28px
-    fontWeight: '650'
-    lineHeight: '1.3'
+    fontSize: 30px
+    fontWeight: '700'
+    lineHeight: '1.25'
   body:
     fontFamily: 'system-ui, "Microsoft YaHei", sans-serif'
     fontSize: 15px
     fontWeight: '400'
-    lineHeight: '1.55'
+    lineHeight: '1.6'
   label:
     fontFamily: 'system-ui, "Microsoft YaHei", sans-serif'
     fontSize: 13px
-    fontWeight: '550'
+    fontWeight: '600'
     lineHeight: '1.4'
 rounded:
-  sm: 6px
-  md: 9px
-  lg: 12px
+  sm: 7px
+  md: 12px
+  lg: 16px
 spacing:
   '1': 4px
   '2': 8px
@@ -44,18 +53,18 @@ spacing:
   '4': 16px
   '5': 24px
   '6': 32px
-  section-gap: 36px
+  section-gap: 28px
   card-padding: 22px
-  sidebar-width: 224px
-  header-height: 64px
+  sidebar-width: 232px
+  header-height: 68px
 components:
   primary-button:
     background: '{colors.primary}'
     foreground: '#FFFFFF'
     radius: '{rounded.sm}'
   selected-nav:
-    background: '{colors.primary-soft}'
-    foreground: '{colors.primary}'
+    background: '{colors.sidebar-active}'
+    foreground: '#FFFFFF'
     radius: '{rounded.sm}'
   panel:
     background: '{colors.surface}'
@@ -65,59 +74,55 @@ components:
 
 ## Visual Direction
 
-应用属于 Operate 型工作台，首要目标是让研发/演示人员快速读懂统计、定位证据并进入下一步。参考用户提供的页面图，保留白色画布、左侧中文导航、卡片分区和鲜明的页面标题；具体色彩与信息密度按智慧学伴的真实数据调整。
+Operate-mode product UI for a desktop teaching evidence workbench. The interface should feel prepared for a live demonstration: confident, legible from a normal viewing distance, and organized around the educator's next decision. Use a cool paper-like canvas, a deep ink-blue navigation rail, white work surfaces, and a broader but restrained semantic palette. Color distinguishes the kind of information and its state; it never substitutes for a label, count, denominator, or explanation.
 
-采用“白纸上的证据台账”作为视觉概念：白色为主画布，蓝色只标记导航、链接、图表重点和主按钮。卡片通过细边框、轻微浅蓝灰底、内边距和对齐来区分，不靠投影、渐变或多色块。数字以中等偏大的字重突出；标题和说明保持紧凑。
+The visual signature is a dark blue navigation spine against a bright, lightly tinted workspace. Cobalt marks primary actions and current selection; teal marks verified or usable evidence; amber marks pending review; coral marks an actual conflict or invalid record; violet identifies teaching proposals. Keep supporting areas pale and quiet. Use color in selected KPI surfaces, status markers, compact section headers, and charts where it improves scanning. Do not turn every panel into a colorful card.
 
 ## Palette
 
-- `canvas`、`surface`、`sidebar` 均为纯白。
-- `surface-soft` 仅用于选中行、筛选栏或小块统计背景；不铺满大面积。
-- `primary` 是唯一品牌强调色；成功、警告、错误颜色仅用于对应状态。
-- 不使用参考图里紫/橙/绿并列的大面积渐变卡片；不能用颜色替代数据语义。
+- `canvas` is a cool light blue-gray; `surface` stays white for reading and editing.
+- `sidebar` and `ink` establish a steady dark-blue frame and high text contrast.
+- `primary` is reserved for primary actions, links, and selected controls.
+- `teal`, `amber`, `coral`, and `violet` have stable meanings described in Visual Direction. Pair each semantic color with Chinese text and never use it as the only state cue.
+- KPI fills may use distinct pale tints when they aid comparison; keep the foreground deep and readable.
+- Avoid rainbow palettes, full-saturation panels, purple-blue AI gradients, glass, decorative grain, and unrelated accent colors.
 
 ## Typography
 
-全站使用 `{typography.body.fontFamily}`，不加载装饰字体。页面标题约 28px，卡片标题约 17–20px，正文 14–16px，辅助信息不低于 12px。主统计值清晰但克制；表格数值可使用等宽数字特性，不使用代码字体。
+Use the platform system sans stack for dependable Chinese rendering. Main page titles are 28–32px, section headings 17–20px, body copy 14–16px, and supporting labels at least 12px. Keep paragraph measure around 65–75ch; dense evidence rows may be wider. Numeric summaries use tabular figures. Labels should use ordinary teaching language; technical identifiers and raw enum values remain available in detail views.
 
 ## Layout
 
-- 桌面固定左侧栏约 224px，顶栏约 64px，主内容区采用统一的 24–32px 外边距。
-- 侧栏只放智慧学伴品牌、全局概览、学科知识、学情洞察、教学方案；不新增未实现的成果中心、系统设置、通知中心、账号菜单或全局搜索。
-- 内容区以信息组为单位：标题与说明、关键统计、当前任务的主要分析、必要入口；区块间留出 28–36px，不要求填满整个视口。
-- 统计卡片同一行最多四张，组内间距 16px、内边距约 20–24px；用相同白底/浅底/边框体系，不给每张卡指定不同彩色背景。
-- 大表格、证据列表、知识结构和教学建议优先使用宽卡片；辅助历史或待处理项可放次列。不是所有内容都必须包进卡片。
-- 页面间距和对齐保持一致；避免卡片套卡片、过密边框和全屏横向色带。保留适度空白，让内容有呼吸感；不为填满页面而添加模块。
-- 仅设计桌面端，重点适配 1280–1920px；紧凑桌面 1024px 仍需可操作，不做平板/手机适配。
+- Desktop-only, with 1024–1920px as the supported range. At 1024px, preserve usable controls and allow dense two-column workspaces to stack. Do not add mobile or tablet navigation work without a product change.
+- Fixed left navigation around 232px; sticky top bar around 68px; content width capped near 1480px with 24–40px side padding.
+- Global overview leads with the current run's truthful scale, data quality, scope limitations, and the next useful action.
+- Learning evidence uses clear master-detail layouts and compact filters. Tables or aligned rows should replace repeated long prose when the data is comparable.
+- Review uses a scope bar, evidence context, a distinct editable proposal, and an always-findable save action. Never show the same diagnosis and recommendation as both read-only copy and editable fields at the same time.
+- Case export keeps candidate evidence, teacher confirmation, selected students, and package contents in a clear sequence.
+- Use panels only to mark meaningful work areas. Avoid nested bordered cards and large empty placeholders.
 
-## Page Hierarchy
+## Product Truth and Data Presentation
 
-- **全局概览**：标题下展示当前运行和真实全局摘要（学生数、原始行、事件、有效评分），随后是注明节点与分母的班级对比、三个业务入口和简短质量摘要。数值始终来自 API；图稿样例不得硬编码成生产值。
-- **学科知识**：按实际主题显示学习目标/指标清单，再进入指标详情查看题目、课标、教材和核验状态。关系图只在有已核验关系时呈现；否则以带说明的待建设占位替代。
-- **学情洞察**：班级概览为入口，子视图分别承担学生分析、作答证据、数据质量。统计始终带测验节点、分母、样本范围；无记录和评分点冲突用文字解释，不得用掌握率或趋势图制造结论。
-- **教学方案**：建议复核和案例与导出分开。建议按“目标/事实/证据/诊断/材料/步骤与活动/观察/调整/复核”阅读；当前不能保存编辑字段时，将其清楚标为只读草稿或待建设。案例逐例回连作答证据，导出前说明样本限制和包内容。
+- Product users include developers/demo presenters; the demonstrated workflow should still be understandable from an educator's perspective.
+- Keep the four primary areas: global overview, subject knowledge, learning insights, and teaching plan. TASK numbers remain internal.
+- All displayed counts and claims come from current API data. Do not hardcode the screenshot fixture, invent trends, or add unsupported analysis.
+- Distinguish raw response rows, selected revisions, logical events, and eligible scored records. Pending is not zero; excluded evidence never enters score denominators; an item score is not a mastery claim.
+- Translate user-facing quality labels into Chinese while retaining original identifiers, enum values, record IDs, and source lines in traceable details.
+- Keep source verification states explicit. A pending relationship never appears confirmed.
+- Rule and model outputs are drafts. Teacher edits, review status, reason, reviewer, saved history, and structured-plan constraints remain accessible and honest.
+- Import stays local; source CSVs are not moved. Export labels reflect the actual API package and do not imply a complete narrative unless the package contains one.
 
-## Implementation-State Language
+## Components and States
 
-- **已有支持**：正文和数值可用真实 API 返回并回连来源。
-- **部分支持**：显示已有部分和缺项，禁止扩大解释。
-- **待建设**：浅灰虚线边框、文字标签“待建设”；没有 API 的区域不得显示样例结果或伪装成可点击按钮。
-- **未验证**：明确说明待组织方独立评测数据验证，不显示“通过”。
-- **待外部提交**：单列 PDF、演示视频和答辩 PPT 状态，不伪装成站内分析模块。
-
-占位卡片按需出现并使用简洁说明，不为填满页面添加卡片。卡片保持白底、留白和浅蓝灰边框，待建设状态不用大面积告警色。
-
-## Components
-
-- **侧栏导航**：简洁图标可选，中文名称始终可见；当前页面用浅蓝底和蓝色文字标记。
-- **顶栏**：轻量显示当前位置和导入数据按钮，不加入没有数据支持的通知/帮助/个人菜单。
-- **卡片**：纯白底、浅蓝灰边框、6–9px 圆角、无常驻阴影；同一组保持相同视觉语言。
-- **图表**：蓝色突出主值，灰蓝表示背景/分母；图旁直接给分母和统计范围。
-- **状态**：以“待核验、无记录、草稿、已复核”等文字为主，配少量语义色。
-- **交互**：按钮一个主色，次级操作使用白底边框；有加载、成功、失败、空数据状态。
+- Navigation: named Chinese destinations, clear active state, visible focus, and subroutes grouped under the four primary areas.
+- Page heading: concise title, one useful task description, current-run details behind a secondary disclosure, and the import action.
+- Metric: number, unit, scope, denominator where relevant, and a restrained semantic tint.
+- Status: concise Chinese label, optional semantic color, and explanatory text for consequential states.
+- Evidence rows: summary first; full response, source file, source line, event, revision, and disposition available on expansion.
+- Loading, empty, error, disabled, saving, saved, and unsaved states use consistent patterns. Errors state what happened and what the user can do next.
+- Forms and native controls keep familiar behavior, legible labels, 40px minimum control height, and visible keyboard focus.
+- Motion is limited to short state feedback (150–220ms); respect reduced-motion preference. No choreographed page-load animations.
 
 ## Reference Boundaries
 
-用户提供的样式图仅作为风格参考，其中的成果中心、系统设置、通知、搜索和示例待办数量并非当前代码已确认的功能，不纳入本方案。图中的“学生总数 806”等字段也与当前代码统计口径不符；本方案保持学生数、原始行数、选中事件、有效评分数的实际含义。
-
-本设计不声称比赛要求已由当前系统完整实现。待建设/未验证内容必须在界面保留文字占位，直至后端契约、数据和人工验收均就绪。页面到 API 和赛题条款的映射见 [前后端与赛题要求映射.md](./前后端与赛题要求映射.md)。
+The screenshots and the redesign brief define experience goals, not product data. Their example IDs and counts are never production defaults. Existing API contracts, scoring rules, event selection, evidence links, review validation, and export members remain authoritative. If a desired interaction needs data the current API does not provide, label the gap or use the closest honest fallback; do not simulate success.

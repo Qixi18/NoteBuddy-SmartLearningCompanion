@@ -63,7 +63,7 @@ test('loads the local workbench and imports the sample bundle', async ({ page })
   await expect(page.getByRole('heading', { name: '建议复核', exact: true })).toBeVisible();
   await page.getByLabel('测验节点').selectOption('N01');
   await page.getByRole('button', { name: '生成规则草稿' }).click();
-  await expect(page.getByRole('heading', { name: '诊断与建议' })).toBeVisible();
-  await expect(page.getByText('只读草稿', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '教师复核内容' })).toBeVisible();
+  await expect(page.getByText('未确认 · 请核对左侧证据和来源边界')).toBeVisible();
   expect(pageErrors).toEqual([]);
 });

@@ -7,9 +7,8 @@ export function ExportPanel({ students, suggestions, onExport }: { students: Stu
   const choose = (index: number, value: string) => setIds(old => { const next = [...old]; next[index] = value; return next; });
   const selected = [0, 1, 2].map(index => ids[index] || '');
   const uniqueReady = selected.every(id => Boolean(id) && options.includes(id)) && new Set(selected).size === 3;
-  return <Panel title="三名案例与成果导出"><p className="muted">候选依据和样本限制请在上方逐项核对。选择三名不同学生后，服务端仍会执行最终校验。</p>
-    {suggestions.map(item => <p className="row" key={`${item.type}-${item.student_id}`}><strong>{item.type}：{item.student_id}</strong> {item.reason} <small>依据记录：{item.evidence_record_ids.join('、') || '暂无证据'}</small></p>)}
-    <div className="grid">{[0, 1, 2].map(index => <label key={index}>案例{['一', '二', '三'][index]}<select value={selected[index]} onChange={event => choose(index, event.target.value)}><option value="">请选择学生</option>{options.map(id => <option key={id} value={id}>{id}</option>)}</select></label>)}</div>
+  return <Panel title="三名案例与成果导出" className="export-panel"><p className="muted">上方可查看 {suggestions.length} 位系统候选及其证据。选择三名不同学生后，服务端会再次校验导出范围。</p>
+    <div className="export-slots">{[0, 1, 2].map(index => <label className="export-slot" key={index}>案例{['一', '二', '三'][index]}<select value={selected[index]} onChange={event => choose(index, event.target.value)}><option value="">请选择学生</option>{options.map(id => <option key={id} value={id}>{id}</option>)}</select></label>)}</div>
     {!uniqueReady && <p className="muted" role="status">请选择三名不同的学生。重复选择会阻止导出。</p>}
     <p className="muted">成果包包含当前 API 提供的结构化数据和字段说明，不自动生成完整案例叙述。</p>
     <details className="export-preview"><summary>查看成果包内容与字段口径</summary>

@@ -23,6 +23,7 @@ export default defineConfig({
   use: {
     ...devices['Desktop Chrome'],
     baseURL: `http://127.0.0.1:${frontendPort}`,
+    viewport: { width: Number(process.env.PLAYWRIGHT_VIEWPORT_WIDTH ?? 1440), height: Number(process.env.PLAYWRIGHT_VIEWPORT_HEIGHT ?? 900) },
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -33,7 +34,7 @@ export default defineConfig({
       command: `python -m app.cli db-upgrade --database-url sqlite:///${databasePath.replaceAll('\\', '/')} && python -m app.main`,
       cwd: 'apps/backend',
       url: `http://127.0.0.1:${backendPort}/api/health`,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       timeout: 60_000,
       env: {
         PLAYWRIGHT_RUN_ID: runId,
@@ -51,7 +52,7 @@ export default defineConfig({
       command: `npm run dev -- --host 127.0.0.1 --port ${frontendPort} --strictPort`,
       cwd: 'apps/web',
       url: `http://127.0.0.1:${frontendPort}`,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       timeout: 60_000,
       env: { SMART_LEARNING_API_TARGET: `http://127.0.0.1:${backendPort}` },
     },

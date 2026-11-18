@@ -35,7 +35,7 @@ export function TeacherCaseEditor({ run, reviews }: { run: AnalysisRun; reviews:
     } catch (error) { setMessage(error instanceof Error ? error.message : String(error)); }
     finally { setSaving(false); }
   };
-  return <Panel title="教师案例确认"><p className="muted">候选只供筛选；正式案例须核对原始记录、复核版本并写明样本限制。</p>
+  return <Panel title="教师案例确认" className="case-editor"><p className="muted">候选只供筛选；正式案例须核对原始记录、复核版本并写明样本限制。</p>
     <label>案例学生<select value={student} onChange={event => { setStudent(event.target.value); setMessage(''); }}>{run.students.map(item => <option key={item['学生编号']} value={item['学生编号']}>{item['学生编号']} · {item['模拟班级编号']}</option>)}</select></label>
     <p>最新版本：{latest ? `${latest.version} · ${latest.status} · ${latest.reviewer || '未署名'}` : '尚无案例记录'}</p>
     <details className="editor-disclosure"><summary>{latest ? '更新案例签核' : '开始案例签核'}</summary><label>案例叙述<textarea value={narrative} onChange={event => setNarrative(event.target.value)} placeholder="描述该节点的实际作答、教师解释与教学处理" /></label>
