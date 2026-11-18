@@ -147,6 +147,38 @@ class ReviewRow(Base):
     )
 
 
+class SourceVerificationRow(Base):
+    __tablename__ = "source_verifications"
+    run_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    indicator_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    version: Mapped[int] = mapped_column(Integer, primary_key=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False)
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["run_id", "indicator_id"],
+            ["learning_objectives.run_id", "learning_objectives.indicator_id"],
+            ondelete="CASCADE",
+        ),
+    )
+
+
+class ConfirmedCaseRow(Base):
+    __tablename__ = "teacher_cases"
+    run_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    student_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    version: Mapped[int] = mapped_column(Integer, primary_key=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False)
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["run_id", "student_id"],
+            ["students.run_id", "students.student_id"],
+            ondelete="CASCADE",
+        ),
+    )
+
+
 class AppStateRow(Base):
     __tablename__ = "app_state"
     key: Mapped[str] = mapped_column(String(128), primary_key=True)

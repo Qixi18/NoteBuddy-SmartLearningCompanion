@@ -53,10 +53,14 @@ describe('TASK02 result panels', () => {
   });
 
   it('renders class scores by node without using an empty denominator as zero', () => {
-    render(<ClassPanel run={run} />);
-    expect(screen.getByText('按测验节点与指标比较')).toBeTruthy();
-    expect(screen.getByText(/N01/)).toBeTruthy();
-    expect(screen.getAllByText(/C1：1\/2（50.0%，1 条）/)).toHaveLength(2);
+    const onNode = vi.fn();
+    const { rerender } = render(<ClassPanel run={run} node="" onNode={onNode} />);
+    expect(screen.getByText(/未选节点时不比较得分/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('测验节点'), { target: { value: 'N01' } });
+    expect(onNode).toHaveBeenCalledWith('N01');
+    rerender(<ClassPanel run={run} node="N01" onNode={onNode} />);
+    fireEvent.click(screen.getByText('节点 N01 的指标明细'));
+    expect(screen.getByText(/C1：1\/2（50.0%，1 条）/)).toBeTruthy();
   });
 
   it('lets the learner view select a node and labels unknown status explicitly', () => {
@@ -83,6 +87,7 @@ describe('TASK02 result panels', () => {
     expect(screen.getByText('结构化评分点状态：校验一致')).toBeTruthy();
     expect(screen.getByText('Q001P1：1/2')).toBeTruthy();
     expect(screen.getByText('该修订未进入当前分析版本；逐点评分未知。')).toBeTruthy();
+    expect(screen.getByText(/原始 CSV：作答记录.csv · 第 2 行/)).toBeTruthy();
     expect(screen.queryByText(/other student/)).toBeNull();
   });
 

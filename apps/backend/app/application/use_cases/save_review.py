@@ -69,6 +69,56 @@ class SaveReview:
                 or not set(cited).issubset(scoped_allowed)
             ):
                 raise ValueError("复核引用了范围外或无效记录")
+            structured_plan = payload.get("structured_plan")
+            source_versions: dict[str, int] = {}
+            if structured_plan is not None:
+                if (
+                    not isinstance(structured_plan, dict)
+                    or original is None
+                    or review_node_id is None
+                ):
+                    raise ValueError("结构化方案必须关联原草稿与单一测验节点")
+                if status not in {ReviewStatus.ACCEPTED, ReviewStatus.EDITED}:
+                    raise ValueError("结构化方案须经教师接受或修改")
+                material_ids = structured_plan.get("material_ids", [])
+                if (
+                    not isinstance(material_ids, list)
+                    or not material_ids
+                    or len(material_ids) != len(set(material_ids))
+                ):
+                    raise ValueError("结构化方案须选择不重复的已核验材料")
+                if any(
+                    not isinstance(value, str) or not value.strip()
+                    for value in material_ids
+                ):
+                    raise ValueError("结构化方案材料编号无效")
+                for field in ("activity",):
+                    if (
+                        not isinstance(structured_plan.get(field), str)
+                        or not structured_plan[field].strip()
+                    ):
+                        raise ValueError("结构化方案须填写学习活动")
+                for field in ("steps", "practice", "observation_points"):
+                    values = structured_plan.get(field)
+                    if (
+                        not isinstance(values, list)
+                        or not values
+                        or any(
+                            not isinstance(value, str) or not value.strip()
+                            for value in values
+                        )
+                    ):
+                        raise ValueError("结构化方案缺少活动步骤、练习或观察点")
+                histories = uow.stage2.list_sources(run_id)
+                latest = histories.get(indicator_id, [])[-1:]
+                verification = latest[0] if latest else None
+                if (
+                    not verification
+                    or verification["status"] != "verified"
+                    or not set(material_ids).issubset(verification["material_ids"])
+                ):
+                    raise ValueError("所选教学材料尚未完成当前运行的指标来源签核")
+                source_versions[indicator_id] = verification["version"]
             draft = RecommendationDraft(
                 student_id=student_id,
                 indicator_id=indicator_id,
@@ -115,6 +165,8 @@ class SaveReview:
                     "evidence_record_ids": cited,
                     "reason": str(payload.get("reason", "")),
                     "reviewer": str(payload.get("reviewer", "教师")),
+                    "structured_plan": structured_plan,
+                    "source_verification_versions": source_versions,
                 },
             )
 

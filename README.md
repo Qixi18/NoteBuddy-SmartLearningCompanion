@@ -7,7 +7,7 @@
 - 后端：Python 3.12+、FastAPI、Pydantic、SQLAlchemy 2.x、Alembic、Uvicorn；SQLite 本地存储。
 - 前端：React 19、TypeScript、Vite。
 - 架构：本地单用户模块化单体，默认只监听 `127.0.0.1`。
-- 当前能力：六类 CSV 导入、版本与质量检查、统计与观察、三类案例建议、规则/可选 DeepSeek 草稿、教师复核历史、PDF 来源 allowlist、ZIP 导出。
+- 当前能力：六类 CSV 导入、版本与质量检查、统计与观察、三类案例建议、规则/可选模型草稿、Web 逐项来源签核、结构化教学方案、教师案例确认、追加式复核历史、PDF 来源 allowlist、ZIP 导出。
 - 统计由确定性程序计算。没有有效记录时不推断学生未掌握。系统没有完整 PDF 自动解析、账户、多用户或动态学习路径。
 
 ## 安装
@@ -23,7 +23,7 @@ Pop-Location
 
 ## PowerShell 配置和启动
 
-程序不会自动读取 `.env`。`.env.example` 仅列出配置项；相对路径统一以仓库根目录为基准，与当前工作目录无关。默认 JSON/CSV 数据目录为仓库根目录 `data/`，SQLite 默认固定为 `data/smart_learning.db`；更改 data-dir 不会移动数据库。默认只绑定 loopback：
+程序启动时读取仓库根目录的 `.env`（已有 PowerShell 环境变量优先）。先将 `.env.example` 复制为 `.env`，填入模型配置；`.env` 已被 Git 忽略。相对路径统一以仓库根目录为基准，与当前工作目录无关。默认 JSON/CSV 数据目录为仓库根目录 `data/`，SQLite 默认固定为 `data/smart_learning.db`；更改 data-dir 不会移动数据库。默认只绑定 loopback：
 
 ```powershell
 $env:SMART_LEARNING_HOST = "127.0.0.1"
@@ -34,9 +34,11 @@ $env:SMART_LEARNING_DATA_DIR = "data"
 $env:SMART_LEARNING_RESOURCES_DIR = "resources"
 # 可选备份根目录；不设置时位于仓库父目录 _backups/smart-learning。
 # $env:SMART_LEARNING_BACKUP_DIR = "D:/workspace/_backups/smart-learning"
-# 可选；仅启用模型草稿时配置。不要提交密钥。
-$env:DEEPSEEK_API_KEY = ""
-$env:DEEPSEEK_MODEL = "deepseek-flash"
+# 可选；也可以在仓库根目录 .env 中填写。不要提交密钥。
+$env:MODEL_PROVIDER = "deepseek"
+$env:MODEL_API_URL = "" # deepseek/openai 可留空；其他提供商填完整 HTTPS 接口地址
+$env:MODEL_API_KEY = ""
+$env:MODEL_NAME = "deepseek-flash"
 $env:DEEPSEEK_TIMEOUT_SECONDS = "30"
 # 模型请求超时秒数；默认 30，须为正数。
 ```
@@ -82,11 +84,11 @@ python -m app.cli import "D:\path\to\模拟学情数据"
 python -m app.cli summary
 ```
 
-数据库默认位于仓库根目录 `data/smart_learning.db`。分析快照、学生/目标/材料/节点/作答投影、当前运行指针和追加式复核历史保存在 SQLite；旧 JSON 保持原样用于备份与校验。导入成功后当前运行指针才会更新。
+数据库默认位于仓库根目录 `data/smart_learning.db`。分析快照、学生/目标/材料/节点/作答投影、当前运行指针、来源签核、教师案例和复核历史保存在 SQLite；三类人工记录均按运行追加版本。旧 JSON 保持原样用于备份与校验。导入成功后当前运行指针才会更新。
 
-## 可选 DeepSeek
+## 可选模型服务
 
-DeepSeek API Key 只配置在后端环境；浏览器不会接触密钥。调用模型会将所选学生的模拟作答步骤及评分点发给外部服务。模型输出是建议草稿，系统校验证据 ID，教师必须复核；自动化测试使用 Mock，不发起真实付费调用。
+模型 API Key 只配置在后端的 `.env` 或环境变量中；浏览器不会接触密钥。`MODEL_PROVIDER` 填 `deepseek` 或 `openai` 时可省略 `MODEL_API_URL`，程序会选择对应默认地址；其他提供商需填写完整的 HTTPS Chat Completions 接口地址。`MODEL_NAME` 填模型 ID。当前支持兼容 OpenAI Chat Completions 的接口及 JSON 对象响应；旧 `DEEPSEEK_API_KEY`、`DEEPSEEK_MODEL` 仍可用。调用模型会将所选学生的模拟作答步骤及评分点发给外部服务。模型输出是建议草稿，系统校验证据 ID，教师必须复核；自动化测试使用 Mock，不发起真实付费调用。修改 `.env` 后须重启后端。
 
 ## 验证
 

@@ -14,6 +14,7 @@ from alembic.config import Config
 from app.config import Settings, resolve_database_url, resolve_path
 from app.application.use_cases.save_review import SaveReview
 from app.infrastructure.database.backup import backup_database, restore_database
+from app.infrastructure.llm.deepseek_client import DeepSeekAdapter
 from app.infrastructure.database.mappers import (
     assessment_item_from_row,
     material_from_row,
@@ -136,6 +137,36 @@ def test_data_directory_does_not_move_default_database(tmp_path):
     )
 
 
+def test_configured_model_endpoint_uses_custom_url_and_key(monkeypatch):
+    monkeypatch.setenv("MODEL_PROVIDER", "example")
+    monkeypatch.setenv("MODEL_API_URL", "https://example.com/v1/chat/completions")
+    monkeypatch.setenv("MODEL_API_KEY", "test-only-key")
+    monkeypatch.setenv("MODEL_NAME", "example-model")
+    config = Settings()
+    assert config.model_provider == "example"
+    assert config.model_name == "example-model"
+
+    class Response:
+        def __enter__(self):
+            return io.BytesIO(b'{"choices": []}')
+
+        def __exit__(self, *_args):
+            return False
+
+    def capture(request, timeout):
+        assert request.full_url == config.model_api_url
+        assert request.get_header("Authorization") == "Bearer test-only-key"
+        assert timeout == 30
+        return Response()
+
+    monkeypatch.setattr(
+        "app.infrastructure.llm.deepseek_client.urllib.request.urlopen", capture
+    )
+    assert DeepSeekAdapter(config.model_api_key, api_url=config.model_api_url).complete(
+        {}
+    ) == {"choices": []}
+
+
 def test_settings_validate_and_resolve_environment_paths_independently_of_cwd(
     tmp_path, monkeypatch
 ):
@@ -194,7 +225,7 @@ def test_json_source_backup_excludes_database_and_sidecars(tmp_path, monkeypatch
     database_backup = tmp_path / "sqlite-backup" / "smart_learning.db"
     database_info = backup_database(f"sqlite:///{database.as_posix()}", database_backup)
     assert database_info["integrity_check"] == ["ok"]
-    assert database_info["revision"] == "da812b1d5423"
+    assert database_info["revision"] == "b2f4d2a8c1e0"
     assert "analysis_runs" in database_info["tables"]
 
     wal = Path(f"{database}-wal")
@@ -391,7 +422,7 @@ def test_alembic_empty_upgrade_repeat_and_consistent_restore(tmp_path, monkeypat
     backup_info = backup_database(url, backup)
     restore_info = restore_database(backup, restored)
     assert backup_info["revision"] == restore_info["revision"]
-    assert restore_info["revision"] == "da812b1d5423"
+    assert restore_info["revision"] == "b2f4d2a8c1e0"
     assert restore_info["integrity_check"] == ["ok"]
     assert restore_info["foreign_key_violations"] == 0
     assert backup_info["tables"] == restore_info["tables"]
@@ -827,7 +858,7 @@ def test_cli_rejects_nonempty_target_without_opt_in_and_persists_report(
     report_path = next(backup_root.glob("*/migration-report.json"))
     report = json.loads(report_path.read_text(encoding="utf-8"))
     assert report["status"] == "failed"
-    assert report["database_preflight"]["revision"] == "da812b1d5423"
+    assert report["database_preflight"]["revision"] == "b2f4d2a8c1e0"
     assert report["database_preflight"]["table_counts"]["analysis_runs"] == 1
     assert not (report_path.parent / "source").exists()
 

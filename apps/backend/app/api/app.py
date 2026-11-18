@@ -18,7 +18,7 @@ from ..config import Settings, settings
 from ..core.logging import configure_logging
 from ..application.ports.llm import LLMError
 from ..repositories.store import Store
-from .routes import analysis, exports, health, imports, recommendations, reviews
+from .routes import analysis, exports, health, imports, recommendations, reviews, stage2
 
 logger = logging.getLogger("smart_learning.api")
 
@@ -135,6 +135,7 @@ def create_app(store: Store | None = None, config: Settings = settings) -> FastA
     application.include_router(analysis.router)
     application.include_router(recommendations.router)
     application.include_router(reviews.router)
+    application.include_router(stage2.router)
     application.include_router(exports.router)
 
     @application.get("/", include_in_schema=False)

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { learningApi } from '../../api/client';
-import type { AnalysisRun, CaseSuggestion, Draft, Review, ReviewMap, ReviewPayload, ReviewStatus } from '../../api/types';
+import type { AnalysisRun, CaseSuggestion, Draft, Review, ReviewMap, ReviewPayload, ReviewStatus, StructuredPlan } from '../../api/types';
 
 export function reviewForNode(history: Review[], nodeId: string | null): Review | undefined {
   return history
@@ -21,33 +21,43 @@ export function useWorkbench() {
   const [loading, setLoading] = useState(true);
   const draftRequest = useRef(0);
   const refreshRequest = useRef(0);
+  const currentRun = useRef<AnalysisRun | null>(null);
   const reviewKey = `${student}:${indicator}`;
 
-  useEffect(() => { draftRequest.current += 1; setDraft(null); setNode(''); }, [reviewKey, run?.run_id]);
+  useEffect(() => { draftRequest.current += 1; setDraft(null); }, [reviewKey, run?.run_id]);
 
   const refresh = useCallback(async () => {
     const requestId = ++refreshRequest.current;
     setLoading(true);
     try {
-      const [nextRun, nextReviews, nextCases] = await Promise.all([
-        learningApi.run(), learningApi.reviews(), learningApi.cases(),
+      const nextRun = await learningApi.run();
+      if (requestId !== refreshRequest.current) return true;
+      const [reviewsResult, casesResult] = await Promise.allSettled([
+        learningApi.reviews(), learningApi.cases(),
       ]);
       if (requestId === refreshRequest.current) {
+        if (currentRun.current?.run_id !== nextRun.run_id) {
+          draftRequest.current += 1;
+          setDraft(null);
+          setNode('');
+        }
         setRun(nextRun);
-        setReviews(nextReviews);
-        setSuggestions(nextCases);
+        currentRun.current = nextRun;
+        setReviews(reviewsResult.status === 'fulfilled' ? reviewsResult.value : {});
+        setSuggestions(casesResult.status === 'fulfilled' ? casesResult.value : []);
         setStudentState(current => nextRun.students.some(item => item['学生编号'] === current)
           ? current : nextRun.students[0]?.['学生编号'] ?? '');
         setIndicatorState(current => nextRun.objectives.some(item => item['指标编号'] === current)
           ? current : nextRun.objectives[0]?.['指标编号'] ?? '');
-        setMessage(`已加载分析运行 ${nextRun.run_id}`);
-        setError(false);
+        const failed = [reviewsResult.status === 'rejected' ? '复核历史' : '', casesResult.status === 'rejected' ? '案例候选' : ''].filter(Boolean);
+        setMessage(failed.length ? `已加载分析运行 ${nextRun.run_id}；${failed.join('、')}读取失败，可重试读取。` : `已加载分析运行 ${nextRun.run_id}`);
+        setError(failed.length > 0);
+        if (failed.length) return `${failed.join('、')}读取失败`;
       }
       return true;
     } catch (reason) {
       const failure = reason instanceof Error ? reason.message : String(reason);
       if (requestId === refreshRequest.current) {
-        setRun(null);
         setMessage(failure);
         setError(true);
         return failure;
@@ -62,11 +72,11 @@ export function useWorkbench() {
   const announce = (text: string, failed = false) => { setMessage(text); setError(failed); };
 
   const setStudent = (studentId: string) => {
-    if (studentId !== student) { draftRequest.current += 1; setDraft(null); setNode(''); }
+    if (studentId !== student) { draftRequest.current += 1; setDraft(null); }
     setStudentState(studentId);
   };
   const setIndicator = (indicatorId: string) => {
-    if (indicatorId !== indicator) { draftRequest.current += 1; setDraft(null); setNode(''); }
+    if (indicatorId !== indicator) { draftRequest.current += 1; setDraft(null); }
     setIndicatorState(indicatorId);
   };
   const selectNode = (nodeId: string) => {
@@ -79,7 +89,7 @@ export function useWorkbench() {
     const requestId = ++draftRequest.current;
     const scope = `${student}:${indicator}:${selectedNode}`;
     try {
-      announce(provider === 'rule' ? '正在生成规则草稿…' : '正在请求 DeepSeek…');
+      announce(provider === 'rule' ? '正在生成规则草稿…' : '正在请求模型服务…');
       const result = provider === 'rule'
         ? await learningApi.ruleDraft(student, indicator, selectedNode || undefined)
         : await learningApi.modelDraft(student, indicator, selectedNode || undefined);
@@ -97,16 +107,21 @@ export function useWorkbench() {
   const saveReview = async (payload: {
     status: ReviewStatus; diagnosis: string; recommendation: string;
     adjustment_condition: string; reason: string;
+    reviewer: string; structured_plan: StructuredPlan | null;
   }) => {
     if (!draft) throw new Error('请先生成诊断草稿');
     if (draft.scope_required || (draft.node_id && draft.node_id !== node)) throw new Error('当前草稿范围不匹配，请重新选择单一测验节点并生成草稿。');
+    const savingRunId = currentRun.current?.run_id;
+    const savingScope = `${student}:${indicator}:${node}`;
     const request: ReviewPayload = {
       student_id: student, indicator_id: indicator, ...payload,
       source: draft.source, model: draft.model, prompt_version: draft.prompt_version,
       evidence_record_ids: draft.evidence_record_ids, original_draft: draft,
     };
     await learningApi.saveReview(request);
-    setReviews(await learningApi.reviews());
+    const nextReviews = await learningApi.reviews();
+    if (currentRun.current?.run_id !== savingRunId || savingScope !== `${student}:${indicator}:${node}`) return;
+    setReviews(nextReviews);
     announce('复核已保存，历史版本已更新。');
   };
 

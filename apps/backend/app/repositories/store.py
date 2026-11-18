@@ -52,9 +52,11 @@ class Store:
         self.config = config
         llm_client = (
             DeepSeekAdapter(
-                config.deepseek_api_key, timeout=config.deepseek_timeout_seconds
+                config.model_api_key or config.deepseek_api_key,
+                timeout=config.deepseek_timeout_seconds,
+                api_url=config.model_api_url,
             )
-            if config.deepseek_api_key
+            if config.model_api_key or config.deepseek_api_key
             else None
         )
         self.use_cases = WorkbenchUseCases(

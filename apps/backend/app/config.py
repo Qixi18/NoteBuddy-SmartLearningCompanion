@@ -5,11 +5,14 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlencode
 
 from sqlalchemy.engine import make_url
+from dotenv import load_dotenv
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
+load_dotenv(PROJECT_ROOT / ".env", override=False)
 
 
 def resolve_path(value: str | Path, *, base: Path = PROJECT_ROOT) -> Path:
@@ -27,10 +30,10 @@ def resolve_database_url(value: str, *, base: Path = PROJECT_ROOT) -> str:
         return value
     database = Path(url.database).expanduser()
     if not database.is_absolute():
-        url = url.set(
-            database=str(resolve_path(database, base=base)).replace("\\", "/")
-        )
-    return url.render_as_string(hide_password=False)
+        resolved = resolve_path(database, base=base).as_posix()
+        query = f"?{urlencode(url.query, doseq=True)}" if url.query else ""
+        return f"sqlite:///{resolved}{query}"
+    return value
 
 
 @dataclass(frozen=True)
@@ -58,6 +61,20 @@ class Settings:
     deepseek_timeout_seconds: int = field(
         default_factory=lambda: int(os.getenv("DEEPSEEK_TIMEOUT_SECONDS", "30"))
     )
+    model_provider: str = field(
+        default_factory=lambda: os.getenv("MODEL_PROVIDER", "deepseek")
+    )
+    model_api_url: str = field(default_factory=lambda: os.getenv("MODEL_API_URL", ""))
+    model_api_key: str = field(
+        default_factory=lambda: os.getenv(
+            "MODEL_API_KEY", os.getenv("DEEPSEEK_API_KEY", "")
+        )
+    )
+    model_name: str = field(
+        default_factory=lambda: os.getenv(
+            "MODEL_NAME", os.getenv("DEEPSEEK_MODEL", "deepseek-flash")
+        )
+    )
 
     def __post_init__(self) -> None:
         root = Path(self.project_root).expanduser().resolve()
@@ -68,6 +85,19 @@ class Settings:
             raise ValueError("SMART_LEARNING_PORT 必须在 1 到 65535 之间")
         if not 1 <= self.deepseek_timeout_seconds <= 120:
             raise ValueError("DEEPSEEK_TIMEOUT_SECONDS 必须在 1 到 120 之间")
+        provider = self.model_provider.strip().lower()
+        if provider == "deepseek" and not self.model_api_url:
+            object.__setattr__(
+                self, "model_api_url", "https://api.deepseek.com/chat/completions"
+            )
+        elif provider == "openai" and not self.model_api_url:
+            object.__setattr__(
+                self, "model_api_url", "https://api.openai.com/v1/chat/completions"
+            )
+        if self.model_api_key and not self.model_api_url.startswith("https://"):
+            raise ValueError("MODEL_API_URL 必须使用 HTTPS")
+        if not self.model_provider.strip() or not self.model_name.strip():
+            raise ValueError("模型提供商和模型名称不能为空")
         path_values = {
             "data_dir": self.data_dir or os.getenv("SMART_LEARNING_DATA_DIR", "data"),
             "resources_dir": self.resources_dir

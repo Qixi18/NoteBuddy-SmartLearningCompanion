@@ -6,9 +6,14 @@ import urllib.request
 from ...application.ports.llm import LLMClient, LLMError
 
 
-def complete(body: dict, api_key: str, timeout: int = 30) -> dict:
+def complete(
+    body: dict,
+    api_key: str,
+    timeout: int = 30,
+    api_url: str = "https://api.deepseek.com/chat/completions",
+) -> dict:
     request = urllib.request.Request(
-        "https://api.deepseek.com/chat/completions",
+        api_url,
         data=json.dumps(body, ensure_ascii=False).encode(),
         headers={
             "Content-Type": "application/json",
@@ -28,9 +33,15 @@ def complete(body: dict, api_key: str, timeout: int = 30) -> dict:
 class DeepSeekAdapter(LLMClient):
     """Configured implementation of the single structured completion port."""
 
-    def __init__(self, api_key: str, timeout: int = 30):
+    def __init__(
+        self,
+        api_key: str,
+        timeout: int = 30,
+        api_url: str = "https://api.deepseek.com/chat/completions",
+    ):
         self.api_key = api_key
         self.timeout = timeout
+        self.api_url = api_url
 
     def complete(self, body: dict) -> dict:
-        return complete(body, self.api_key, timeout=self.timeout)
+        return complete(body, self.api_key, timeout=self.timeout, api_url=self.api_url)

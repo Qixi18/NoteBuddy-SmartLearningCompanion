@@ -38,20 +38,23 @@ describe('WorkbenchPage empty state', () => {
     expect(screen.queryByText('学生')).toBeNull();
   });
 
-  it('lists external submissions as unverified rather than implying they are done', () => {
+  it('keeps the home focused on current run and task entry points', () => {
     render(<WorkbenchPage {...defaults} />);
-    expect(screen.getByText(/方案 PDF/)).not.toBeNull();
-    expect(screen.getByText(/MP4 不超过 5 分钟 · 待站外准备与核验/)).not.toBeNull();
-    expect(screen.getByText(/不会显示虚构的完成状态/)).not.toBeNull();
+    expect(screen.getByLabelText('当前运行摘要').children).toHaveLength(4);
+    expect(screen.getByRole('button', { name: '查看数据质量' })).not.toBeNull();
+    expect(screen.queryByText(/方案 PDF/)).toBeNull();
   });
 
-  it('does not turn a missing indicator denominator into a zero percent score', () => {
-    render(<WorkbenchPage {...defaults} />);
-    expect(screen.getByText('C1：1/2（无分母，1 条）')).not.toBeNull();
+  it('does not turn an old snapshot without node metrics into a zero percent score', () => {
+    render(<WorkbenchPage {...defaults} path="/insights/classes" />);
+    expect(screen.getByText(/旧统计快照/)).not.toBeNull();
+    expect(screen.queryByText(/得分率 0.0%/)).toBeNull();
   });
 
   it('drills from a class member into student analysis', () => {
-    render(<WorkbenchPage {...defaults} path="/insights/classes" />);
+    const run = makeRun();
+    run.metrics.push({ kind: 'class_indicator', key: 'C1:I1@N1', class_id: 'C1', indicator_id: 'I1', node_id: 'N1', score: 1, maximum: 2, ratio: 0.5, count: 1, record_ids: ['R1'], event_ids: ['E1'] });
+    render(<WorkbenchPage {...defaults} run={run} path="/insights/classes" />);
     fireEvent.click(screen.getByText('查看本班学生（1）'));
     fireEvent.click(screen.getByRole('button', { name: 'D01' }));
     expect(defaults.onStudent).toHaveBeenCalledWith('D01');

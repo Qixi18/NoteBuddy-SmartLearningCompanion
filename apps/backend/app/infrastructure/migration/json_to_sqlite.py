@@ -15,7 +15,7 @@ from ..database import models as database_models
 
 RUN_ID = re.compile(r"^[0-9a-f]{16,64}$")
 REVIEW_STATUSES = {"accepted", "edited", "rejected", "needs_observation"}
-ALEMBIC_HEAD = "da812b1d5423"
+ALEMBIC_HEAD = "b2f4d2a8c1e0"
 
 
 class MigrationTargetError(ValueError):

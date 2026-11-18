@@ -41,6 +41,53 @@ class ReviewRequest(BaseModel):
     evidence_record_ids: list[str] = Field(default_factory=list)
     original_draft: dict[str, Any] | None = None
     reviewer: str = "教师"
+    structured_plan: "StructuredPlan | None" = None
+
+
+class StructuredPlan(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    material_ids: list[str] = Field(default_factory=list)
+    activity: str = ""
+    steps: list[str] = Field(default_factory=list)
+    practice: list[str] = Field(default_factory=list)
+    observation_points: list[str] = Field(default_factory=list)
+
+
+class KnowledgeLink(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    target_indicator_id: str = Field(min_length=1)
+    relation: str = Field(min_length=1)
+    evidence: str = Field(min_length=1)
+
+
+class SourceVerificationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    indicator_id: str = Field(min_length=1)
+    status: Literal["pending", "verified", "rejected"]
+    curriculum_locator: str = Field(default="", max_length=500)
+    textbook_locator: str = Field(default="", max_length=500)
+    material_ids: list[str] = Field(default_factory=list)
+    knowledge_links: list[KnowledgeLink] = Field(default_factory=list)
+    reviewer: str = Field(default="", max_length=200)
+    reason: str = Field(default="", max_length=4000)
+
+
+class CaseReviewRef(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    indicator_id: str = Field(min_length=1)
+    node_id: str = Field(min_length=1)
+    version: int = Field(ge=1)
+
+
+class TeacherCaseRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    student_id: str = Field(min_length=1)
+    status: Literal["draft", "confirmed", "rejected"]
+    narrative: str = Field(default="", max_length=10000)
+    limitations: str = Field(default="", max_length=4000)
+    evidence_record_ids: list[str] = Field(default_factory=list)
+    review_refs: list[CaseReviewRef] = Field(default_factory=list)
+    reviewer: str = Field(default="", max_length=200)
 
 
 class ImportResponse(BaseModel):
@@ -137,6 +184,20 @@ class ReviewRecordResponse(BaseModel):
     reviewer: str
     version: int
     updated_at: str
+    structured_plan: StructuredPlan | None = None
+    source_verification_versions: dict[str, int] = Field(default_factory=dict)
+
+
+class SourceVerificationResponse(SourceVerificationRequest):
+    run_id: str
+    version: int
+    reviewed_at: str
+
+
+class TeacherCaseResponse(TeacherCaseRequest):
+    run_id: str
+    version: int
+    reviewed_at: str
 
 
 class ErrorResponse(BaseModel):

@@ -661,7 +661,7 @@ def deepseek_draft(
         else settings.deepseek_api_key or os.getenv("DEEPSEEK_API_KEY", "")
     )
     if not key and client is None:
-        raise ValueError("未配置 DEEPSEEK_API_KEY")
+        raise ValueError("未配置 MODEL_API_KEY")
     selected_model = model or os.getenv("DEEPSEEK_MODEL", settings.deepseek_model)
     metric, records = _evidence(run, student_id, indicator_id, baseline["node_id"])
     allowed = set(baseline["evidence_record_ids"])

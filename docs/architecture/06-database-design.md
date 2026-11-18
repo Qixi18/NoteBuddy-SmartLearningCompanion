@@ -93,7 +93,7 @@ erDiagram
 
 复合主键以 `(run_id, entity_id)` 隔离跨运行的相同赛事 ID。作答事件与原始作答分表；`responses.is_selected` 由当前分析结果投影，历史原始字段保存在 data_json。`learning_item_objectives` 支持多对多。对可能含无效上游引用的源作答，记录保留在快照和 responses，不强制学生/材料外键；有效核心实体和事件关系仍受约束。
 
-`analysis_runs.snapshot_json` 保存原分析结果全文作为不可变兼容和恢复载体；学生、班级、目标、材料、节点、作答和复核仍有可查询关系表。尚未独立持久化的 Diagnosis/Evidence/Recommendation 不建空表，它们从分析快照和建议服务即时派生；教师实际复核保存在追加式 `teacher_reviews`。
+`analysis_runs.snapshot_json` 保存原分析结果全文作为不可变兼容和恢复载体；学生、班级、目标、材料、节点、作答和人工记录仍有可查询关系表。Diagnosis/Evidence/Recommendation 从分析快照和建议服务即时派生；来源签核、教师复核和正式案例分别保存在追加式 `source_verifications`、`teacher_reviews`、`teacher_cases`。
 
 ## 事务及 Repository
 

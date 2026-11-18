@@ -43,9 +43,12 @@ def main():
     parser.add_argument("--allow-nonempty-database", action="store_true")
     args = parser.parse_args()
     data_dir = resolve_path(args.data_dir) if args.data_dir else settings.data_dir
+    configured_database_url = args.database_url or os.getenv(
+        "SMART_LEARNING_DATABASE_URL"
+    )
     database_url = (
-        resolve_database_url(args.database_url)
-        if args.database_url
+        resolve_database_url(configured_database_url)
+        if configured_database_url
         else settings.database_url
     )
     if args.command == "serve":

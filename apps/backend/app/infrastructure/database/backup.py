@@ -67,8 +67,13 @@ def _verify(path: Path) -> dict:
         name: {column.name for column in table.columns}
         for name, table in database_models.Base.metadata.tables.items()
     }
-    if set(tables) != set(expected) | {"alembic_version"}:
-        raise ValueError("SQLite 文件的表集合与应用数据库 schema 不匹配")
+    expected_tables = set(expected) | {"alembic_version"}
+    if set(tables) != expected_tables:
+        raise ValueError(
+            "SQLite 文件的表集合与应用数据库 schema 不匹配："
+            f"missing={sorted(expected_tables - set(tables))}, "
+            f"unexpected={sorted(set(tables) - expected_tables)}"
+        )
     with closing(sqlite3.connect(path)) as connection:
         for table, expected_columns in expected.items():
             actual_columns = {
@@ -107,11 +112,13 @@ def backup_database(database_url: str, destination: Path) -> dict:
         pass
     try:
         # SQLite backup API provides a consistent snapshot even while connections are open.
-        with closing(
-            sqlite3.connect(f"file:{source.as_posix()}?mode=ro", uri=True)
-        ) as src:
-            with closing(sqlite3.connect(destination)) as dst:
-                src.backup(dst)
+        with (
+            closing(
+                sqlite3.connect(f"file:{source.as_posix()}?mode=ro", uri=True)
+            ) as src,
+            closing(sqlite3.connect(destination)) as dst,
+        ):
+            src.backup(dst)
     except BaseException:
         destination.unlink(missing_ok=True)
         raise
@@ -133,11 +140,13 @@ def restore_database(backup: Path, destination: Path) -> dict:
     with destination.open("xb"):
         pass
     try:
-        with closing(
-            sqlite3.connect(f"file:{backup.as_posix()}?mode=ro", uri=True)
-        ) as src:
-            with closing(sqlite3.connect(destination)) as dst:
-                src.backup(dst)
+        with (
+            closing(
+                sqlite3.connect(f"file:{backup.as_posix()}?mode=ro", uri=True)
+            ) as src,
+            closing(sqlite3.connect(destination)) as dst,
+        ):
+            src.backup(dst)
         return _verify(destination)
     except Exception:
         destination.unlink(missing_ok=True)

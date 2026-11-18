@@ -10,5 +10,6 @@ describe('navigation', () => {
   it('keeps known Chinese workbench views addressable', () => {
     expect(normalizeHash('#/insights/evidence')).toBe('/insights/evidence');
     expect(routeFor('/plan/reviews').title).toBe('建议复核');
+    expect(normalizeHash('#/knowledge/sources')).toBe('/knowledge/indicators');
   });
 });

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { AnalysisRun, CaseSuggestion, Draft, Review, ReviewStatus } from '../api/types';
+import type { AnalysisRun, CaseSuggestion, Draft, Review, ReviewStatus, StructuredPlan } from '../api/types';
 import { Panel } from '../components/Panel';
 import { ObjectivesPanel } from '../features/task01/components/ObjectivesPanel';
 import { ClassPanel } from '../features/task02/components/ClassPanel';
@@ -7,10 +7,11 @@ import { StudentPanel } from '../features/task02/components/StudentPanel';
 import { EvidencePanel } from '../features/task02/components/EvidencePanel';
 import { QualityPanel } from '../features/task02/components/QualityPanel';
 import { ReviewPanel } from '../features/task03/components/ReviewPanel';
+import { TeacherCaseEditor } from '../features/task03/components/TeacherCaseEditor';
 import { ExportPanel } from '../features/export/ExportPanel';
 import { routes, type RoutePath } from '../app/navigation';
 
-type ReviewFields = { status: ReviewStatus; diagnosis: string; recommendation: string; adjustment_condition: string; reason: string };
+type ReviewFields = { status: ReviewStatus; diagnosis: string; recommendation: string; adjustment_condition: string; reason: string; reviewer: string; structured_plan: StructuredPlan | null };
 type PageProps = {
   path: RoutePath;
   run: AnalysisRun | null;
@@ -39,27 +40,23 @@ function Overview({ run, onNavigate }: { run: AnalysisRun; onNavigate: (path: Ro
     ['学生', run.students.length, '当前快照中的学生记录'],
     ['班级', classCount, '按学生班级编号去重'],
     ['原始作答行', run.quality.raw_rows, '包含待评分、未作答及旧修订'],
-    ['作答事件', run.quality.events, '按事件编号归并原始行'],
-    ['选中修订', run.quality.selected_revisions, '事件中选择的有效修订'],
     ['有效已评分', run.quality.eligible_scored, '作为有效评分统计分母'],
   ];
   return <>
     <section className="stat-grid" aria-label="当前运行摘要">{summary.map(([label, value, note]) => <div className="stat-block" key={String(label)}><span>{label}</span><strong>{value}</strong><small>{note}</small></div>)}
     </section>
     <section className="overview-meta"><p>当前运行 <strong>{run.run_id}</strong> · 规则版本 {run.rule_version} · 创建于 {run.created_at}</p><p>数据范围仅限此快照；各节点分别统计，不能据此推断跨节点进步。</p></section>
-    <ClassPanel run={run} />
     <section className="entry-list" aria-label="业务入口">
       {routes.filter(route => ['/knowledge/indicators', '/insights/classes', '/plan/reviews'].includes(route.path)).map(route => <button className="entry-link" key={route.path} onClick={() => onNavigate(route.path)}><strong>{route.section}</strong><span>{route.description}</span><span aria-hidden="true">查看 →</span></button>)}
     </section>
-    <div className="grid"><QualityPanel run={run} /><Panel title="当前能力边界"><p className="muted">跨节点趋势、共性错误聚合、完整知识关系图和结构化方案保存尚未由当前契约支持。</p><p>赛事独立评测兼容性尚未使用组织方数据验证。</p><span className="tag">部分支持</span><h3>站外赛事交付物</h3><ul className="deliverable-list"><li><strong>方案 PDF</strong><span>不超过 20 页 · 待站外准备与核验</span></li><li><strong>演示视频</strong><span>MP4 不超过 5 分钟 · 待站外准备与核验</span></li><li><strong>答辩 PPT</strong><span>站外提交材料 · 待站外准备与核验</span></li></ul><small>Web 不读取这些材料的文件状态，因此不会显示虚构的完成状态。</small></Panel></div>
+    <Panel title="数据质量提示"><p>原始作答 {run.quality.raw_rows} 行；有效已评分 {run.quality.eligible_scored} 条。其余记录需按处置状态核查，不能直接视为未掌握。</p><p>质量问题 {run.quality.findings.length} 项；请在学情洞察的“数据质量”页核对原始行和异常处置。</p><button className="secondary" onClick={() => onNavigate('/insights/quality')}>查看数据质量</button></Panel>
   </>;
 }
 
-function KnowledgePage({ run, sourcesOnly = false }: { run: AnalysisRun; sourcesOnly?: boolean }) {
+function KnowledgePage({ run }: { run: AnalysisRun }) {
   return <>
-    <div className="grid"><Panel title="当前指标范围"><strong className="stat">{run.objectives.length}</strong><p>个目标 / 观察指标来自当前分析快照</p><p>关联题目数以指标明细为准，来源状态保留待核验与异常提示。</p></Panel><Panel title="知识关系图 · 待建设"><span className="tag">待建设</span><p>当前 API 只提供指标、题目关联和来源索引，尚无经过核验的完整知识关系图或覆盖率结论。</p></Panel></div>
+    <p className="scope-summary">当前运行 {run.run_id} · {new Set(run.objectives.map(item => item['主题'] || item['主题编号'])).size} 个主题 · {run.objectives.length} 项指标。请选择指标核对关联与来源；待核验关系不作为已确认材料。</p>
     <ObjectivesPanel run={run} />
-    {sourcesOnly && <Panel title="来源核验边界"><p>来源链接来自当前运行的来源索引。指标级页码与材料映射仍需人工核验；待核验、异常和缺失状态不代表已确认。</p><p className="muted">课程标准或教材链接仅在接口提供有效定位时显示。</p></Panel>}
   </>;
 }
 
@@ -81,7 +78,6 @@ function CaseEvidence({ run, suggestions, reviews, draft, onOpenReview }: { run:
     }) : <p className="muted">候选记录 ID 未能在当前运行证据中匹配；此候选不可作为已核实案例。</p>}
       <section className="case-reviews"><h3>关联的教师复核</h3>{relatedReviews.length ? relatedReviews.map(({ key, review }) => <details className="row" key={`${key}:${review.version}`}><summary>{key} · 节点 {review.node_id ?? review.original_draft?.node_id ?? '范围未记录'} · 版本 {review.version} · {review.status}</summary><p>诊断：{review.diagnosis}</p><p>建议：{review.recommendation}</p><p>复核理由：{review.reason}</p><small>关联证据：{review.evidence_record_ids.filter(id => selected?.evidence_record_ids.includes(id)).join('、')}</small></details>) : <p className="muted">当前候选证据没有关联的已保存复核版本。</p>}</section>
     </div>}
-    <div className="placeholder"><span className="tag">部分支持</span><p>案例叙述、教师逐项确认和导出前内容预览尚无持久化契约。当前 ZIP 包不等于完整案例报告；请人工补充背景、证据解释和课堂反思。</p></div>
   </Panel>;
 }
 
@@ -92,29 +88,31 @@ export function WorkbenchPage(props: PageProps) {
   const reviewNodes = [...new Set(run.responses.filter(row => row['学生编号'] === props.student && run.items.some(item => item['材料编号'] === row['材料编号'] && item['指标编号'] === props.indicator)).map(row => row['节点编号']))];
   const reviewKey = `${props.student}:${props.indicator}`;
   const review = (props.reviews[reviewKey] ?? []).filter(item => (item.node_id ?? item.original_draft?.node_id ?? null) === (props.node || (reviewNodes.length === 1 ? reviewNodes[0] : null))).at(-1);
-  const reviewScope = `${reviewKey}:${props.node || (reviewNodes.length === 1 ? reviewNodes[0] : '')}`;
+  const reviewScope = `${run.run_id}:${reviewKey}:${props.node || (reviewNodes.length === 1 ? reviewNodes[0] : '')}`;
   const initialReviewFields = reviewEdits[reviewScope] ?? (review ? {
     status: review.status,
     diagnosis: review.diagnosis,
     recommendation: review.recommendation,
     adjustment_condition: review.adjustment_condition || '',
     reason: review.reason,
+    reviewer: review.reviewer,
+    structured_plan: review.structured_plan ?? null,
   } : undefined);
   switch (path) {
     case '/home': return <Overview run={run} onNavigate={onNavigate} />;
     case '/knowledge/indicators': return <KnowledgePage run={run} />;
-    case '/knowledge/sources': return <KnowledgePage run={run} sourcesOnly />;
-    case '/insights/classes': return <ClassPanel run={run} onOpenStudent={studentId => { props.onStudent(studentId); onNavigate('/insights/students'); }} />;
+    case '/insights/classes': return <ClassPanel run={run} node={props.node} onNode={props.onNode} onOpenStudent={studentId => { props.onStudent(studentId); onNavigate('/insights/students'); }} />;
     case '/insights/students': return <StudentPanel run={run} student={props.student} indicator={props.indicator} node={props.node} onNode={props.onNode} onStudent={props.onStudent} onIndicator={props.onIndicator} onOpenEvidence={() => onNavigate('/insights/evidence')} />;
     case '/insights/evidence': return <EvidencePanel run={run} student={props.student} indicator={props.indicator} node={props.node} onNode={props.onNode} />;
     case '/insights/quality': return <QualityPanel run={run} />;
     case '/plan/reviews': return <>
-      <StudentPanel run={run} student={props.student} indicator={props.indicator} node={props.node} onNode={props.onNode} onStudent={props.onStudent} onIndicator={props.onIndicator} />
-      <ReviewPanel student={props.student} indicator={props.indicator} node={props.node} nodes={reviewNodes} onNode={props.onNode} review={review} draft={props.draft} onDraft={props.onDraft} onSave={props.onSave} initialFields={initialReviewFields} onFieldsChange={fields => setReviewEdits(old => ({ ...old, [reviewScope]: fields }))} />
-      <Panel title="结构化方案编辑 · 待建设"><span className="tag">待建设</span><p>当前复核接口可保存诊断、建议、调整条件、理由、状态和证据 ID；材料、活动步骤、观察点及评分点的独立修改尚不能持久化。</p></Panel>
-      <Panel title="分析边界 · 待建设"><p>此快照不支持跨节点进步或总体掌握情况推断。共性问题分类、材料选择理由和建议优先级尚无经核验字段。</p></Panel>
+      <Panel title="教学范围与证据"><div className="scope-fields"><label>学生<select value={props.student} onChange={event => props.onStudent(event.target.value)}>{run.students.map(item => <option key={item['学生编号']} value={item['学生编号']}>{item['学生编号']} · {item['模拟班级编号']}</option>)}</select></label><label>观察指标<select value={props.indicator} onChange={event => props.onIndicator(event.target.value)}>{run.objectives.map(item => <option key={item['指标编号']} value={item['指标编号']}>{item['指标编号']} · {item['观察指标']}</option>)}</select></label><label>测验节点<select value={props.node} onChange={event => props.onNode(event.target.value)}><option value="">请选择测验节点</option>{run.nodes.map(item => <option key={item['节点编号']} value={item['节点编号']}>{item['节点编号']}</option>)}</select></label></div>
+        <p>当前范围：{props.student || '未选学生'} · {props.indicator || '未选指标'} · 节点 {props.node || '未选'}。</p>{props.node && (() => { const observation = run.observations.find(item => item.student_id === props.student && item.indicator_id === props.indicator && item.node_id === props.node); return <p className="muted">选中事件 {observation?.selected_count ?? 0} · 有效已评分 {observation?.scored_count ?? 0} · 待评分 {observation?.pending_count ?? 0} · 未作答 {observation?.unanswered_count ?? 0} · 排除 {observation?.excluded_count ?? 0}。{!observation && '当前范围无观察记录，不能据此判断未掌握。'}</p>; })()}{props.node && <button className="secondary" onClick={() => onNavigate('/insights/evidence')}>查看此范围作答证据</button>}
+      </Panel>
+      <ReviewPanel run={run} student={props.student} indicator={props.indicator} node={props.node} review={review} draft={props.draft} onDraft={props.onDraft} onSave={props.onSave} initialFields={initialReviewFields} onFieldsChange={fields => setReviewEdits(old => ({ ...old, [reviewScope]: fields }))} />
+      <p className="scope-summary">复核版本可保存诊断、建议、调整条件、结构化方案与证据引用；完整方案仅在来源签核仍有效时进入正式导出。不推断跨节点进步。</p>
     </>;
-    case '/plan/cases': return <><CaseEvidence run={run} suggestions={props.suggestions} reviews={props.reviews} draft={props.draft} onOpenReview={(studentId, indicatorId, nodeId) => { props.onStudent(studentId); props.onIndicator(indicatorId); props.onNode(nodeId); onNavigate('/plan/reviews'); }} /><ExportPanel students={run.students} suggestions={props.suggestions} onExport={props.onExport} /></>;
+    case '/plan/cases': return <><CaseEvidence run={run} suggestions={props.suggestions} reviews={props.reviews} draft={props.draft} onOpenReview={(studentId, indicatorId, nodeId) => { props.onStudent(studentId); props.onIndicator(indicatorId); props.onNode(nodeId); onNavigate('/plan/reviews'); }} /><TeacherCaseEditor run={run} reviews={props.reviews} /><ExportPanel students={run.students} suggestions={props.suggestions} onExport={props.onExport} /></>;
     default: return <Overview run={run} onNavigate={onNavigate} />;
   }
 }

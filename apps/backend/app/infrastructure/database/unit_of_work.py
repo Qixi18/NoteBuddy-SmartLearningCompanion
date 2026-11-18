@@ -6,6 +6,7 @@ from ...application.ports.unit_of_work import UnitOfWork
 from ...repositories.analysis_run_repository import AnalysisRunRepository
 from ...repositories.response_repository import ResponseRepository
 from ...repositories.review_repository import ReviewRepository
+from ...repositories.stage2_repository import Stage2Repository
 from ...repositories.student_repository import StudentRepository
 from ...repositories.subject_repository import SubjectRepository
 from .session import SessionFactory
@@ -35,6 +36,7 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
             self.reviews = ReviewRepository(
                 self.root, database=self.sessions, session=session
             )
+            self.stage2 = Stage2Repository(self.sessions, session=session)
             self.students = StudentRepository(self.sessions, session=session)
             self.subjects = SubjectRepository(self.sessions, session=session)
             self.responses = ResponseRepository(self.sessions, session=session)

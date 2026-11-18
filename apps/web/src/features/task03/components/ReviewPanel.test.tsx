@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { useState } from 'react';
 import type { Draft } from '../../../api/types';
 import { ReviewPanel } from './ReviewPanel';
 import draftFixture from '../../../../../../contracts/api/draft.json';
@@ -13,19 +12,15 @@ describe('ReviewPanel', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', {
       status: 200, headers: { 'content-type': 'application/json' },
     })));
-    render(<ReviewPanel student="S1" indicator="I1" node="" nodes={[]} onNode={vi.fn()} draft={null} onDraft={vi.fn()} onSave={vi.fn()} />);
+    render(<ReviewPanel student="S1" indicator="I1" node="" draft={null} onDraft={vi.fn()} onSave={vi.fn()} />);
     expect(screen.queryByLabelText('复核状态')).toBeNull();
     expect(screen.queryByRole('button', { name: '保存复核' })).toBeNull();
+    expect((screen.getByRole('button', { name: '生成规则草稿' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('passes the selected node when requesting a draft', () => {
     const onDraft = vi.fn();
-    function Harness() {
-      const [node, setNode] = useState('');
-      return <ReviewPanel student="S1" indicator="I1" node={node} nodes={['N01', 'N02']} onNode={setNode} draft={null} onDraft={onDraft} onSave={vi.fn()} />;
-    }
-    render(<Harness />);
-    fireEvent.change(screen.getByLabelText('测验节点'), { target: { value: 'N02' } });
+    render(<ReviewPanel student="S1" indicator="I1" node="N02" draft={null} onDraft={onDraft} onSave={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: '生成规则草稿' }));
     expect(onDraft).toHaveBeenCalledWith('rule', 'N02');
   });
@@ -33,7 +28,7 @@ describe('ReviewPanel', () => {
   it('prevents duplicate draft generation while a request is pending', async () => {
     let resolveDraft!: () => void;
     const onDraft = vi.fn(() => new Promise<void>(resolve => { resolveDraft = resolve; }));
-    render(<ReviewPanel student="S1" indicator="I1" node="N01" nodes={['N01']} onNode={vi.fn()} draft={null} onDraft={onDraft} onSave={vi.fn()} />);
+    render(<ReviewPanel student="S1" indicator="I1" node="N01" draft={null} onDraft={onDraft} onSave={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: '生成规则草稿' }));
     expect(screen.getAllByRole('button', { name: '正在生成草稿…' }).every(button => (button as HTMLButtonElement).disabled)).toBe(true);
     expect(onDraft).toHaveBeenCalledTimes(1);
@@ -44,7 +39,7 @@ describe('ReviewPanel', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', {
       status: 200, headers: { 'content-type': 'application/json' },
     })));
-    render(<ReviewPanel student="S1" indicator="I1" node="" nodes={['N01', 'N02']} onNode={vi.fn()} draft={{ ...draftFixture, scope_required: true, node_id: null }} onDraft={vi.fn()} onSave={vi.fn()} />);
+    render(<ReviewPanel student="S1" indicator="I1" node="" draft={{ ...draftFixture, scope_required: true, node_id: null }} onDraft={vi.fn()} onSave={vi.fn()} />);
     expect(screen.getByRole('alert').textContent).toMatch(/多个节点有记录/);
     expect(screen.queryByRole('button', { name: '保存复核' })).toBeNull();
   });
@@ -53,7 +48,7 @@ describe('ReviewPanel', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('[]', {
       status: 200, headers: { 'content-type': 'application/json' },
     })));
-    render(<ReviewPanel student="D01" indicator="T01I1" node="N01" nodes={["N01"]} onNode={vi.fn()} draft={draftFixture as Draft} onDraft={vi.fn()} onSave={vi.fn()} />);
+    render(<ReviewPanel student="D01" indicator="T01I1" node="N01" draft={draftFixture as Draft} onDraft={vi.fn()} onSave={vi.fn()} />);
     expect(screen.getByText(/规则：TR-05/)).toBeTruthy();
     expect(screen.getByText('已评分事实：Q001 1/2')).toBeTruthy();
     expect(screen.getByText(/适用边界：结论仅限列出的题目得分/)).toBeTruthy();
@@ -64,7 +59,7 @@ describe('ReviewPanel', () => {
     let resolveSave!: () => void;
     const onSave = vi.fn(() => new Promise<void>(resolve => { resolveSave = resolve; }));
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } })));
-    render(<ReviewPanel student="D01" indicator="T01I1" node="N01" nodes={['N01']} onNode={vi.fn()} draft={draftFixture as Draft} onDraft={vi.fn()} onSave={onSave} />);
+    render(<ReviewPanel student="D01" indicator="T01I1" node="N01" draft={draftFixture as Draft} onDraft={vi.fn()} onSave={onSave} />);
     fireEvent.click(screen.getByRole('button', { name: '保存复核' }));
     expect((screen.getByRole('button', { name: '正在保存…' }) as HTMLButtonElement).disabled).toBe(true);
     expect(onSave).toHaveBeenCalledTimes(1);
@@ -88,7 +83,7 @@ describe('ReviewPanel', () => {
         },
       ],
     }), { status: 200, headers: { 'content-type': 'application/json' } })));
-    render(<ReviewPanel student="D01" indicator="T01I1" node="N02" nodes={['N01', 'N02']} onNode={vi.fn()} draft={null} onDraft={vi.fn()} onSave={vi.fn()} />);
+    render(<ReviewPanel student="D01" indicator="T01I1" node="N02" draft={null} onDraft={vi.fn()} onSave={vi.fn()} />);
 
     expect(await screen.findByText(/版本 1 · 节点 N01/)).toBeTruthy();
     expect(await screen.findByText(/版本 2 · 节点 N02/)).toBeTruthy();

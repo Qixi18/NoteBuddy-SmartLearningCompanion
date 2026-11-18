@@ -25,6 +25,8 @@
 - **Metric**：兼容的 `kind`/`key` 及 `score`、`maximum`、`ratio`、`count`、`record_ids`、`event_ids`；新增可选 `node_id`、`indicator_id`、`student_id`、`class_id` 维度。
 - **RecommendationDraft**：学生、指标、单一节点、TR rule/evidence kind、观察事实、推断边界、unknown reason、步骤/活动、来源定位、证据 ID/源行、旧诊断建议字段、来源与 `needs_review` 状态。
 - **TeacherReview**：学生/指标组合下追加递增 `version`，保存状态、修改字段、来源、模型、原草稿、引用、理由、复核者和时间。复核引用可包含同一运行、学生、指标及草稿节点内的已选记录（例如待评分/冲突记录供教师核查）；这些引用不会让记录进入有效得分分母。跨范围或非当前分析快照记录仍拒绝保存。
+- **SourceVerification**：指标下追加递增 `version`，保存课标/教材定位、逐项材料 ID、已核对知识联系、状态、核验人、依据与时间。`verified` 必须覆盖该指标当前全部关联材料；后续待核或驳回版本会使旧签核失效。
+- **TeacherCase**：学生下追加递增 `version`，保存案例叙述、样本限制、原始证据 ID、教师复核版本引用、状态、确认人和时间。正式确认要求引用可追溯的 accepted/edited 结构化方案及其当前有效来源签核。
 
 ## 统计和复核状态
 

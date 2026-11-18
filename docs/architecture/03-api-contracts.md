@@ -12,6 +12,8 @@
 | POST | `/api/deepseek` | `student_id`, `indicator_id`；可选 `node_id` | 结构和证据校验后的单 DeepSeek 草稿；范围/冲突闸门返回规则基线，不由模型覆盖 |
 | GET | `/api/reviews` | 无 | 当前运行的 `student_id:indicator_id` → 版本数组映射 |
 | POST | `/api/review` | 学生、指标、状态及复核字段/证据 ID | 新增复核版本 |
+| GET/POST | `/api/source-verifications`、`/api/source-verification` | 当前运行的签核历史／单指标逐项签核 | 版本映射／新增签核版本 |
+| GET/POST | `/api/teacher-cases`、`/api/teacher-case` | 当前运行的案例历史／案例确认字段 | 版本映射／新增案例版本 |
 | GET | `/api/source?file=…` | 允许列表中的 PDF 文件名 | PDF 字节流 |
 | GET | `/api/export?cases=id1,id2,id3` | 三个不同有效学生 ID | `application/zip` |
 

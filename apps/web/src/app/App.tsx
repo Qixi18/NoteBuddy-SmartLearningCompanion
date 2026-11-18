@@ -48,7 +48,7 @@ export function App() {
     setImportOpen(false);
     navigate('/home');
     if (refreshed !== true) {
-      workbench.announce(`导入已完成（${id}），但无法刷新当前运行：${refreshed}`, true);
+      workbench.announce(`导入已完成（${id}）；读取提示：${refreshed}。可重试读取。`, true);
       return;
     }
     workbench.announce(`导入完成：${id}`);
@@ -75,7 +75,8 @@ export function App() {
       <main className="page-content">
         <div className="page-heading"><div><h1 ref={titleRef} tabIndex={-1}>{page.title}</h1><p>{page.description}</p></div>{workbench.run && <div className="run-badge"><span>当前运行</span><strong>{workbench.run.run_id}</strong></div>}</div>
         <p id="message" className={`global-message${workbench.error ? ' error' : ''}`} role={workbench.error ? 'alert' : 'status'} aria-live={workbench.error ? 'assertive' : 'polite'}>{workbench.message}</p>
-        {workbench.loading && !workbench.run ? <div className="loading-state" role="status">正在读取当前分析运行…</div> : <WorkbenchPage path={path} run={workbench.run} reviews={workbench.reviews} suggestions={workbench.suggestions} student={workbench.student} indicator={workbench.indicator} node={workbench.node} draft={workbench.draft} onStudent={workbench.setStudent} onIndicator={workbench.setIndicator} onNode={workbench.setNode} onDraft={workbench.makeDraft} onSave={workbench.saveReview} onExport={workbench.exportCases} onNavigate={navigate} />}
+        {workbench.error && workbench.run && <div className="retry-row"><button className="secondary" onClick={() => void workbench.refresh()}>重试读取当前运行</button></div>}
+        {workbench.loading && !workbench.run ? <div className="loading-state" role="status">正在读取当前分析运行…</div> : <WorkbenchPage key={workbench.run?.run_id ?? 'empty'} path={path} run={workbench.run} reviews={workbench.reviews} suggestions={workbench.suggestions} student={workbench.student} indicator={workbench.indicator} node={workbench.node} draft={workbench.draft} onStudent={workbench.setStudent} onIndicator={workbench.setIndicator} onNode={workbench.setNode} onDraft={workbench.makeDraft} onSave={workbench.saveReview} onExport={workbench.exportCases} onNavigate={navigate} />}
         {!workbench.run && !workbench.loading && <div className="retry-row"><button className="secondary" onClick={() => void workbench.refresh()}>重试读取</button></div>}
       </main>
     </div>

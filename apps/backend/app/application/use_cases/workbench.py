@@ -6,6 +6,7 @@ from ...services.cases import suggest_cases
 from ...services.exports import package
 from ...services.recommendations import draft, deepseek_draft
 from ..ports.llm import LLMClient
+from .stage2 import Stage2Decisions
 
 
 class CurrentRun:
@@ -67,8 +68,8 @@ class DeepSeekDraft:
             self.current_run.execute(),
             student_id,
             indicator_id,
-            self.config.deepseek_api_key,
-            self.config.deepseek_model,
+            self.config.model_api_key or self.config.deepseek_api_key,
+            self.config.model_name,
             client=self.client,
             node_id=node_id,
         )
@@ -92,7 +93,9 @@ class ExportPackage:
         with self.uow_factory(immediate=False) as uow:
             run = uow.runs.current()
             reviews = uow.reviews.list(run["run_id"])
-        return package(run, reviews, case_ids)
+            sources = uow.stage2.list_sources(run["run_id"])
+            cases = uow.stage2.list_cases(run["run_id"])
+        return package(run, reviews, case_ids, sources=sources, cases=cases)
 
 
 class WorkbenchUseCases:
@@ -111,6 +114,7 @@ class WorkbenchUseCases:
         self.import_folder = ImportFolder(import_service)
         self.list_reviews = ListReviews(uow_factory)
         self.save_review = save_review
+        self.stage2 = Stage2Decisions(uow_factory)
         self.list_cases = ListCases(self.current_run)
         self.rule_draft = RuleDraft(self.current_run)
         self.deepseek_draft = DeepSeekDraft(self.current_run, config, llm_client)

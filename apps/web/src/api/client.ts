@@ -1,4 +1,4 @@
-import type { AnalysisRun, CaseSuggestion, Draft, ImportResult, ReviewMap, ReviewPayload, ReviewStatus } from './types';
+import type { AnalysisRun, CaseSuggestion, Draft, ImportResult, ReviewMap, ReviewPayload, ReviewStatus, SourceVerification, SourceVerificationPayload, TeacherCase, TeacherCasePayload } from './types';
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init);
@@ -20,6 +20,10 @@ export const learningApi = {
   ruleDraft: (student: string, indicator: string, node?: string) => api<Draft>(`/api/draft?student=${encodeURIComponent(student)}&indicator=${encodeURIComponent(indicator)}${node ? `&node=${encodeURIComponent(node)}` : ''}`),
   modelDraft: (student: string, indicator: string, node?: string) => api<Draft>('/api/deepseek', jsonRequest({ student_id: student, indicator_id: indicator, node_id: node ?? null })),
   saveReview: (payload: ReviewPayload) => api<ReviewMap[string][number]>('/api/review', jsonRequest(payload)),
+  sourceVerifications: () => api<Record<string, SourceVerification[]>>('/api/source-verifications'),
+  saveSourceVerification: (payload: SourceVerificationPayload) => api<SourceVerification>('/api/source-verification', jsonRequest(payload)),
+  teacherCases: () => api<Record<string, TeacherCase[]>>('/api/teacher-cases'),
+  saveTeacherCase: (payload: TeacherCasePayload) => api<TeacherCase>('/api/teacher-case', jsonRequest(payload)),
   exportUrl: (studentIds: string[]) => `/api/export?cases=${encodeURIComponent(studentIds.join(','))}`,
   sourceUrl: (file: string) => `/api/source?file=${encodeURIComponent(file)}`,
   async reviewHistory(key: string) {
