@@ -30,6 +30,7 @@ export interface Draft {
 
 export interface CaseSuggestion {
   student_id: string;
+  class_id?: string;
   type: string;
   reason: string;
   evidence_record_ids: string[];

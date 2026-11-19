@@ -52,10 +52,13 @@ def test_cases_use_latest_node_and_explain_evidence_and_roster_coverage():
     assert len(cases) == 3
     assert len({case["student_id"] for case in cases}) == 3
     assert by_type["部分得分"]["student_id"] == "D02"
+    assert by_type["部分得分"]["class_id"] == "C2"
     assert by_type["部分得分"]["evidence_record_ids"] == ["R-D02-P"]
     assert by_type["表现较好"]["student_id"] == "D03"
+    assert by_type["表现较好"]["class_id"] == "C1"
     assert set(by_type["表现较好"]["evidence_record_ids"]) == {"R-D03-A", "R-D03-B"}
     assert by_type["记录较少"]["student_id"] == "D04"
+    assert by_type["记录较少"]["class_id"] == "C3"
     assert by_type["记录较少"]["evidence_record_ids"] == []
     for case in cases:
         assert "节点 N02" in case["reason"]

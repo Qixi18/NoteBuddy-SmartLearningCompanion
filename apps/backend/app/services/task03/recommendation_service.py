@@ -695,10 +695,72 @@ def deepseek_draft(
     selected_model = model or os.getenv("DEEPSEEK_MODEL", settings.deepseek_model)
     metric, records = _evidence(run, student_id, indicator_id, baseline["node_id"])
     allowed = set(baseline["evidence_record_ids"])
+    has_scored_evidence = any(
+        row["记录编号"] in allowed and row.get("评分状态") == "已评分"
+        for row in records
+    )
+    if not has_scored_evidence:
+        return baseline
+    evidence_ids = list(dict.fromkeys(baseline["evidence_record_ids"]))
+    record_aliases = {
+        record_id: f"证据{index + 1}" for index, record_id in enumerate(evidence_ids)
+    }
+    item_ids = list(
+        dict.fromkeys(
+            row["材料编号"] for row in records if row.get("记录编号") in record_aliases
+        )
+    )
+    item_aliases = {
+        item_id: f"题目{index + 1}" for index, item_id in enumerate(item_ids)
+    }
+
+    identifier_aliases = {student_id: "当前学生", **record_aliases, **item_aliases}
+
+    def redact_identifiers(value):
+        if isinstance(value, str):
+            for identifier, alias in sorted(
+                identifier_aliases.items(),
+                key=lambda entry: len(entry[0]),
+                reverse=True,
+            ):
+                value = value.replace(identifier, alias)
+            return value
+        if isinstance(value, list):
+            return [redact_identifiers(item) for item in value]
+        if isinstance(value, dict):
+            return {
+                redact_identifiers(key): redact_identifiers(item)
+                for key, item in value.items()
+            }
+        return value
+
+    model_baseline = {
+        key: value
+        for key, value in baseline.items()
+        if key
+        not in {
+            "student_id",
+            "evidence_record_ids",
+            "observed_record_ids",
+            "evidence_source_lines",
+        }
+    }
+    model_baseline["material_ids"] = [
+        item_aliases[item_id]
+        for item_id in baseline.get("material_ids", [])
+        if item_id in item_aliases
+    ]
+    model_baseline = redact_identifiers(model_baseline)
+    model_metric = {
+        key: value
+        for key, value in (metric or {}).items()
+        if key not in {"key", "student_id", "record_ids", "evidence_record_ids"}
+    }
+    model_metric = redact_identifiers(model_metric)
     evidence = [
         {
-            "record_id": r["记录编号"],
-            "item_id": r["材料编号"],
+            "record_id": record_aliases[r["记录编号"]],
+            "item_id": item_aliases[r["材料编号"]],
             "score": r["得分"],
             "maximum": r["满分"],
             "steps": r.get("解答过程", ""),
@@ -707,6 +769,7 @@ def deepseek_draft(
         for r in records
         if r["记录编号"] in allowed
     ]
+    evidence = redact_identifiers(evidence)
     body = {
         "model": selected_model,
         "response_format": {"type": "json_object"},
@@ -720,9 +783,9 @@ def deepseek_draft(
                 "role": "user",
                 "content": json.dumps(
                     {
-                        "objective": baseline["objective"],
-                        "baseline": baseline,
-                        "metric": metric,
+                        "objective": model_baseline["objective"],
+                        "baseline": model_baseline,
+                        "metric": model_metric,
                         "evidence": evidence,
                     },
                     ensure_ascii=False,
@@ -757,7 +820,8 @@ def deepseek_draft(
     if (
         not isinstance(cited, list)
         or any(not isinstance(record_id, str) for record_id in cited)
-        or not set(cited).issubset(allowed)
+        or len(cited) != len(set(cited))
+        or not set(cited).issubset(set(record_aliases.values()))
     ):
         raise LLMError("模型返回了无效证据引用")
     if allowed and not cited:
@@ -771,7 +835,14 @@ def deepseek_draft(
             field: candidate[field]
             for field in ("diagnosis", "recommendation", "adjustment_condition")
         },
-        "evidence_record_ids": cited,
+        "evidence_record_ids": [
+            next(
+                record_id
+                for record_id, alias in record_aliases.items()
+                if alias == cited_alias
+            )
+            for cited_alias in cited
+        ],
         "source": "deepseek",
         "model": body["model"],
         "prompt_version": "1",

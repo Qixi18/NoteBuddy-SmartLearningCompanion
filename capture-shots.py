@@ -65,6 +65,10 @@ async def main(argv=None):
                 "screenshots": sorted(file.name for file in out.glob("*.png")),
             }
         )
+        if errors:
+            raise RuntimeError(
+                f"Browser page errors occurred: {len(errors)}; details withheld from artifact output"
+            )
         await browser.close()
 
 

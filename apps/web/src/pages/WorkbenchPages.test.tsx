@@ -79,11 +79,11 @@ describe('WorkbenchPage empty state', () => {
   });
 
   it('shows evidence and only the review version linked to that candidate evidence', async () => {
-    const candidate: CaseSuggestion = { student_id: 'D01', type: '部分得分', reason: '节点 N1 的候选', evidence_record_ids: ['R1'] };
+    const candidate: CaseSuggestion = { student_id: 'D01', class_id: 'DC01', type: '部分得分', reason: '节点 N1 的候选', evidence_record_ids: ['R1'] };
     const review: Review = { status: 'accepted', diagnosis: '有证据的诊断', recommendation: '有证据的建议', adjustment_condition: '', reason: '核验通过', source: 'rule', model: null, prompt_version: null, evidence_record_ids: ['R1'], node_id: 'N1', version: 1, original_draft: null, reviewer: '教师', updated_at: '2026-11-17' };
     const unrelated: Review = { ...review, diagnosis: '无关指标的复核', evidence_record_ids: ['R2'], version: 2 };
     render(<WorkbenchPage {...defaults} path="/plan/cases" suggestions={[candidate]} reviews={{ 'D01:I1': [review, unrelated] }} />);
-    fireEvent.click(screen.getByText('部分得分 · D01'));
+    fireEvent.click(screen.getByText('部分得分 · D01 · DC01'));
     expect(await screen.findByText('D01 的可追溯记录')).not.toBeNull();
     expect(screen.getByText(/当前节点该学生有效评分数：2/)).not.toBeNull();
     expect(screen.getByText('诊断：有证据的诊断')).not.toBeNull();

@@ -145,6 +145,7 @@ def suggest_cases(run: dict) -> list[dict]:
         cases.append(
             {
                 "student_id": student_id,
+                "class_id": class_by_student[student_id],
                 "type": case_type,
                 "reason": (
                     f"节点 {node_id or '未知'}；{reason} {sample_note(student_id)} "

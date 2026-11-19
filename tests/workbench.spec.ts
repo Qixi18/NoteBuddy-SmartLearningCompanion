@@ -177,6 +177,8 @@ test('loads the local workbench and imports the sample bundle', async ({ page })
   await expect(page.getByText(/不包含完整运行审计数据/)).toBeVisible();
   const archivePath = await download.path();
   expect(archivePath).toBeTruthy();
+  const artifactScan = spawnSync('python', ['scan-artifacts.py', archivePath!], { encoding: 'utf8' });
+  expect(artifactScan.status, artifactScan.stdout + artifactScan.stderr).toBe(0);
   const archiveCheck = spawnSync('python', ['-c', [
     'import json, sys, zipfile',
     'with zipfile.ZipFile(sys.argv[1]) as archive:',
@@ -275,6 +277,7 @@ test('all nine routes render on direct hash load, refresh, history, and unknown 
     await expect(page.locator('#message')).toContainText('数据已导入，当前运行已更新。');
   }
   await page.goto('/#/home');
+  await page.reload();
   await expect(page.getByRole('heading', { name: '全局概览', level: 1 })).toBeVisible();
 
   for (const [path, title] of routes) {
@@ -302,6 +305,217 @@ test('all nine routes render on direct hash load, refresh, history, and unknown 
   await page.goto('/#/made-up-route');
   await expect(page).toHaveURL(/#\/home$/);
   await expect(page.getByRole('heading', { name: '全局概览', level: 1 })).toBeVisible();
+});
+
+test('keyboard focus and accessible names are available across all routes', async ({ page }) => {
+  let gradientTextSamples = 0;
+  const routes = [
+    ['/home', '全局概览'],
+    ['/knowledge/indicators', '学习要求与来源'],
+    ['/insights/classes', '班级概览'],
+    ['/insights/students', '学生分析'],
+    ['/insights/evidence', '作答证据'],
+    ['/insights/quality', '数据质量'],
+    ['/plan/reviews', '建议复核'],
+    ['/plan/adjustments', '教学调整'],
+    ['/plan/cases', '案例与导出'],
+  ] as const;
+
+  expect(sampleCsvFiles(bundlePath)).toHaveLength(6);
+  await page.goto('/#/home');
+  const emptyState = page.getByRole('heading', { name: '先导入一份学情数据', level: 1 });
+  await expect(emptyState.or(page.getByRole('heading', { name: '全局概览', level: 1 }))).toBeVisible();
+  if (await emptyState.isVisible()) {
+    await page.getByRole('main').getByLabel('选择 CSV 文件夹').setInputFiles(bundlePath);
+    await page.getByRole('button', { name: '检查文件并导入' }).click();
+    await expect(page.locator('#message')).toContainText('数据已导入，当前运行已更新。');
+  }
+
+  for (const [route, title] of routes) {
+    if (route === '/plan/adjustments') {
+      await page.route('**/api/teaching-adjustments', request => request.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify([{
+          adjustment_id: 'keyboard-audit-adjustment', student_id: 'D01', indicator_id: 'T01I1', origin_run_id: 'keyboard-audit-origin', origin_node_id: 'N01', review_version: 1,
+          planned_activity: '按步骤完成同类练习', planned_practice: ['Q001 变式'], observation_points: ['记录关键步骤'], teacher: '审核教师', planned_at: '2026-11-19',
+          implementation: '完成课堂讲解', implementation_status: 'completed', outcome_observations: '记录独立作答步骤', followup_run_id: 'keyboard-audit-followup', followup_node_id: 'N01', followup_evidence_record_ids: ['R2'],
+          comparability: 'not_comparable', comparability_reason: '测量范围不同', teacher_conclusion: '仅记录观察，不推断效果', reviewer: '审核教师', concluded_at: '2026-11-19', created_at: '2026-11-19T00:00:00Z', updated_at: '2026-11-19T00:00:00Z',
+          history: [{ implementation: '完成课堂讲解', implementation_status: 'completed', outcome_observations: '记录独立作答步骤', followup_run_id: 'keyboard-audit-followup', followup_node_id: 'N01', followup_evidence_record_ids: ['R2'], comparability: 'not_comparable', comparability_reason: '测量范围不同', teacher_conclusion: '仅记录观察，不推断效果', reviewer: '审核教师', concluded_at: '2026-11-19', updated_at: '2026-11-19T00:00:00Z' }],
+        }]),
+      }));
+    }
+    await page.goto(`/#${route}`);
+    await page.reload();
+    await expect(page.getByRole('heading', { name: title, level: 1 })).toBeVisible();
+    if (route === '/insights/classes') {
+      await page.getByLabel('测验节点').selectOption('N01');
+    }
+    if (route === '/plan/reviews') {
+      await page.getByLabel('测验节点').selectOption('N01');
+      await page.getByRole('button', { name: '生成规则草稿' }).click();
+      await expect(page.getByRole('heading', { name: '教师复核内容' })).toBeVisible();
+      const proposedActivity = page.locator('.proposed-activity');
+      if (await proposedActivity.count()) await proposedActivity.locator('summary').click();
+      const structuredPlan = page.locator('.review-structured');
+      await structuredPlan.locator('summary').click();
+      await structuredPlan.getByLabel('保存完整方案').check();
+      const firstEvidence = page.locator('.review-record').first();
+      if (await firstEvidence.count()) await firstEvidence.locator('summary').click();
+    }
+    if (route === '/plan/adjustments') {
+      await expect(page.getByLabel('选择记录')).toHaveValue('keyboard-audit-adjustment');
+      await page.locator('details').filter({ hasText: '选择后续证据' }).locator('summary').click();
+      await page.locator('details').filter({ hasText: '实施与复核历史' }).locator('summary').click();
+    }
+    if (route === '/plan/cases') {
+      await page.locator('.case-editor summary').filter({ hasText: '开始案例签核' }).click();
+    }
+    await page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; animation: none !important; }' });
+    const findings = await page.locator('body').evaluate((body) => {
+      const selector = 'a[href],button,input:not([type="hidden"]),select,textarea,summary,[tabindex]:not([tabindex="-1"])';
+      const elements = [...body.querySelectorAll<HTMLElement>(selector)].filter((element) => {
+        const style = getComputedStyle(element);
+        const closedDetails: HTMLDetailsElement[] = [];
+        let ancestor: Element | null = element;
+        while (ancestor) {
+          if (ancestor.matches('details:not([open])')) closedDetails.push(ancestor as HTMLDetailsElement);
+          ancestor = ancestor.parentElement;
+        }
+        const hiddenByClosedDetails = closedDetails.some((details) => details !== element.parentElement
+          || element.tagName !== 'SUMMARY');
+        return !element.matches(':disabled')
+          && element.tabIndex >= 0
+          && style.display !== 'none'
+          && style.visibility !== 'hidden'
+          && element.getClientRects().length > 0
+          && !hiddenByClosedDetails
+          && element.closest('[aria-hidden="true"], [inert]') === null;
+      });
+      const unnamed = elements.filter((element) => {
+        const labelledBy = element.getAttribute('aria-labelledby')
+          ?.split(/\s+/)
+          .map((id) => document.getElementById(id)?.textContent || '')
+          .join(' ');
+        const labels = (element as HTMLInputElement).labels;
+        const labelText = [...(labels || [])].map((label) => label.textContent || '').join(' ')
+          || element.closest('label')?.textContent
+          || '';
+        const text = `${element.textContent || ''} ${element.getAttribute('title') || ''} ${labelText} ${element.getAttribute('aria-label') || ''} ${labelledBy || ''}`.trim();
+        return !text;
+      }).map((element) => `${element.tagName.toLowerCase()}${element.type ? `[type=${element.type}]` : ''}`);
+      elements.forEach((element, index) => { element.dataset.keyboardAuditIndex = String(index); });
+      const contrast = (color: string) => {
+        if (color.startsWith('#')) {
+          const hex = color.slice(1);
+          const expanded = hex.length === 3 ? [...hex].map((value) => value + value).join('') : hex;
+          if (expanded.length < 6) return null;
+          return [0, 2, 4].map((index) => Number.parseInt(expanded.slice(index, index + 2), 16)).concat(1);
+        }
+        const values = color.match(/[\d.]+/g)?.map(Number);
+        return values && values.length >= 3 ? [values[0], values[1], values[2], values[3] ?? 1] : null;
+      };
+      const composite = (foreground: number[], background: number[]) => [
+        foreground[0] * foreground[3] + background[0] * (1 - foreground[3]),
+        foreground[1] * foreground[3] + background[1] * (1 - foreground[3]),
+        foreground[2] * foreground[3] + background[2] * (1 - foreground[3]),
+        1,
+      ];
+      const luminance = (values: number[]) => {
+        const channels = values.slice(0, 3).map((channel) => {
+          const normalized = channel / 255;
+          return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+        });
+        return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+      };
+      let gradientTextCount = 0;
+      const contrastIssues = [...body.querySelectorAll<HTMLElement>('*')].flatMap((element) => {
+        const text = [...element.childNodes]
+          .filter((node) => node.nodeType === Node.TEXT_NODE)
+          .map((node) => node.textContent || '')
+          .join(' ')
+          .trim();
+        if (!text || element.matches(':disabled') || element.closest(':disabled, [aria-hidden="true"], [inert]') || element.getClientRects().length === 0) return [];
+        const style = getComputedStyle(element);
+        const size = Number.parseFloat(style.fontSize);
+        const largeText = size >= 24 || (size >= 18.66 && Number.parseFloat(style.fontWeight) >= 700);
+        let foreground = contrast(style.color);
+        let background = [255, 255, 255, 1];
+        let ancestor: HTMLElement | null = element;
+        const gradientStops: number[][] = [];
+        while (ancestor) {
+          const layer = getComputedStyle(ancestor);
+          if (layer.backgroundImage.includes('gradient')) {
+            const colors = layer.backgroundImage.match(/rgba?\([^)]*\)|#[\da-fA-F]{3,8}/g) ?? [];
+            gradientStops.push(...colors.map(contrast).filter((color): color is number[] => color !== null));
+          }
+          const color = contrast(layer.backgroundColor);
+          if (color && color[3] > 0) background = composite(color, background);
+          if (color && color[3] >= 1) break;
+          ancestor = ancestor.parentElement;
+        }
+        if (gradientStops.length) gradientTextCount += 1;
+        if (!foreground) return [];
+        const textColor = composite(foreground, background);
+        const backgrounds = [background, ...gradientStops.map((stop) => composite(stop, background))];
+        const ratio = Math.min(...backgrounds.map((candidate) => {
+          const [dark, light] = [luminance(textColor), luminance(candidate)].sort((a, b) => a - b);
+          return (light + 0.05) / (dark + 0.05);
+        }));
+        return ratio < (largeText ? 3 : 4.5)
+          ? [{ text: text.slice(0, 50), color: style.color, background: getComputedStyle(element).backgroundColor, ratio: Number(ratio.toFixed(2)), size, weight: style.fontWeight, tag: element.tagName, className: element.className, disabled: element.matches(':disabled'), cursor: style.cursor, opacity: style.opacity, html: element.outerHTML.slice(0, 180) }]
+          : [];
+      });
+      return {
+        count: elements.length,
+        unnamed,
+        contrastIssues,
+        gradientTextCount,
+        order: elements.map((element, index) => ({
+          index,
+          tag: element.tagName.toLowerCase(),
+          className: element.className,
+          tabIndex: element.tabIndex,
+          text: (element.innerText || element.textContent || element.getAttribute('aria-label') || '').trim().slice(0, 60),
+          parent: element.tagName === 'SUMMARY' ? element.parentElement?.outerHTML.slice(0, 240) : '',
+        })),
+      };
+    });
+    gradientTextSamples += findings.gradientTextCount;
+    expect(findings.unnamed, `${title} contains unnamed controls`).toEqual([]);
+    expect(findings.contrastIssues, `${title} has text below the WCAG AA contrast threshold: ${JSON.stringify(findings.contrastIssues)}`).toEqual([]);
+
+    await page.locator('a.brand').focus();
+    const initialFocus = await page.evaluate(() => ({
+      index: (document.activeElement as HTMLElement | null)?.dataset.keyboardAuditIndex ?? 'none',
+      outlineWidth: getComputedStyle(document.activeElement as HTMLElement).outlineWidth,
+    }));
+    expect(initialFocus.index, `${title} should expose a keyboard entry point`).toBe('0');
+    expect(initialFocus.outlineWidth, `${title} entry point needs a visible focus outline`).toBe('3px');
+    const reached = new Set<string>([initialFocus.index]);
+    const expected = new Set(Array.from({ length: findings.count }, (_, index) => String(index)));
+    for (let step = 0; step < findings.count * 4 + 12; step += 1) {
+      await page.keyboard.press('Tab');
+      const active = await page.evaluate(() => {
+        const element = document.activeElement as HTMLElement | null;
+        return {
+          index: element?.dataset.keyboardAuditIndex ?? 'none',
+          outlineWidth: element ? getComputedStyle(element).outlineWidth : 'none',
+        };
+      });
+      if (active.index === 'none') {
+        const missing = [...expected].filter((index) => !reached.has(index)).map((index) => findings.order[Number(index)]);
+        expect([...reached].sort(), `${title} focus left the page before every control was reached; missing=${JSON.stringify(missing)}`).toEqual([...expected].sort());
+        break;
+      }
+      expect(expected.has(active.index), `${title} focus landed outside the visible control set`).toBe(true);
+      expect(active.outlineWidth, `${title} control ${active.index} needs a visible focus outline`).toBe('3px');
+      const completedCycle = reached.has(active.index) && active.index === '0';
+      reached.add(active.index);
+      if (reached.size === expected.size || completedCycle) break;
+    }
+    expect([...reached].sort(), `${title} keyboard traversal should reach every visible control`).toEqual([...expected].sort());
+  }
+  expect(gradientTextSamples, 'gradient backgrounds should be included in endpoint contrast sampling').toBeGreaterThan(0);
 });
 
 test('keyboard users can open and close import, and get an announced validation error', async ({ page }) => {
@@ -510,5 +724,7 @@ test('key pages fit and render at four desktop widths', async ({ page }, testInf
       });
     }
   }
+  const screenshotScan = spawnSync('python', ['scan-artifacts.py', testInfo.outputDir], { cwd: repoRoot, encoding: 'utf8' });
+  expect(screenshotScan.status, screenshotScan.stdout + screenshotScan.stderr).toBe(0);
   expect(pageErrors).toEqual([]);
 });

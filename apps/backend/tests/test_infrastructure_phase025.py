@@ -264,7 +264,7 @@ def test_deepseek_application_port_accepts_only_validated_structured_output():
                                     "diagnosis": "结合记录观察",
                                     "recommendation": "先分步练习",
                                     "adjustment_condition": "再次观察",
-                                    "evidence_record_ids": ["R2"],
+                                    "evidence_record_ids": ["证据1"],
                                 }
                             )
                         },

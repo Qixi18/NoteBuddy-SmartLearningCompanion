@@ -2,7 +2,7 @@
 
 来源清单：`../智慧学伴-main分支全面核验与测试清单.md`。按原清单编号逐项保留。PASS=有当前可定位证据；FAIL=复现未修；BLOCKED=依赖授权、人工审核或责任人决定；NOT_RUN=本轮未执行。自动测试不替代人工学科/赛事签核。
 
-环境：Windows / Python 3.14.6 / Node 24.20.0 / Chromium 159.0.8154.6；本轮实查分支 `main`；HEAD `89fe0077496f6b02beef8b8a914099c7d00bc933`；工作区 dirty，包含未提交修改。矩阵状态仍为 54 PASS、5 BLOCKED、6 NOT_RUN（65 项）；后续复测和新增覆盖见 [审计报告](main-branch-audit-2026-11-19.md)。E2E 使用 Playwright 独立 SQLite/数据目录和 loopback。
+环境：Windows / Python 3.14.6 / Node 24.20.0 / Chromium 159.0.8154.6；本轮实查分支 `main`；HEAD `2a442d03a76c958979d176a140f72bf651ef6e1b`；工作区 dirty，包含未提交修改。矩阵状态为 56 PASS、5 BLOCKED、4 NOT_RUN（65 项）；后续复测和新增覆盖见 [审计报告](main-branch-audit-2026-11-19.md)。E2E 使用 Playwright 独立 SQLite/数据目录和 loopback。
 数据集映射见 [测试数据集矩阵](main-branch-test-datasets-2026-11-19.md)。
 
 | ID | 优先级 | 责任方 | 状态 | 执行命令/动作与输入 | 期望 | 实际与证据 | 缺陷/未满足项 |
@@ -35,7 +35,7 @@
 | EXP-07 | P1 | 浏览器 | PASS | Playwright 导出主流程与 `export failure is announced without navigating away or claiming success` | 浏览器点击下载，校验响应头、文件名、下载成功/失败反馈。**通过：** 失败不误显示成功，成果包能由普通解压软件打开。 | 成功路径触发浏览器 ZIP 下载、页面播报“成果包下载已开始”；Python `zipfile.testzip()` 与 `manifest.json` 检查通过。模拟 HTTP 500 JSON 错误后，页面播报服务器错误并留在案例页；失败专项通过 | 仅覆盖 JSON 错误响应与成功 ZIP，其他失败类型未穷举 |
 | EXP-08 | P1 | 人工 | BLOCKED | 需责任人/学科成员人工审核或决定 | 逐项核查三个正式案例的代表性、原始证据、数学解释、方案、适用限制。**通过：** 教师或学科成员签署三例完成记录。 | 当前无签核或决定证据 | 需责任人输入 |
 | EXP-09 | P1 | 人工 | BLOCKED | 需责任人/学科成员人工审核或决定 | 核验成果 ZIP 与正式赛事提交要求是否同义。**通过：** 数据包不被误称为完整比赛设计方案 PDF、演示 MP4 或答辩 PPT。 | 当前无签核或决定证据 | 需责任人输入 |
-| EXP-10 | P1 | 安全 | NOT_RUN | 对生产前端构建与现有文本报告/Playwright trace 静态扫描 credential-like token 和 Windows 用户路径；扫描范围 5 个文本产物 | 归档/演示用 ZIP、截图、报告中涉及学生原始作答与模型调用内容的处理。**通过：** 不意外暴露敏感数据，不将密钥/绝对个人路径写入交付包。 | Synthetic `/api/export` ZIP test now scans every archive member for credential-like tokens, Windows user paths, and the temp fixture path; no matches. Test uses isolated synthetic student data. | Final presentation screenshots and the actual contest delivery ZIP have not been visually/content reviewed |
+| EXP-10 | P1 | 安全 | PASS（自动静态检查） | `python scan-artifacts.py apps/backend/app/web/dist playwright-report test-results "D:\工作台\智慧学伴-比赛项目\web端截图"`; E2E 下载 ZIP 后同样调用扫描器 | 导出包、截图、构建产物和 Playwright 报告不包含常见凭证形态或 Windows 用户路径。 | 扫描器遍历目录递归文件、ZIP 每个成员及 PNG tEXt/zTXt/iTXt 元数据；当前构建、报告、E2E 截图 20 张和演示截图目录均无匹配。真实下载 ZIP 的扫描已由 Playwright 导出流程覆盖。 | 模式扫描不能证明没有所有形式的敏感内容；正式赛事提交包的语义内容仍需人工审阅 |
 | UI-01 | P0 | 浏览器 | PASS | 根目录 `npm run test:e2e` | 9 个子路由逐页进入、直接刷新、浏览器前进后退、未知 hash 回首页。**通过：** 页面名称、导航高亮、标题和内容一致。 | 九路由 E2E，直接 hash/刷新/history/未知 hash；目标标题和导航状态通过；当前全套 E2E 6 passed | 不包含视觉布局/异常态覆盖，见 UI-03/UI-06 |
 | UI-02 | P0 | 浏览器 | PASS | 根目录 `npm run test:e2e` | 全局概览数字均取当前 API，运行改变后重新显示。**通过：** 无静态伪数据，无跨运行残留。 | 首次运行 3 学生/2 班；导入含新学生与班级的后续运行后概览更新为 4/3；当前 run 刷新与 E2E 通过 |  |
 | UI-03 | P1 | 视觉 | PASS | Playwright `key pages fit and render at four desktop widths` | 在 1024、1280、1440、1920 宽度检查所有页面；每个宽度至少截图首页、知识、学情、复核、案例。**通过：** 主要内容可读、无非预期横向滚动、按钮和文本不遮挡。 | 五页×四宽度共 20 张 Chromium 全页截图；每页 `scrollWidth <= viewport`；抽查 1024 五页与 1920 概览/案例布局可读且无重叠 | 截图在忽略目录 `test-results/workbench-key-pages-fit-and-render-at-four-desktop-widths-chromium/` |
@@ -47,7 +47,7 @@
 | UI-09 | P1 | 浏览器 | PASS | Playwright 本地文件夹导入 E2E | 导入文件选择器真实可用，能识别六文件、显示缺失及导入反馈。**通过：** 文案与真实“文件夹选取并上传六 CSV 内容到本地后端”行为一致。 | 浏览器文件夹选择器识别 6 个 CSV；导入后 API run 刷新成功并显示反馈 |  |
 | UI-10 | P1 | 浏览器 | PASS | Playwright 1024px 教师复核流程 | 教学复核完成全部操作流程，无强制多次上下滚动找保存按钮。**通过：** 证据区与编辑区各有明确视觉层级，操作可发现。 | 1024px 下检查节点/范围选择器宽度，生成规则草稿、查看证据、填写教师字段并保存成功；随后创建教学调整 | 仅覆盖关键主路径，不代表所有错误状态已测 |
 | UI-11 | P1 | 浏览器 | PASS | Playwright 候选到成果下载流程 | 案例候选→原始证据→复核→返回案例→确认→导出。**通过：** 不丢必要选择，路径可解释。 | 打开 D01 候选与原始记录，跳转对应节点教师复核，再返回案例页完成人工确认并下载 ZIP；E2E 通过 | 测试签核/内容为模拟字段，不能作为学科签字 |
-| UI-12 | P1 | 可访问性 | NOT_RUN | `npm run test:e2e -- --grep "keyboard users can open and close import"` | 键盘 Tab、焦点指示、弹窗开关/关闭、Esc、表单 label、ARIA 错误提示、颜色对比。**通过：** 不依赖鼠标或颜色才能完成关键操作。 | 专项 E2E 通过 Tab/Shift+Tab 序列、3px `#557FCE` 焦点环（白底 3.95:1、画布 3.65:1）、弹窗首尾焦点循环、Escape 关闭及返回触发按钮、缺失文件的 `role=alert` 播报；全站 Tab 顺序/焦点审查、其他表单 label 与颜色对比尚未执行 | 导入弹窗局部键盘路径通过；全站无障碍审查仍未完成 |
+| UI-12 | P1 | 可访问性 | NOT_RUN | `npm run test:e2e -- --grep "keyboard focus and accessible names are available across all routes"`；`npm run test:e2e -- --grep "keyboard users can open and close import"` | 键盘 Tab、焦点指示、弹窗开关/关闭、Esc、表单 label、ARIA 错误提示、颜色对比。**通过：** 不依赖鼠标或颜色才能完成关键操作。 | 9 个路由逐页扫描初始可见文本、控件名称并进行 Chromium 原生 Tab 遍历；建议复核路由额外生成规则草稿、展开教学安排/完整教学方案并展开一条原始证据；教学调整使用独立历史记录 fixture 展开后续证据和实施历史；案例页展开教师签核并扫描 textarea/嵌套证据区。颜色扫描纳入线性渐变 CSS 色标端点并断言实际采样到渐变文本；当前扫描无 AA 对比失败，控件均有名称和 3px 可见焦点环。全套 E2E 8 passed，见审计报告 2026-11-19 键盘与色彩复核 | 渐变对比按现用两端色标采样，尚未覆盖所有动态主题/条件状态、图形文字和完整语义审计；人工屏幕阅读器仍待执行 |
 | UI-13 | P1 | 浏览器 | PASS | Playwright `slow review requests reject stale drafts and keep generation and save single-flight`；Vitest ReviewPanel/useWorkbench 竞态用例 | 网络慢、连续点击生成、连续点击保存、快速切页。**通过：** 防重复请求，异步状态无覆盖/竞争导致错误提示。 | Playwright 对草稿与复核 POST 延迟 300ms；生成/保存请求处理中按钮禁用，重复点击不产生第二个请求；更换学生后迟到草稿被丢弃，再按新范围生成并成功保存。相关 E2E 通过 | 模拟的是本地 API 延迟，不代表生产网络负载测试 |
 | UI-14 | P2 | 维护 | NOT_RUN | 本轮未执行 | `WorkbenchPages.tsx` 与 `style.css` 的拆分设计，只作为独立小改动执行。**通过：** 拆分后交互与 API 行为保持一致，新增回归测试。 | 无本轮证据 | 待核验 |
 | UI-15 | P2 | 性能 | NOT_RUN | 本轮未执行 | 真实规模数据下首屏、切页、展开 806 行质量明细、长列表输入的响应。**通过：** 无明显卡死；若发现卡顿，记录可重复的操作与浏览器 Performance 证据。 | 无本轮证据 | 待核验 |
@@ -60,9 +60,9 @@
 | API-01 | P0 | 自动 | PASS | `python -m pytest -q`：test_shared_frontend_backend_contract_fixtures；apps/web Vitest contract tests | source-verification/teacher-case 前后端字段共享兼容 | fixture 经 Pydantic 与前端类型校验；Vitest 当前 55 passed/1 skipped | 尚非全路由自动生成 OpenAPI 对比 |
 | API-02 | P0 | 自动 | PASS | `python -m pytest -q`：test_health_and_validation_error_contract；test_api_not_found_uses_common_error_contract；test_review_api_rejects_invalid_identity_and_cross_student_evidence | 参数/空白 ID/未知资源返回安全 4xx | 400/404/422、安全 error/code/request_id 且无跨学生写入断言通过 | 枚举和 JSON 错误类型组合并非穷举 |
 | API-03 | P1 | 自动 | PASS | `test_api_error_does_not_expose_traceback`; common error contract tests | 统一 API 错误，不暴露 Traceback、模型密钥、系统路径和供应方原文。**通过：** 安全错误消息且后端诊断日志具备请求 ID。 | 后端完整 pytest 通过；通用错误契约、错误不泄漏 traceback 测试通过 | 非所有路由错误类型穷举 |
-| API-04 | P1 | 受控测试 | NOT_RUN | 生产构建后检查 bundle 与 `apps/web/vite.config.ts`；仅静态检查模型 API 环境变量和 HTTPS 校验代码，不发起模型调用 | 模型 Key 只在后端 `.env` 或环境变量读取；网络调用仅 HTTPS。**通过：** 构建产物、前端请求、截图、日志、ZIP 均无密钥。 | 构建产物未匹配凭证样式；配置显示 Key 由后端环境读取，配置 Key 时 `MODEL_API_URL` 必须 HTTPS；未读取或打印本地 `.env` 值，也未调用收费模型 | 前端 bundle 与源码已核验；截图/日志/ZIP 全量审查及受控真实配置检查未完成 |
+| API-04 | P1 | 受控测试 | PASS（静态与隔离产物） | `python scan-artifacts.py apps/backend/app/web/dist playwright-report test-results "D:\工作台\智慧学伴-比赛项目\web端截图"`; 模型提示去标识化和引用回映单测；静态检查 config/client/vite 配置；不读取 `.env`、不发起模型调用 | Key 由后端环境读取；配置 Key 时模型 URL 使用 HTTPS；发送到外部模型的提示尽量不含本地学生/记录/题目标识；构建、截图、日志、导出 ZIP 不含常见凭证模式。 | `config.py` 将 Key 字段设为 `repr=False` 并在 Key 非空时要求 HTTPS；前端客户端仅访问本地后端路由；模型调用前递归替换提示中的 `D01`/`R2`/`Q001` 为本地别名，返回别名再映射为本地证据 ID；定向测试断言成立。构建/截图/报告及 ZIP 扫描无命中。未读取 `.env`、未调用真实模型 API。 | 规则扫描有覆盖边界；教育作答过程文本仍会发送给配置的模型服务，实际供应商留存/训练政策需团队评估 |
 | API-05 | P1 | 安全 | PASS | ASGI `RequestBodyLimitMiddleware`；请求体 20 MiB+1（Content-Length/分块）、无效 UTF-8、60 秒总接收超时单测；既有 16 MiB CSV 内容/类型测试 | 浏览器导入接口的大文件、伪造超长内容、错误类型/编码。**通过：** 不发生不可控内存占用或长时间阻塞；如果尚无请求大小上限，记录实际风险及修复优先级。 | JSON 解码前最多缓冲 20 MiB；超限返回 413/REQUEST_TOO_LARGE；总接收超过 60 秒返回 408/REQUEST_BODY_TIMEOUT；无效 UTF-8 安全返回 400 且 current-run 不变；4 个新边界专项通过，原 16 MiB 内容及类型约束仍保留 | 超时通过可控 ASGI receive 直接验证；不模拟慢速真实网络吞吐。
-| API-06 | P2 | 安全 | NOT_RUN | 本轮未执行 | 文件读取白名单、路径穿越、临时目录清理、日志脱敏、数据保管边界。**通过：** 不意外读取仓库外任意文件、不残留密钥和不必要个人数据。 | 无本轮证据 | 待核验 |
+| API-06 | P2 | 安全 | NOT_RUN | 文件读取白名单/路径穿越现有 `test_source_route_enforces_allowlist_and_reports_missing_files`；根 `npm run test:e2e` 包装器在子进程退出后清理本轮新建 UUID DB/CSV 目录 | 不意外读取仓库外文件；自动测试临时数据可清理；保留用户指定路径。 | 路径白名单与 traversal 测试已有；包装器仅清理自己新建、无预存目标的默认 UUID 路径，显式路径不动；本轮 E2E 7 passed 且验证新产物已删除。仍有 263 个历史 `playwright-<UUID>` 项残留。 | 本轮递归清理历史生成物被执行工具安全审查拒绝；数据保管边界未全量闭合，维持 NOT_RUN |
 | DOC-01 | P0 | Codex | PASS | 已重建 35 项赛事需求追踪矩阵，逐项含当前代码/测试/人工状态/未满足条件 | 重新构建 35 项赛事需求追踪矩阵（8+14+13），每项关联代码文件、测试、实际结果、人工签核及未满足事项。**通过：** 不照搬 2026-11-17 历史状态。 | 35 项（8+14+13）齐全；保留 BLOCKED/NOT_MET，不代签人工事项 | 最新代码/测试引用已写入阶段报告需求矩阵 |
 | DOC-02 | P0 | 负责人 | PASS | 审计报告将 T03-REQ-010 映射到教学调整 API、迁移和 E2E | 需求状态须与实现相符；未实现时保留 `not_met`，实现后更新证据和限制。 | 跨运行计划/实施/后续证据/教师比较与导出已实现并由后端集成及浏览器流程覆盖；学科结论仍须教师审核 |  |
 | DOC-03 | P1 | Codex | PASS | 核对 README 安装/启动/迁移/备份命令、根 package scripts 和实际 Playwright 导入流程 | README 命令与当前脚本存在；浏览器使用目录选择器导入六类 CSV，旧 CLI 绝对路径说明对应 CLI 能力。**通过：** 文档能指导本地启动与导入。 | README 命令、根目录 `test:e2e` script、`ImportPanel` 六 CSV 选择及 E2E 导入流程相互对应 |  |
@@ -75,7 +75,6 @@
 
 ## 当前计数（导出范围迭代后）
 - P0：PASS 29, BLOCKED 1, NOT_RUN 0
-- P1：PASS 25, BLOCKED 4, NOT_RUN 3
+- P1：PASS 27, BLOCKED 4, NOT_RUN 1
 - P2：NOT_RUN 3
-- 总计：PASS 54, BLOCKED 5, NOT_RUN 6（65 项；人工签核/外部权限事项仍保留 BLOCKED）
-
+- 总计：PASS 56, BLOCKED 5, NOT_RUN 4（65 项；人工签核/外部权限事项仍保留 BLOCKED）

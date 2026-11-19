@@ -97,7 +97,7 @@
 | T02-REQ-010 信息不足不推断未掌握 | PASS | `no_record`/`not_measured`/pending/unanswered 测试；合法 0 分与零满分排除用例; apps/backend/tests/test_task02_quality_metrics.py zero/no_record/pending/unanswered/max=0 tests | 自动/代码证据已核验；正式内容审核（如适用）仍独立签核 | 正式学科/教学/赛事内容签核仍需对应责任人独立完成（如适用） |
 | T02-REQ-011 结合答案、过程和评分依据 | BLOCKED | Evidence 页面有答案、过程、rubric 状态字段; apps/web/src/features/task02/components/EvidencePanel.tsx; human math review blocked | BLOCKED：需责任人签核原始出处、审核人和日期 | 需责任人提供人工审核记录、原始出处、日期与签核结论 |
 | T02-REQ-012 适配实际测量范围 | PASS | N01/N02 分节点指标与跨节点规则测试; apps/backend/tests/test_server.py cross-node draft scope test | 自动/代码证据已核验；正式内容审核（如适用）仍独立签核 | 正式学科/教学/赛事内容签核仍需对应责任人独立完成（如适用） |
-| T02-REQ-013 典型案例和依据 | BLOCKED | 三类候选服务和 evidence 输出; apps/backend/tests/test_task02_cases.py::test_cases_use_latest_node_and_explain_evidence_and_roster_coverage; human cases blocked | BLOCKED：需责任人签核原始出处、审核人和日期 | 需责任人提供人工审核记录、原始出处、日期与签核结论 |
+| T02-REQ-013 典型案例和依据 | BLOCKED | 三类候选服务输出类型、学生、结构化班级、覆盖理由和 evidence；官方 CSV 只读复算显示三候选覆盖 DC01/DC02；apps/backend/tests/test_task02_cases.py::test_cases_use_latest_node_and_explain_evidence_and_roster_coverage；human cases blocked | 自动证据与界面可见性已核验；正式案例代表性仍待责任人签核 | 需责任人提供人工审核记录、原始出处、日期与签核结论 |
 | T02-REQ-014 结构化成果 | BLOCKED | ZIP 结构、manifest、文件解析测试通过; apps/backend/tests/test_core.py::test_review_and_export; apps/backend/tests/test_stage2_workflow.py export roundtrip | BLOCKED：需责任人签核原始出处、审核人和日期 | 需责任人提供人工审核记录、原始出处、日期与签核结论 |
 | T03-REQ-001 结合要求、学情、条件 | PASS | `recommendation_service.py` 规则测试、节点范围隔离; apps/backend/tests/test_task03_recommendations.py TR-01 to TR-08 tests | 自动/代码证据已核验；正式内容审核（如适用）仍独立签核 | 正式学科/教学/赛事内容签核仍需对应责任人独立完成（如适用） |
 | T03-REQ-002 提出内容/练习/活动 | BLOCKED | TR 规则与 structured plan schema/验证; apps/backend/tests/test_stage2_workflow.py structured plan validation; teaching review blocked | BLOCKED：需责任人签核原始出处、审核人和日期 | 需责任人提供人工审核记录、原始出处、日期与签核结论 |
@@ -204,3 +204,77 @@ pm run test:e2e 全部 2 passed。新增八路由直接 hash、刷新、当前�
 - **前端模型错误与审慎边界复核：** Hook 将 API 的安全错误文本用全局 alert 显示；E2E 已覆盖模拟 502。模型服务只覆盖确定性草稿允许的证据 ID，解析失败/不完整响应/无效引用拒绝；TR-01/TR-08 不调用模型。输出仍是草稿并要求教师复核，自动测试没有证明模型语义正确。
 - **验证：** 最新完整后端 pytest `140 passed, 2 skipped`；`ruff check apps/backend` 和 `ruff format --check apps/backend` 通过（104 文件）；前端 Vitest `55 passed, 1 skipped`、生产构建通过；根目录 Chromium Playwright `7 passed`。两个后端 skip 仍是本机 Windows symlink 权限限制。前一条从错误目录调用前端脚本导致“无 test script”，已改从 `apps/web` 执行正确的 Vitest 和 build 命令并通过。
 - **剩余边界：** 未执行真实模型质量/语义评审；九项赛事来源验证仍待学科责任人签核；UI-12 全站可访问性、EXP-10 最终截图/真实交付 ZIP、API-04 敏感信息产物全量审查、UI-14/15、API-06 等仍依原矩阵标为未执行或待决。自动化通过不等于赛事完整验收。
+
+### 模型证据门槛优化（当前工作区后续复核）
+
+- **复现：** 新增三种无有效评分场景（仅待评分、仅未作答、没有记录），失败用例证明原实现仍会向模型客户端发送请求。
+- **修复：** `deepseek_draft` 仅在规则草稿引用范围内存在至少一条“已评分”记录时调用模型。无已评分证据时直接返回确定性草稿，保留未知原因和补充观察建议；原有范围冲突 TR-01/TR-08 仍在更早阶段拦截。未改统计、阈值或 `rule_version`。
+- **验证：** 定向模型用例 6 passed（含三类不请求模型、有效结构化输出、伪造引用拒绝和冲突拦截）；完整后端 143 passed、2 skipped；Ruff check/format 通过（104 文件）；Playwright 7 passed。未调用真实模型 API。
+- **评审边界：** 有已评分记录仅说明满足模型调用的最低证据门槛，不代表模型输出已被证明正确；证据语义和教学适切性仍需固定案例集与学科人员审核。
+- **重复引用校验：** 复现模型对同一合法记录重复引用会通过校验，导致页面/历史出现重复 ID；现改为拒绝重复引用，加入 Mock 回归。完整后端现为 144 passed、2 skipped；Ruff check/format 通过。E2E 在该纯服务端校验前一轮已 7 passed，此次未因未影响 UI/API 契约的引用校验重复运行。
+
+### 三类案例班级信息透明度
+
+- **差距：** T02-DEV-005 要求案例覆盖与限制可见；原候选卡只显示学生编号、理由和证据，评审无法直接看到每名候选所属班级。
+- **改动：** `/api/cases` 增加必需 `class_id` 响应字段（值来自原始模拟班级编号）；前端候选标题展示类型、学生和班级；原有 `reason` 班级覆盖总结保留。前端类型允许旧 Mock/客户端缺省该字段，避免兼容期 UI 崩溃。
+- **验证：** 后端候选测试断言每类候选的 class_id；HTTP 测试验证响应模型包含该字段；Workbench 页面测试断言班级显示。使用官方六 CSV 只读复算：40 名学生、806 行作答，生成 3 个候选并覆盖 DC01/DC02（2/2）；此结果说明分组覆盖，不证明案例有代表性。完整后端 144 passed、2 skipped；Ruff check/format 通过；前端 55 passed、1 skipped 和 build 成功；Playwright 7 passed。
+- **状态：** 赛事原始 CSV/PDF 未修改；真实案例代表性、差异解释和教学结论仍待教师/学科人员复核，本项不能据代码测试标为正式内容验收完成。
+
+### TASK03 教学步骤展示修复
+
+- **复现：** 新增 ReviewPanel 用例，将规则草稿 `activity` 设置为与 `recommendation` 相同、同时提供步骤/材料/观察点。原 UI 只在 activity 与 recommendation 不同时渲染教学安排折叠区，定向测试失败，确认规则草稿细节被隐藏。
+- **修复：** 现在只要草稿含不同的活动说明、步骤、材料或观察点，就展示“教学安排建议”；活动说明与主建议重复时不再重复打印文案，但步骤、材料 ID、观察点仍可查看。
+- **验证：** ReviewPanel 9 passed；前端完整 Vitest 56 passed、1 skipped；生产 build 成功；Chromium E2E 7 passed；后端 Ruff check/format 通过。此处只改前端展示，没有调整 TASK03 规则或推断逻辑。
+
+### 教师复核历史中的完整方案回看
+
+- **差距：** 完整教学方案此前已由服务端校验、追加保存并进入 ZIP，但 ReviewPanel 历史只呈现诊断/建议/理由，教师不能在应用内回看该版本保存的活动、材料、步骤、练习和观察点。
+- **改动：** 展开某条历史复核后显示该版本的完整方案及材料来源签核版本号；无方案的旧版记录保持原展示。新增区分化样式，不改 API、数据库和 ZIP 契约。
+- **验证：** 先加历史方案测试并观察失败，再实现；ReviewPanel 9 passed，完整前端 Vitest 56 passed、1 skipped，生产 build 成功，Chromium E2E 7 passed；后端 Ruff check/format 和 `git diff --check` 通过。历史测试覆盖活动、材料/签核版本、步骤、练习及观察点。
+- **限制：** 页面显示的是复核时保存的历史方案与签核版本，不代表该来源签核当前仍有效；ZIP 仍由服务端按最新签核版本决定是否将方案作为当前有效内容导出。
+
+### TASK03 教师复核历史中的当前签核有效性
+
+- **差距：** 上一轮历史方案只展示保存时的签核版本；教师无法从页面判断该签核是否仍有效，容易把旧方案误认为当前仍可用。
+- **规则与改动：** 与导出端一致，只有当前签核状态为 `verified`、版本号等于方案保存版本、且方案所需材料仍在当前签核材料集合中，才显示“本方案来源签核仍有效”；其他情况均标注签核已变化/撤销/无法核验，且方案仅作历史记录、导出不作为有效方案。
+- **验证：** helper 单测覆盖有效版本、版本变化、材料缺失、签核撤销和无签核；历史 UI 测试覆盖当前有效与过期方案。ReviewPanel 11 passed；完整前端 Vitest 58 passed、1 skipped；生产 build 成功；根目录 Chromium Playwright 7 passed；`git diff --check` 无空白错误。没有改 API、数据库或模型推断。
+- **限制：** 自动化验证的是版本/材料引用一致性，不代表课程来源本身经学科专家认可；真实模型和教材签核仍未执行。
+
+### 自动化交付产物扫描（EXP-10 / API-04）
+
+- **差距复核：** 旧审计只扫描少量文本构建/测试产物；演示 PNG 元数据、完整 Playwright 结果目录、ZIP 每个成员未形成可复用全量扫描流程。矩阵 HEAD 记录也与实际工作区不符，现已更新为当前 HEAD `2a442d03a76c958979d176a140f72bf651ef6e1b`。
+- **实现：** 新增 `scan-artifacts.py`，递归扫描目录、逐成员读取 ZIP，并检查 PNG tEXt/zTXt/iTXt 元数据；识别常见 sk token、Bearer token、模型密钥配置行、Windows Users 路径，输出只含文件位置和规则、不回显命中值。Playwright 真实导出流程对浏览器下载 ZIP 执行该扫描；20 张多视口浏览器截图也在 E2E 中自动扫描。截图脚本现遇浏览器 pageerror 会失败，避免仅打印后仍被误认为成功。
+- **验证：** 扫描器/截图脚本定向 pytest 4 passed；Ruff check/format 通过。真实导出 E2E 1 passed（ZIP 结构范围校验与全成员敏感形态扫描）；多视口 E2E 1 passed（20 PNG 检查并扫描）；对生产 bundle、Playwright HTML 报告/trace、test-results 和现存演示截图目录运行扫描，均为 `No artifact disclosure patterns found.`。没有读取 `.env` 或调用模型 API。
+- **矩阵：** EXP-10 与 API-04 记为自动静态范围 PASS；当前 65 项统计为 P0 29 PASS/1 BLOCKED，P1 27 PASS/4 BLOCKED/1 NOT_RUN，P2 3 NOT_RUN；合计 56 PASS、5 BLOCKED、4 NOT_RUN。
+- **边界：** 规则扫描只能证明所列模式未命中，不等于语义隐私审查；正式赛事交付 ZIP 是否包含恰当的真实案例内容、学生授权/匿名化和演示材料仍需负责人审阅。
+
+### API-03/API-06 日志隐私加固
+
+- **发现：** 通用 500 响应已隐藏异常原文，但服务端仍通过 `logger.exception` 把完整 traceback 与异常消息写入常规日志；合成异常验证复现了日志包含 Windows 私有路径和密钥标记。这使 API-03 的“安全错误”只覆盖响应，没有覆盖日志侧泄漏。
+- **修复：** 通用异常日志现在只记录异常类型和 request ID，不输出异常文本或 traceback。定向回归先复现旧行为，再断言日志调用只有类型、请求 ID 且没有异常上下文。
+- **验证：** 后端完整 pytest 145 passed、2 skipped；Ruff check 通过，104 个 Python 文件格式检查通过；Chromium Playwright 7 passed；API 响应仍为安全 `INTERNAL_ERROR`，未改变正常业务接口。未发现应用源码仍有 `logger.exception` 调用。
+- **范围状态：** API-03 的常规 500 日志脱敏证据增强；API-06 仍为 NOT_RUN，因为临时文件/服务数据清理与数据保管边界未完成系统性核查。备份迁移报告保留源/目标路径是现有运维设计约定，不在此处静默改变。
+- **诊断取舍：** 常规日志不再包含默认 traceback。排查需凭 request ID 结合受控诊断；如果未来需要完整堆栈，应另行设计访问受控、可脱敏的诊断通道。
+
+### Playwright 临时数据生命周期（API-06 补充）
+
+- **复核发现：** `playwright.config.ts` 的每次 E2E 默认在仓库 `data/` 下创建 UUID 隔离 SQLite 与六 CSV 导入目录；此前只靠 `.gitignore` 隐藏，没有清理钩子，累积旧产物。
+- **改进：** 根 `test:e2e` 改由 `run-playwright.cjs` 启动子进程。只有运行器自己生成 UUID、且默认目录/数据库运行前都不存在时，才在 Playwright 和 webServer 子进程完全退出后，调用路径严格校验的清理器删除精确匹配的目录、SQLite、WAL/SHM。显式自定义路径、复用的 run ID、已有目标、越界路径和 symlink 目标不清理。`smart_learning.db` 与非 UUID 测试数据保留。
+- **验证：** 清理器 Node 测试 2 passed、symlink 测试 1 skipped（Windows 本机不允许创建 symlink）；包装器定向真实 E2E 1 passed，结束提示已清理；包装器全套 Chromium E2E 7 passed，结束提示已清理；测试后确认本次 UUID 数据目录/DB 不存在、日常 `data/smart_learning.db` 存在、8876/5174 无监听服务。
+- **历史残留：** 核验发现 `data/` 中仍有 263 个以前累积的 `playwright-<UUID>` 目录/数据库项。本轮尝试在校验其均为 `data/` 直接子项、并确认测试服务已停止后清理；执行工具的自动安全审查拒绝了递归删除。本轮没有绕过该限制或删除这些旧项。API-06 仍保持 NOT_RUN；未来经包装器启动的新运行会清理自己创建的临时数据。
+
+### 2026-11-19 键盘与色彩复核（UI-12 补充）
+
+- **发现：** 新增的全路由键盘审计首轮误报案例页两个嵌套折叠区的 `<summary>` 无法 Tab 聚焦。原因是审计筛选只检查最近一层 `<details>`，没有检查外层关闭的折叠区；浏览器实际 Tab 序列并未暴露这些隐藏控件。
+- **改进：** 测试现在沿 DOM 所有祖先检查关闭的 `<details>`，仅保留关闭折叠区自身直接的 summary。9 个路由逐一检查可访问名称，并通过 Chromium 原生 Tab 验证焦点环；建议复核路由会生成规则草稿、展开教学安排/完整方案、启用结构化方案编辑并展开原始证据；教学调整路由使用独立模拟历史记录，展开后续证据和实施历史；案例路由展开教师签核表单，将条件态 textarea 与嵌套证据 disclosure 纳入检查。采样前禁用视觉过渡以避免计算到动画中间帧。以工作台入口链接作为序列起点，并先断言其焦点环，再遍历后续控件。
+- **色彩发现与修正：** 实际 Chromium 文本/背景采样发现概览页琥珀状态（3.86:1）、青色统计数字（3.88:1）、数据质量技术文本（4.01:1）及建议复核“教学对象与目标”标签（4.47:1）低于小字号 AA 4.5:1；禁用按钮文本也偏淡。加深 `--amber`、`--teal`、`.quality-raw`、`button:disabled` 和 `.draft-target > span` 色值。扫描器现在解析项目实际使用的线性渐变 CSS 色标，并用最差端点作为背景对比；用例断言确实采样到渐变文本。对当前已覆盖的页面初始状态、建议复核条件态、教学调整历史与案例签核展开态，复测无低于 WCAG AA 阈值的组合。
+- **验证：** 全站专项测试通过；全套 Chromium Playwright E2E 8 passed（`npm run test:e2e`，包装器清理本轮隔离数据）；前端 Vitest 58 passed、1 skipped；生产构建成功；后端完整 pytest 145 passed、2 skipped；Ruff check 通过、104 个 Python 文件格式通过；`git diff --check` 通过。清理器 Node 测试 2 passed、symlink 限制用例 1 skipped。
+- **范围边界：** CSS 端点检查针对仓库现有两色浅色线性渐变；未覆盖动态主题、图形文字和所有条件状态，且没有替代完整 axe/WCAG 语义审计。人工屏幕阅读器检查仍待完成，UI-12 维持 NOT_RUN。
+
+### 2026-11-19 模型提示去标识化
+
+- **发现：** 可选模型请求会发送学生/记录/题目 ID；这些编号也嵌在规则基线的说明文本中，单独清理 JSON 字段仍会泄漏标识。
+- **TDD 验证：** 新增模型提示回归测试，要求请求全文不含合成学生 `D01`、记录 `R2`、题目 `Q001`，而结构化证据使用“证据1”“题目1”；模型以“证据1”引用时，应用返回的本地草稿必须还原为 `R2`。首轮红灯准确暴露规则基线文本仍含 `Q001`，随后修复再通过。
+- **改进：** 发送前剔除学生 ID、证据 ID、来源行等字段；将题目/证据编号映射为请求内别名，并对基线、指标和作答文本递归替换标识；模型引用校验只接受已发出的别名，之后在本地映射回原始证据 ID。未更改评分或推荐规则。
+- **验证：** 后端完整 pytest 146 passed、2 skipped；Ruff check 通过、104 个 Python 文件格式检查通过；Chromium E2E 8 passed，隔离测试数据自动清理。没有读取 `.env` 或调用付费模型 API。
+- **边界：** 学生作答过程文本仍会发送给所配置的模型服务，以便模型依据步骤提出建议；不能据此推断实际供应商不保存或不使用数据。真实供应商条款、人工授权及真实输出质量仍需负责人确认。

@@ -608,6 +608,35 @@ def test_deepseek_returns_tr08_without_calling_model_for_conflicted_scope():
     assert result["source"] == "rule"
 
 
+@pytest.mark.parametrize("response_status", ["待评分", "未作答", None])
+def test_deepseek_does_not_call_model_without_valid_scored_evidence(response_status):
+    tables = sample_tables()
+    tables["作答记录"] = [
+        row for row in tables["作答记录"] if row["记录编号"] in {"R2", "R3"}
+    ]
+    for row in tables["作答记录"]:
+        if response_status is None:
+            row["评分状态"] = "待评分"
+        else:
+            row["评分状态"] = response_status
+        row["得分"] = ""
+        row["评分点得分"] = ""
+    run = analyze(tables, {})
+
+    class UnexpectedLLM:
+        def complete(self, _body):
+            raise AssertionError("没有有效已评分证据时不能调用模型")
+
+    result = deepseek_draft(run, "D01", "T01I1", client=UnexpectedLLM())
+
+    assert result["source"] == "rule"
+    assert result["unknown_reason"] in {
+        "pending_scoring",
+        "unanswered",
+        "no_valid_scored_evidence",
+    }
+
+
 def test_deepseek_rejects_fabricated_evidence():
     run = _task03_run_without_unrelated_invalid_record()
 
@@ -636,6 +665,30 @@ def test_deepseek_rejects_fabricated_evidence():
         raise AssertionError("伪造证据应被拒绝")
 
 
+def test_deepseek_rejects_duplicate_evidence_references():
+    run = _task03_run_without_unrelated_invalid_record()
+
+    class FakeLLM:
+        def complete(self, _body):
+            content = {
+                "diagnosis": "需复核第一步",
+                "recommendation": "先提示数量关系，再独立作答",
+                "adjustment_condition": "完成后检查同类题",
+                "evidence_record_ids": ["证据1", "证据1"],
+            }
+            return {
+                "choices": [
+                    {
+                        "finish_reason": "stop",
+                        "message": {"content": json.dumps(content)},
+                    }
+                ]
+            }
+
+    with pytest.raises(LLMError, match="证据引用"):
+        deepseek_draft(run, "D01", "T01I1", client=FakeLLM())
+
+
 def test_deepseek_accepts_valid_structured_draft():
     run = _task03_run_without_unrelated_invalid_record()
 
@@ -645,7 +698,7 @@ def test_deepseek_accepts_valid_structured_draft():
                 "diagnosis": "需复核第一步",
                 "recommendation": "先提示数量关系，再独立作答",
                 "adjustment_condition": "完成后检查同类题",
-                "evidence_record_ids": ["R2"],
+                "evidence_record_ids": ["证据1"],
             }
             return {
                 "choices": [
@@ -660,3 +713,34 @@ def test_deepseek_accepts_valid_structured_draft():
     assert result["source"] == "deepseek"
     assert result["evidence_record_ids"] == ["R2"]
     assert result["recommendation"] == "先提示数量关系，再独立作答"
+
+
+def test_model_prompt_uses_local_aliases_and_maps_citations_back():
+    run = _task03_run_without_unrelated_invalid_record()
+
+    class FakeLLM:
+        def complete(self, body):
+            prompt = json.loads(body["messages"][1]["content"])
+            prompt_json = json.dumps(prompt, ensure_ascii=False)
+            assert "D01" not in prompt_json
+            assert "R2" not in prompt_json
+            assert "Q001" not in prompt_json
+            assert prompt["evidence"][0]["record_id"] == "证据1"
+            assert prompt["evidence"][0]["item_id"] == "题目1"
+            content = {
+                "diagnosis": "需复核第一步",
+                "recommendation": "先提示数量关系，再独立作答",
+                "adjustment_condition": "完成后检查同类题",
+                "evidence_record_ids": ["证据1"],
+            }
+            return {
+                "choices": [
+                    {
+                        "finish_reason": "stop",
+                        "message": {"content": json.dumps(content)},
+                    }
+                ]
+            }
+
+    result = deepseek_draft(run, "D01", "T01I1", client=FakeLLM())
+    assert result["evidence_record_ids"] == ["R2"]

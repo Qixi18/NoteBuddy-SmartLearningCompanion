@@ -177,6 +177,7 @@ class AnalysisRunResponse(BaseModel):
 
 class CaseSuggestionResponse(BaseModel):
     student_id: str
+    class_id: str
     type: Literal["部分得分", "表现较好", "记录较少"]
     reason: str
     evidence_record_ids: list[str]

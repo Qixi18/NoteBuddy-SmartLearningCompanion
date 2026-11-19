@@ -8,7 +8,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from app.api.app import RequestBodyLimitMiddleware, create_app
+from app.api.app import RequestBodyLimitMiddleware, create_app, logger as api_logger
 from app.config import settings
 from app.repositories.store import Store
 from app.services.analysis import TABLES, analyze
@@ -28,6 +28,9 @@ def client_for(tmp_path, config=None, tables=None):
 
 def test_http_review_to_export(tmp_path):
     client = client_for(tmp_path)
+    cases = client.get("/api/cases")
+    assert cases.status_code == 200
+    assert all("class_id" in item for item in cases.json())
     response = client.get("/api/draft", params={"student": "D01", "indicator": "T01I1"})
     assert response.status_code == 200
     assert response.json()["rule_id"] == "TR-08"
@@ -418,6 +421,35 @@ def test_api_error_does_not_expose_traceback(tmp_path):
     assert response.status_code == 400
     assert response.json()["code"] == "INVALID_REQUEST"
     assert "Traceback" not in response.text
+
+
+def test_unexpected_error_log_omits_exception_text_and_traceback(tmp_path, monkeypatch):
+    secret_marker = "synthetic-secret-marker-7d4a1b"
+    application = create_app(Store(tmp_path))
+
+    @application.get("/test-unexpected-error")
+    def raise_unexpected_error():
+        raise RuntimeError(
+            f"database path D:\\Users\\Private\\state.sqlite key={secret_marker}"
+        )
+
+    client = TestClient(application, raise_server_exceptions=False)
+    logged = []
+    monkeypatch.setattr(
+        api_logger, "error", lambda *args, **kwargs: logged.append((args, kwargs))
+    )
+    response = client.get("/test-unexpected-error")
+
+    assert response.status_code == 500
+    assert response.json()["code"] == "INTERNAL_ERROR"
+    assert response.json()["request_id"]
+    assert len(logged) == 1
+    args, kwargs = logged[0]
+    assert args == ("request failed (%s)", "RuntimeError")
+    assert kwargs["extra"]["request_id"] == response.json()["request_id"]
+    assert secret_marker not in repr(logged)
+    assert "D:\\Users\\Private" not in repr(logged)
+    assert "exc_info" not in kwargs
 
 
 def test_api_not_found_uses_common_error_contract(tmp_path):

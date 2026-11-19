@@ -8,6 +8,16 @@ type ReviewFields = { status: ReviewStatus; diagnosis: string; recommendation: s
 const emptyFields: ReviewFields = { status: 'accepted', diagnosis: '', recommendation: '', adjustment_condition: '', reason: '', reviewer: '', structured_plan: null };
 const statusLabels: Record<ReviewStatus, string> = { accepted: '接受', edited: '已修改', needs_observation: '待观察', rejected: '驳回' };
 
+export function isStructuredPlanCurrentlyVerified(review: Review, indicator: string, verification: SourceVerification | null): boolean {
+  const plan = review.structured_plan;
+  return Boolean(
+    plan
+    && verification?.status === 'verified'
+    && review.source_verification_versions?.[indicator] === verification.version
+    && plan.material_ids.every(id => verification.material_ids.includes(id)),
+  );
+}
+
 function EvidenceContext({ run, student, indicator, node, draft }: { run?: AnalysisRun; student: string; indicator: string; node: string; draft: Draft }) {
   if (!run) return <aside className="review-context"><h3>本次依据 · {student} · {indicator} · {node}</h3>{draft.observed_fact && <div className="context-item"><span>观察事实</span><p>{draft.observed_fact}</p></div>}{draft.inference_limit && <div className="context-limit"><strong>适用边界：{draft.inference_limit}</strong></div>}<div className="review-tech-details"><p>规则：{draft.rule_id || '未提供'} · 证据类型：{draft.evidence_kind || '未分类'}</p><p>引用记录：{draft.evidence_record_ids.join('、') || '无有效记录'} · 原始来源行：{draft.evidence_source_lines?.join('、') || '未提供'}</p></div><p>当前无法读取作答明细。</p></aside>;
   const itemIds = new Set(run.items.filter(item => item['指标编号'] === indicator).map(item => item['材料编号']));
@@ -100,6 +110,7 @@ export function ReviewPanel({ run, student, indicator, node, review, draft, onDr
     finally { setSaving(false); }
   };
   const activityDiffers = draft?.activity?.trim() && draft.activity.trim() !== draft.recommendation.trim();
+  const hasTeachingDetails = Boolean(activityDiffers || draft?.steps?.length || draft?.material_ids.length || draft?.observation_point?.trim());
 
   return <Panel title="生成与复核" className="review-panel">
     <div className="review-tool-intro"><p>选择规则或模型生成待复核草稿。系统提供依据，教师确认后才形成复核结论。</p><span className="draft-status">{review ? `已有复核版本 ${review.version}` : draft ? '待教师复核' : '尚未生成草稿'}</span></div>
@@ -111,7 +122,7 @@ export function ReviewPanel({ run, student, indicator, node, review, draft, onDr
       <section className="review-editor" aria-label="教师复核草稿">
         <div className="draft-banner"><span>系统草稿</span><strong>{draft.source === 'rule' ? '规则生成' : '模型辅助生成'}</strong><small>未确认 · 请核对左侧证据和来源边界</small></div>
         <div className="draft-target"><span>教学对象与目标</span><p>{draft.objective || '草稿未提供目标。'}</p></div>
-        {activityDiffers && <details className="proposed-activity"><summary>查看教学安排建议</summary><p>{draft.activity}</p>{draft.steps?.length ? <ol>{draft.steps.map((step, index) => <li key={`${index}:${step}`}>{step}</li>)}</ol> : null}{draft.material_ids.length > 0 && <p>材料编号：{draft.material_ids.join('、')}</p>}{draft.observation_point && <p>观察点：{draft.observation_point}</p>}</details>}
+        {hasTeachingDetails && <details className="proposed-activity"><summary>查看教学安排建议</summary>{activityDiffers && <p>{draft.activity}</p>}{draft.steps?.length ? <ol>{draft.steps.map((step, index) => <li key={`${index}:${step}`}>{step}</li>)}</ol> : null}{draft.material_ids.length > 0 && <p>材料编号：{draft.material_ids.join('、')}</p>}{draft.observation_point && <p>观察点：{draft.observation_point}</p>}</details>}
 
         <section className="review-fields">
           <h3>教师复核内容</h3>
@@ -139,6 +150,6 @@ export function ReviewPanel({ run, student, indicator, node, review, draft, onDr
         <div className="review-save-bar"><p>{fields.structured_plan ? '将保存教师复核及完整方案。' : '将保存教师复核字段和草稿引用。'}</p><button disabled={saving || drafting} onClick={() => void save()}>{saving ? '正在保存…' : '保存复核'}</button></div>
       </section>
     </div>}
-    {history.length > 0 && <details className="review-history"><summary>查看复核历史（{history.length}）</summary>{history.map(item => <details className="row" key={`${item.version}:${item.updated_at}`}><summary>版本 {item.version} · 节点 {item.node_id ?? item.original_draft?.node_id ?? '范围未记录'} · {statusLabels[item.status]} · {item.updated_at}</summary><p>诊断：{item.diagnosis}</p><p>建议：{item.recommendation}</p><p>理由：{item.reason}</p><small>复核人：{item.reviewer || '未填写'} · 来源：{item.source === 'rule' ? '规则生成' : '模型辅助生成'} · 引用记录 {item.evidence_record_ids.join('、') || '无'}</small></details>)}</details>}
+    {history.length > 0 && <details className="review-history"><summary>查看复核历史（{history.length}）</summary>{history.map(item => <details className="row" key={`${item.version}:${item.updated_at}`}><summary>版本 {item.version} · 节点 {item.node_id ?? item.original_draft?.node_id ?? '范围未记录'} · {statusLabels[item.status]} · {item.updated_at}</summary><p>诊断：{item.diagnosis}</p><p>建议：{item.recommendation}</p><p>理由：{item.reason}</p>{item.structured_plan && <section className="review-history-plan"><h4>已保存的完整教学方案</h4><p>活动：{item.structured_plan.activity}</p><p>材料：{item.structured_plan.material_ids.join('、') || '无'}{Object.entries(item.source_verification_versions ?? {}).map(([sourceIndicator, version]) => ` · 来源签核版本 ${version}（${sourceIndicator}）`)}</p>{isStructuredPlanCurrentlyVerified(item, indicator, verification) ? <p role="status">本方案来源签核仍有效（版本 {verification?.version}）</p> : <p className="review-alert">来源签核已变化、撤销或无法核验；该方案仅作历史记录，导出时不会作为有效方案。</p>}{item.structured_plan.steps.length > 0 && <><strong>活动步骤</strong><ol>{item.structured_plan.steps.map((step, index) => <li key={`${index}:${step}`}>{step}</li>)}</ol></>}{item.structured_plan.practice.length > 0 && <><strong>练习</strong><ul>{item.structured_plan.practice.map((practice, index) => <li key={`${index}:${practice}`}>{practice}</li>)}</ul></>}{item.structured_plan.observation_points.length > 0 && <><strong>观察点</strong><ul>{item.structured_plan.observation_points.map((point, index) => <li key={`${index}:${point}`}>{point}</li>)}</ul></>}</section>}<small>复核人：{item.reviewer || '未填写'} · 来源：{item.source === 'rule' ? '规则生成' : '模型辅助生成'} · 引用记录 {item.evidence_record_ids.join('、') || '无'}</small></details>)}</details>}
   </Panel>;
 }

@@ -216,8 +216,9 @@ def create_app(store: Store | None = None, config: Settings = settings) -> FastA
 
     @application.exception_handler(Exception)
     async def unexpected_error(request: Request, exc: Exception) -> JSONResponse:
-        logger.exception(
-            "request failed",
+        logger.error(
+            "request failed (%s)",
+            type(exc).__name__,
             extra={"request_id": getattr(request.state, "request_id", "")},
         )
         return error(request, 500, "服务器内部错误", "INTERNAL_ERROR")
