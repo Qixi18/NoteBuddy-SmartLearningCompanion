@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from app.application.ports.llm import LLMError
+from app.config import Settings
 from app.services.analysis import analyze, read_bundle
 from app.services.exports import package
 from app.services.recommendations import deepseek_draft, draft
@@ -96,6 +97,32 @@ def sample_tables():
             },
         ],
     }
+
+
+@pytest.mark.parametrize(
+    ("table_name", "id_field"),
+    [
+        ("模拟学生", "学生编号"),
+        ("题目与材料", "材料编号"),
+        ("测验节点", "节点编号"),
+    ],
+)
+def test_analysis_rejects_duplicate_reference_entity_ids(table_name, id_field):
+    tables = sample_tables()
+    duplicate = dict(tables[table_name][0])
+    tables[table_name].append(duplicate)
+
+    with pytest.raises(ValueError, match=f"{table_name}.*{id_field}.*重复"):
+        analyze(tables, {})
+
+
+def test_settings_repr_redacts_model_api_keys():
+    config = Settings(
+        model_api_key="model-secret-marker", deepseek_api_key="legacy-secret-marker"
+    )
+
+    assert "model-secret-marker" not in repr(config)
+    assert "legacy-secret-marker" not in repr(config)
 
 
 def test_version_and_denominator():

@@ -32,6 +32,8 @@ $env:SMART_LEARNING_DATA_DIR = "data"
 # 可选；相对路径按仓库根目录解析。不设置时 SQLite 固定在仓库根目录 data/ 下。
 # $env:SMART_LEARNING_DATABASE_URL = "sqlite:///D:/workspace/project/data/smart_learning.db"
 $env:SMART_LEARNING_RESOURCES_DIR = "resources"
+# 可选；配置赛事材料 PDF 所在目录。浏览器导入的临时上传不保留原始材料包路径。
+# $env:SMART_LEARNING_SOURCE_FILES_DIR = "D:/path/to/5_课程标准及相关教学资源"
 # 可选备份根目录；不设置时位于仓库父目录 _backups/smart-learning。
 # $env:SMART_LEARNING_BACKUP_DIR = "D:/workspace/_backups/smart-learning"
 # 可选；也可以在仓库根目录 .env 中填写。不要提交密钥。
@@ -89,6 +91,8 @@ python -m app.cli summary
 ## 可选模型服务
 
 模型 API Key 只配置在后端的 `.env` 或环境变量中；浏览器不会接触密钥。`MODEL_PROVIDER` 填 `deepseek` 或 `openai` 时可省略 `MODEL_API_URL`，程序会选择对应默认地址；其他提供商需填写完整的 HTTPS Chat Completions 接口地址。`MODEL_NAME` 填模型 ID。当前支持兼容 OpenAI Chat Completions 的接口及 JSON 对象响应；旧 `DEEPSEEK_API_KEY`、`DEEPSEEK_MODEL` 仍可用。调用模型会将所选学生的模拟作答步骤及评分点发给外部服务。模型输出是建议草稿，系统校验证据 ID，教师必须复核；自动化测试使用 Mock，不发起真实付费调用。修改 `.env` 后须重启后端。
+
+来源 PDF 按 `source_checks.json` 的 allowlist 查找。CLI 导入赛事材料包时可从原始材料目录读取；浏览器导入使用临时目录，如需查看 PDF，请通过 `SMART_LEARNING_SOURCE_FILES_DIR` 指向包含 allowlist 文件的本机目录。该目录与 `SMART_LEARNING_RESOURCES_DIR` 中的元数据目录分开配置。
 
 ## 验证
 

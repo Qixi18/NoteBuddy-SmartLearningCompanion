@@ -6,6 +6,7 @@ import csv
 import io
 import json
 import zipfile
+from collections import Counter
 from datetime import UTC, datetime
 
 from ..task02.case_service import suggest_cases
@@ -98,6 +99,7 @@ def package(
                 else:
                     pending.append(entry)
     manifest = {
+        "package_type": "selected_student_cases",
         "run_id": run["run_id"],
         "created_at": run["created_at"],
         "rule_version": run["rule_version"],
@@ -171,20 +173,107 @@ def package(
             valid = False
         if valid:
             confirmed_cases.append(case)
-    node_scoped_metrics = [entry for entry in metric if entry.get("node_id")]
-    node_observations = [
-        entry for entry in run.get("observations", []) if entry.get("node_id")
+    selected_class_ids = {
+        student.get("模拟班级编号")
+        for student in run["students"]
+        if student["学生编号"] in case_ids
+    }
+    scoped_metric = [
+        entry
+        for entry in metric
+        if (
+            entry.get("kind", "").startswith("student")
+            and (
+                entry.get("key") in case_ids
+                or any(
+                    entry.get("key", "").startswith(student_id + ":")
+                    for student_id in case_ids
+                )
+            )
+        )
+        or (
+            entry.get("kind", "").startswith("class")
+            and (
+                entry.get("key") in selected_class_ids
+                or any(
+                    entry.get("key", "").startswith(f"{class_id}:")
+                    for class_id in selected_class_ids
+                )
+            )
+        )
     ]
+    scoped_observations = [
+        entry
+        for entry in run["observations"]
+        if entry.get("student_id") in case_ids
+        or entry.get("class_id") in selected_class_ids
+    ]
+    scoped_rubric_observations = [
+        entry
+        for entry in run.get("rubric_observations", [])
+        if entry.get("student_id") in case_ids
+    ]
+    scoped_responses = [row for row in run["responses"] if row["学生编号"] in case_ids]
+    scoped_raw_responses = [
+        row for row in run["raw_responses"] if row["学生编号"] in case_ids
+    ]
+    scoped_record_ids = {row.get("记录编号") for row in scoped_raw_responses}
+    scoped_dispositions = [
+        row
+        for row in run["quality"].get("record_dispositions", [])
+        if row.get("record_id") in scoped_record_ids
+    ]
+    scoped_findings = [
+        row
+        for row in run["quality"].get("findings", [])
+        if row.get("record_id") in scoped_record_ids
+    ]
+    scoped_quality = {
+        **run["quality"],
+        "raw_rows": len(scoped_raw_responses),
+        "events": len({row.get("作答事件编号") for row in scoped_raw_responses}),
+        "selected_revisions": sum(
+            row.get("disposition") != "superseded" for row in scoped_dispositions
+        ),
+        "eligible_scored": sum(
+            row.get("disposition") == "scored" for row in scoped_dispositions
+        ),
+        "excluded_record_ids": sorted(
+            {
+                row.get("record_id")
+                for row in scoped_dispositions
+                if row.get("disposition") == "excluded" and row.get("record_id")
+            }
+        ),
+        "record_dispositions": scoped_dispositions,
+        "disposition_counts": dict(
+            Counter(row["disposition"] for row in scoped_dispositions)
+        ),
+        "raw_status_counts": dict(
+            Counter(row.get("评分状态", "") for row in scoped_raw_responses)
+        ),
+        "event_disposition_counts": dict(
+            Counter(
+                row["disposition"]
+                for row in scoped_dispositions
+                if row.get("disposition") != "superseded"
+            )
+        ),
+        "finding_counts": dict(Counter(row["code"] for row in scoped_findings)),
+        "findings": scoped_findings,
+    }
+    node_scoped_metrics = [entry for entry in scoped_metric if entry.get("node_id")]
+    node_observations = [entry for entry in scoped_observations if entry.get("node_id")]
     files = {
         "manifest.json": manifest,
         "learning_objectives.json": run["objectives"],
         "field_dictionary.json": run["field_dictionary"],
-        "data_quality.json": run["quality"],
+        "data_quality.json": scoped_quality,
         "class_summary.json": [
-            m for m in metric if m["kind"] in {"class", "class_indicator"}
+            m for m in scoped_metric if m["kind"] in {"class", "class_indicator"}
         ],
         "student_summary.json": [
-            m for m in metric if m["kind"] in {"student", "student_indicator"}
+            m for m in scoped_metric if m["kind"] in {"student", "student_indicator"}
         ],
         "student_cases.json": [
             {
@@ -213,11 +302,11 @@ def package(
             }
             for student_id in case_ids
         ],
-        "all_metrics.json": metric,
-        "observations.json": run["observations"],
-        "rubric_observations.json": run.get("rubric_observations", []),
-        "responses.json": run["responses"],
-        "raw_responses.json": run["raw_responses"],
+        "all_metrics.json": scoped_metric,
+        "observations.json": scoped_observations,
+        "rubric_observations.json": scoped_rubric_observations,
+        "responses.json": scoped_responses,
+        "raw_responses.json": scoped_raw_responses,
         "evidence_index.json": [
             {
                 "record_id": r["记录编号"],
@@ -227,7 +316,7 @@ def package(
                 "source_file": "作答记录.csv",
                 "source_line": r["_source_line"],
             }
-            for r in run["raw_responses"]
+            for r in scoped_raw_responses
         ],
         "items.json": run["items"],
         "source_index.json": run["source_index"],
@@ -269,7 +358,7 @@ def package(
             extrasaction="ignore",
         )
         writer.writeheader()
-        for row in metric:
+        for row in scoped_metric:
             writer.writerow({**row, "record_ids": "|".join(row["record_ids"])})
         archive.writestr("metrics.csv", "\ufeff" + metric_csv.getvalue())
         relations_csv = io.StringIO(newline="")
@@ -311,6 +400,8 @@ def package(
         archive.writestr(
             "字段与口径说明.md",
             "# 字段与统计口径\n\n"
+            "本包为三名所选学生的案例包；学生级统计、观测、作答和证据索引仅含所选学生。班级统计是所选学生所属班级的整班聚合，可能包含其他同学的聚合贡献。\n"
+            "`manifest.json` 的 `case_ids` 记录所选学生；不包含完整运行审计数据。\n"
             "`run_id` 由导入文件哈希生成；`record_ids` 为实际进入得分统计的修订记录。\n"
             "`score/maximum` 是有效已评分记录的得分率；待评分、未作答及异常记录不进入分母。\n"
             "`class_summary.json` 和 `student_summary.json` 保留跨节点旧汇总；节点分层数据见 `node_scoped_metrics.json` 与 `node_observations.json`。\n"

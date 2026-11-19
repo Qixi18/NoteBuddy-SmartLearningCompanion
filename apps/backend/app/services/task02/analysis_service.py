@@ -18,11 +18,23 @@ from .revision_service import select_revisions
 RULE_VERSION = "3"
 
 
+def _unique_index(rows: list[dict], id_field: str, table_name: str) -> dict[str, dict]:
+    index: dict[str, dict] = {}
+    for row in rows:
+        entity_id = str(row.get(id_field, "")).strip()
+        if not entity_id:
+            raise ValueError(f"{table_name} 的 {id_field} 不能为空")
+        if entity_id in index:
+            raise ValueError(f"{table_name} 的 {id_field} 重复：{entity_id}")
+        index[entity_id] = row
+    return index
+
+
 def analyze(tables: dict, files: dict, resources_dir: Path | None = None) -> dict:
     objectives = tables["课程要求"]
-    items = {row["材料编号"]: row for row in tables["题目与材料"]}
-    students = {row["学生编号"]: row for row in tables["模拟学生"]}
-    nodes = {row["节点编号"]: row for row in tables["测验节点"]}
+    items = _unique_index(tables["题目与材料"], "材料编号", "题目与材料")
+    students = _unique_index(tables["模拟学生"], "学生编号", "模拟学生")
+    nodes = _unique_index(tables["测验节点"], "节点编号", "测验节点")
     indicator_ids = {row["指标编号"] for row in objectives}
     findings: list[dict] = []
 

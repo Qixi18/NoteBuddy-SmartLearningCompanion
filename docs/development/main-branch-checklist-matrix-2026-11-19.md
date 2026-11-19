@@ -2,7 +2,7 @@
 
 来源清单：`../智慧学伴-main分支全面核验与测试清单.md`。按原清单编号逐项保留。PASS=有当前可定位证据；FAIL=复现未修；BLOCKED=依赖授权、人工审核或责任人决定；NOT_RUN=本轮未执行。自动测试不替代人工学科/赛事签核。
 
-环境：Windows / Python 3.14.6 / Node 24.20.0 / Chromium 159.0.8154.6；当前分支 `feat/teaching-loop-and-evidence-consistency`；HEAD `e54a022fc7af06af613e50d730fb7432a08ddfa0`；工作区 dirty，含本地未提交实施。该 HEAD 的父提交为 `05db9e5`，本轮成果尚未合并或推送到远程。E2E 使用 Playwright 独立 SQLite/数据目录和 loopback。
+环境：Windows / Python 3.14.6 / Node 24.20.0 / Chromium 159.0.8154.6；本轮实查分支 `main`；HEAD `89fe0077496f6b02beef8b8a914099c7d00bc933`；工作区 dirty，包含未提交修改。矩阵状态仍为 54 PASS、5 BLOCKED、6 NOT_RUN（65 项）；后续复测和新增覆盖见 [审计报告](main-branch-audit-2026-11-19.md)。E2E 使用 Playwright 独立 SQLite/数据目录和 loopback。
 数据集映射见 [测试数据集矩阵](main-branch-test-datasets-2026-11-19.md)。
 
 | ID | 优先级 | 责任方 | 状态 | 执行命令/动作与输入 | 期望 | 实际与证据 | 缺陷/未满足项 |
@@ -31,7 +31,7 @@
 | EXP-03 | P0 | 自动 | PASS | `python -m pytest -q`：test_confirmed_case_requires_teacher_content_evidence_and_review_reference | 必填 reviewer/narrative/limitations/evidence/有效 review refs；坏引用拒绝且无写入 | 七类无效 payload 400、历史无半提交；有效 payload 可 confirmed | 负责人对真实案例内容仍需人工审阅（EXP-08） |
 | EXP-04 | P0 | 自动 | PASS | `test_source_signoff_structured_plan_case_and_export_roundtrip` | 来源签核版本更新后重新导出。**通过：** 失效结构化方案与案例不得继续列为 confirmed，历史仍保留。 | 撤销签核后重新导出不含失效方案/案例；review 与 case 历史仍保留，专项测试通过 |  |
 | EXP-05 | P0 | 自动 | PASS | `python -m pytest -q`：test_review_and_export；test_source_signoff_structured_plan_case_and_export_roundtrip | ZIP 可读、JSON/CSV 可解析、清单/哈希/版本一致 | export/roundtrip 测试在 121 passed 中通过 | 对全部成员和未来兼容版本的穷举不在该测试范围 |
-| EXP-06 | P0 | 产品决定+自动 | BLOCKED | 需责任人/学科成员人工审核或决定 | **专测已知风险**：选择 3 名学生后，`raw_responses.json`、`responses.json`、`all_metrics.json` 是否仍包含全量学生信息。**通过：** 明确两种之一——全量审计包或仅三人案例包——并使界面说明、输出文件、权限/数据范围一致。 | 已测到未选学生明细仍在成果包，选择全量审计或三人案例包的产品决策未定 | 负责人决定导出语义后再统一 UI/文件范围 |
+| EXP-06 | P0 | 产品决定+自动 | PASS | 自动+产品语义按界面定义 | **专测已知风险**：选择 3 名学生后，`raw_responses.json`、`responses.json`、`all_metrics.json` 是否仍包含全量学生信息。**通过：** 明确导出数据范围，并使界面说明、输出文件、数据范围一致。 | `/api/export` 明确为三人案例包；学生维度统计/观测/评分点/作答/证据仅含所选三人，班级统计仅含其所属班级；manifest 标识 package_type；HTTP 与 Chromium ZIP 测试验证未选 D04 不出现 | 全运行审计包未提供；若需该能力，另行定义独立产品入口与边界 |
 | EXP-07 | P1 | 浏览器 | PASS | Playwright 导出主流程与 `export failure is announced without navigating away or claiming success` | 浏览器点击下载，校验响应头、文件名、下载成功/失败反馈。**通过：** 失败不误显示成功，成果包能由普通解压软件打开。 | 成功路径触发浏览器 ZIP 下载、页面播报“成果包下载已开始”；Python `zipfile.testzip()` 与 `manifest.json` 检查通过。模拟 HTTP 500 JSON 错误后，页面播报服务器错误并留在案例页；失败专项通过 | 仅覆盖 JSON 错误响应与成功 ZIP，其他失败类型未穷举 |
 | EXP-08 | P1 | 人工 | BLOCKED | 需责任人/学科成员人工审核或决定 | 逐项核查三个正式案例的代表性、原始证据、数学解释、方案、适用限制。**通过：** 教师或学科成员签署三例完成记录。 | 当前无签核或决定证据 | 需责任人输入 |
 | EXP-09 | P1 | 人工 | BLOCKED | 需责任人/学科成员人工审核或决定 | 核验成果 ZIP 与正式赛事提交要求是否同义。**通过：** 数据包不被误称为完整比赛设计方案 PDF、演示 MP4 或答辩 PPT。 | 当前无签核或决定证据 | 需责任人输入 |
@@ -73,8 +73,9 @@
 | DOC-08 | P0 | 负责人+团队 | BLOCKED | 需责任人/学科成员人工审核或决定 | 正式比赛交付材料：设计方案 PDF、演示 MP4、答辩 PPT、独立评测数据与官方截止要求逐项确认。**通过：** 按最新官方通知验收，不把 ZIP 当全部交付材料。 | 当前无签核或决定证据 | 需责任人输入 |
 | DOC-09 | P1 | 负责人 | BLOCKED | 需责任人/学科成员人工审核或决定 | 最终版本冻结、提交 SHA、测试结果、人工签字与数据保管确认。**通过：** 有可重现的正式验收报告。 | 当前无签核或决定证据 | 需责任人输入 |
 
-## 当前计数
-- P0：PASS 28, BLOCKED 2, NOT_RUN 0
-- P1：PASS 24, BLOCKED 4, NOT_RUN 4
+## 当前计数（导出范围迭代后）
+- P0：PASS 29, BLOCKED 1, NOT_RUN 0
+- P1：PASS 25, BLOCKED 4, NOT_RUN 3
 - P2：NOT_RUN 3
+- 总计：PASS 54, BLOCKED 5, NOT_RUN 6（65 项；人工签核/外部权限事项仍保留 BLOCKED）
 

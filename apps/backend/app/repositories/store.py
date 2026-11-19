@@ -41,7 +41,11 @@ class Store:
         self.subject_repository = SubjectRepository(self.database)
         self.response_repository = ResponseRepository(self.database)
         self.config = config or settings
-        self.sources = SourceService(resources_dir or self.config.resources_dir)
+        self._resources_dir = Path(resources_dir or self.config.resources_dir)
+        self.sources = SourceService(
+            self._resources_dir,
+            source_files_dir=self.config.source_files_dir,
+        )
         self.imports = ImportService(
             self.run_repository, self.sources, self.uow_factory
         )
@@ -50,6 +54,11 @@ class Store:
 
     def bind_config(self, config):
         self.config = config
+        self.sources = SourceService(
+            self._resources_dir,
+            source_files_dir=config.source_files_dir,
+        )
+        self.imports.sources = self.sources
         llm_client = (
             DeepSeekAdapter(
                 config.model_api_key or config.deepseek_api_key,

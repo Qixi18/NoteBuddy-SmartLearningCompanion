@@ -7,8 +7,14 @@ from ...infrastructure.files.local_file_storage import LocalFileStorage
 
 
 class SourceService:
-    def __init__(self, resources_dir: Path, storage: FileStorage | None = None):
+    def __init__(
+        self,
+        resources_dir: Path,
+        storage: FileStorage | None = None,
+        source_files_dir: Path | None = None,
+    ):
         self.resources_dir = Path(resources_dir)
+        self.source_files_dir = Path(source_files_dir) if source_files_dir else None
         self.storage = storage or LocalFileStorage()
 
     def allowed_names(self, run: dict) -> set[str]:
@@ -21,10 +27,13 @@ class SourceService:
         if name not in self.allowed_names(run) or Path(name).name != name:
             raise ValueError("来源文件不在允许范围")
         roots = [
+            self.source_files_dir,
             self.resources_dir,
             Path(run.get("source_root", "")) / "5_课程标准及相关教学资源",
         ]
         for root in roots:
+            if root is None:
+                continue
             base = root.resolve()
             path = (root / name).resolve()
             if path.is_relative_to(base) and path.is_file():

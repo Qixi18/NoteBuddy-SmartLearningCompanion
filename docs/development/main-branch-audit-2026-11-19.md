@@ -179,8 +179,28 @@ pm run test:e2e 全部 2 passed。新增八路由直接 hash、刷新、当前�
 
 ### 当前工作区收尾复核（2026-11-19）
 
+### 本轮后续迭代：三人案例包范围
+
+- **决策：** `/api/export` 是“三名案例与成果导出”，因此本 ZIP 定义为三人案例包，不包含全运行审计明细。学生级指标/观测、评分点观察、作答和证据索引只含所选学生；班级统计是所选学生所属班级的整班聚合，可能包含其他同学的聚合贡献，但不含其个人作答。完整运行审计包如需提供，应另行定义入口和数据范围说明。
+- **复现：** 将 EXP-06 隔离夹具断言改为拒绝 D04 明细后，首测失败，确认旧实现把未选择学生的指标、回答、原始回答和证据索引放入 ZIP。
+- **第二轮发现：** 复核质量附件发现 `data_quality.json` 的逐行处置和 finding 仍可能包含未选学生记录；首轮过滤需覆盖附属审计数据。
+- **修复：** 导出服务统一筛选学生维度统计/观测/评分点、作答、证据索引和质量记录；班级统计保留入选学生所属班级的汇总。CSV 与 ZIP JSON 使用相同范围；manifest 增加 `package_type=selected_student_cases`，字段口径说明和导出页列明案例包范围及非全运行审计包。
+- **验证：** 后端导出/历史导出专项 3 passed；完整 pytest 135 passed、2 skipped；Ruff check/format 通过；Vitest 55 passed、1 skipped；生产构建通过；Chromium 全套 7 passed，且解压 ZIP 核查未选 D04 不进入作答、证据、指标或质量记录；公开六 CSV 回归通过（1 passed）。来源路径/请求体边界专项 6 passed、1 skipped（Windows symlink 权限）。
+- **未解决：** 学科签核、正式案例审核和真实模型语义仍需人工；后端两个 symlink 安全用例在当前 Windows 权限下跳过。此次没有读取本地 `.env`、调用外部模型、改官方资料、提交或推送。
+
 - UI-08 压力 E2E 扩展完成：隔离合成数据包含 41 道题、40 条超分质量异常、4000 字长作答和 80 步解答过程；1024px 下无横向溢出，证据和异常可定位/操作。
 - 最终回归：后端 `python -m pytest -q` 为 135 passed、2 skipped；前端 Vitest 为 55 passed、1 skipped；Chromium Playwright 为 7 passed；`ruff check apps/backend`、`ruff format --check apps/backend` 与 `npm run build` 通过；`git diff --check` 无空白错误。两个后端 skip 是本机 Windows symlink 权限限制。
-- 追踪矩阵 65 项：53 PASS、6 BLOCKED、6 NOT_RUN，无已复现未修 FAIL。未执行项为 UI-12 全站可访问性、EXP-10 最终截图/实际交付 ZIP、API-04 截图/日志/ZIP 全量敏感信息核查、UI-14 可选页面拆分、UI-15 806 行等真实规模性能、API-06 文件路径与数据保管边界。未完成项不影响本轮已验证的关键路径结论，但矩阵尚非全绿。
+- 导出范围迭代前的阶段记录：追踪矩阵曾为 53 PASS、6 BLOCKED、6 NOT_RUN；本轮修复 EXP-06 后，最新矩阵为 54 PASS、5 BLOCKED、6 NOT_RUN，无已复现未修 FAIL。未执行项仍包括 UI-12 全站可访问性、EXP-10 最终截图/实际交付 ZIP、API-04 截图/日志/ZIP 全量敏感信息核查、UI-14 可选页面拆分、UI-15 806 行等真实规模性能、API-06 文件路径与数据保管边界。
 - BLOCKED 项等待负责人/权限：EXP-06 导出数据范围决策、EXP-08 正式案例学科签核、EXP-09 赛事交付材料对应确认、DOC-07 GitHub 分支保护读取/设置权限、DOC-08 最新赛事交付与截止要求确认、DOC-09 最终冻结和签字。
 - 工作仍在 `feat/teaching-loop-and-evidence-consistency`，未提交、未合并 main、未写远程；未修改官方赛事 CSV/PDF，未读取 `.env` 值，未发起真实/付费模型调用。
+
+### main 工作区后续迭代（2026-11-19）
+
+本节覆盖上方实施记录的分支/HEAD 描述：本次实查分支为 `main`，HEAD `89fe0077496f6b02beef8b8a914099c7d00bc933`。以下改动均留在 dirty 工作区，尚未提交或推送；此前三人案例导出范围改动也仍在同一工作区。
+
+- **重复实体 ID 静默覆盖：** 在 TASK 02 分析入口为学生、题目材料、测验节点建立唯一索引；空 ID 或重复 ID 现在明确拒绝，避免 Python 字典构造时静默丢弃同 ID 行。新增三类重复 ID 参数测试。规则和有效输入的指标公式未变，未改 `rule_version`。
+- **浏览器导入的来源 PDF：** 浏览器上传使用临时目录，无法依赖原赛事材料包路径；新增可选 `SMART_LEARNING_SOURCE_FILES_DIR`，与 `source_checks.json` 所在 `SMART_LEARNING_RESOURCES_DIR` 分开。仍先校验 allowlist 文件名，并检查解析后的路径位于候选根目录内。新增模拟临时上传路径的 HTTP 来源文件测试，验证配置目录可读且内容正确。
+- **密钥日志面：** `Settings` 的 `repr` 不再包含新旧模型 API Key 字段；新增只含虚构标记值的回归测试。核验过程中曾有一次失败回溯输出运行配置的 repr；运行密钥因此按已暴露处理，须由负责人在提供商处轮换。本报告不记录、不复述密钥内容。此后未读取 `.env` 或发起模型请求。
+- **前端模型错误与审慎边界复核：** Hook 将 API 的安全错误文本用全局 alert 显示；E2E 已覆盖模拟 502。模型服务只覆盖确定性草稿允许的证据 ID，解析失败/不完整响应/无效引用拒绝；TR-01/TR-08 不调用模型。输出仍是草稿并要求教师复核，自动测试没有证明模型语义正确。
+- **验证：** 最新完整后端 pytest `140 passed, 2 skipped`；`ruff check apps/backend` 和 `ruff format --check apps/backend` 通过（104 文件）；前端 Vitest `55 passed, 1 skipped`、生产构建通过；根目录 Chromium Playwright `7 passed`。两个后端 skip 仍是本机 Windows symlink 权限限制。前一条从错误目录调用前端脚本导致“无 test script”，已改从 `apps/web` 执行正确的 Vitest 和 build 命令并通过。
+- **剩余边界：** 未执行真实模型质量/语义评审；九项赛事来源验证仍待学科责任人签核；UI-12 全站可访问性、EXP-10 最终截图/真实交付 ZIP、API-04 敏感信息产物全量审查、UI-14/15、API-06 等仍依原矩阵标为未执行或待决。自动化通过不等于赛事完整验收。

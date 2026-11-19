@@ -174,13 +174,25 @@ test('loads the local workbench and imports the sample bundle', async ({ page })
     page.getByRole('button', { name: '下载成果包' }).click(),
   ]);
   expect(download.suggestedFilename()).toMatch(/\.zip$/);
+  await expect(page.getByText(/不包含完整运行审计数据/)).toBeVisible();
   const archivePath = await download.path();
   expect(archivePath).toBeTruthy();
   const archiveCheck = spawnSync('python', ['-c', [
-    'import sys, zipfile',
+    'import json, sys, zipfile',
     'with zipfile.ZipFile(sys.argv[1]) as archive:',
     ' assert archive.testzip() is None',
     ' assert "manifest.json" in archive.namelist()',
+    ' manifest=json.loads(archive.read("manifest.json"))',
+    ' assert manifest["package_type"] == "selected_student_cases"',
+    ' ids=set(manifest["case_ids"])',
+    ' assert len(ids) == 3',
+    ' assert all(row["学生编号"] in ids for row in json.loads(archive.read("raw_responses.json")))',
+    ' assert all(row["student_id"] in ids for row in json.loads(archive.read("evidence_index.json")))',
+    ' assert all(not item["key"].startswith("D04") for item in json.loads(archive.read("all_metrics.json")))',
+    ' records={row["记录编号"] for row in json.loads(archive.read("raw_responses.json"))}',
+    ' quality=json.loads(archive.read("data_quality.json"))',
+    ' assert all(row["record_id"] in records for row in quality["record_dispositions"])',
+    ' assert all(row.get("record_id") in records for row in quality["findings"])',
   ].join('\n'), archivePath!], { encoding: 'utf8' });
   expect(archiveCheck.status, archiveCheck.stderr).toBe(0);
   await expect(page.locator('#message')).toContainText('成果包下载已开始');

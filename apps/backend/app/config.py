@@ -41,6 +41,7 @@ class Settings:
     project_root: Path = field(default_factory=lambda: PROJECT_ROOT)
     data_dir: Path | None = None
     resources_dir: Path | None = None
+    source_files_dir: Path | None = None
     web_dist_dir: Path | None = None
     host: str = field(
         default_factory=lambda: os.getenv("SMART_LEARNING_HOST", "127.0.0.1")
@@ -53,7 +54,7 @@ class Settings:
     )
     backup_dir: Path | None = None
     deepseek_api_key: str = field(
-        default_factory=lambda: os.getenv("DEEPSEEK_API_KEY", "")
+        default_factory=lambda: os.getenv("DEEPSEEK_API_KEY", ""), repr=False
     )
     deepseek_model: str = field(
         default_factory=lambda: os.getenv("DEEPSEEK_MODEL", "deepseek-flash")
@@ -68,7 +69,8 @@ class Settings:
     model_api_key: str = field(
         default_factory=lambda: os.getenv(
             "MODEL_API_KEY", os.getenv("DEEPSEEK_API_KEY", "")
-        )
+        ),
+        repr=False,
     )
     model_name: str = field(
         default_factory=lambda: os.getenv(
@@ -109,6 +111,14 @@ class Settings:
         }
         for name, value in path_values.items():
             object.__setattr__(self, name, resolve_path(value, base=root))
+        source_files = self.source_files_dir
+        if source_files is None:
+            source_files = os.getenv("SMART_LEARNING_SOURCE_FILES_DIR", "").strip()
+        object.__setattr__(
+            self,
+            "source_files_dir",
+            resolve_path(source_files, base=root) if source_files else None,
+        )
         backup = self.backup_dir or os.getenv("SMART_LEARNING_BACKUP_DIR")
         object.__setattr__(
             self, "backup_dir", resolve_path(backup, base=root) if backup else None

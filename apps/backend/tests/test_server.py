@@ -277,13 +277,37 @@ def test_export_selected_case_bundle_member_scope_is_explicit(tmp_path):
         raw_responses = json.loads(archive.read("raw_responses.json"))
         evidence = json.loads(archive.read("evidence_index.json"))
         review_history = json.loads(archive.read("teacher_review_history.json"))
+        manifest = json.loads(archive.read("manifest.json"))
+        observations = json.loads(archive.read("observations.json"))
+        rubric = json.loads(archive.read("rubric_observations.json"))
+        quality = json.loads(archive.read("data_quality.json"))
+        metrics_csv = archive.read("metrics.csv").decode("utf-8-sig")
+        field_notes = archive.read("字段与口径说明.md").decode("utf-8")
 
     assert {entry["student_id"] for entry in selected_cases} == {"D01", "D02", "D03"}
-    assert any(entry["key"].startswith("D04") for entry in all_metrics)
-    assert any(row["学生编号"] == "D04" for row in responses)
-    assert any(row["学生编号"] == "D04" for row in raw_responses)
-    assert any(row["student_id"] == "D04" for row in evidence)
+    assert all(not entry["key"].startswith("D04") for entry in all_metrics)
+    assert all(row["学生编号"] in {"D01", "D02", "D03"} for row in responses)
+    assert all(row["学生编号"] in {"D01", "D02", "D03"} for row in raw_responses)
+    assert all(row["student_id"] in {"D01", "D02", "D03"} for row in evidence)
     assert set(review_history).issubset({"D01:T01I1", "D02:T01I1", "D03:T01I1"})
+    assert manifest["package_type"] == "selected_student_cases"
+    assert manifest["case_ids"] == ["D01", "D02", "D03"]
+    assert all(
+        row.get("student_id") in {None, "D01", "D02", "D03"}
+        and row.get("class_id") in {None, "C1", "C2"}
+        for row in observations
+    )
+    assert all(row.get("student_id") in {"D01", "D02", "D03"} for row in rubric)
+    assert all(
+        row["record_id"] in {item["记录编号"] for item in raw_responses}
+        for row in quality["record_dispositions"]
+    )
+    assert all(
+        row.get("record_id") in {item["记录编号"] for item in raw_responses}
+        for row in quality["findings"]
+    )
+    assert "D04" not in metrics_csv
+    assert "D04" not in field_notes
 
 
 def test_shared_draft_contract_fixture(tmp_path):
@@ -807,6 +831,37 @@ def test_source_route_enforces_allowlist_and_reports_missing_files(tmp_path: Pat
     missing = client.get("/api/source", params={"file": "missing.pdf"})
     assert missing.status_code == 400
     assert missing.json()["code"] == "RESOURCE_NOT_FOUND"
+
+
+def test_source_route_reads_configured_pdf_root_after_browser_style_import(tmp_path):
+    metadata = tmp_path / "app-resources"
+    metadata.mkdir()
+    (metadata / "source_checks.json").write_text(
+        json.dumps({"T01": {"textbook_slices": ["B05_相关资料切片.pdf"]}}),
+        encoding="utf-8",
+    )
+    pdf_root = tmp_path / "contest-pdfs"
+    pdf_root.mkdir()
+    pdf_path = pdf_root / "B05_相关资料切片.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4 configured source")
+    config = replace(
+        settings,
+        resources_dir=metadata,
+        source_files_dir=pdf_root,
+    )
+    run = analyze(sample_tables(), {}, resources_dir=metadata)
+    run["source_root"] = str(tmp_path / "temporary-browser-upload")
+    store = Store(tmp_path / "state", metadata, config=config)
+    store.database.create_schema_for_tests()
+    with store.uow_factory() as uow:
+        uow.runs.save(run)
+
+    response = TestClient(create_app(store, config)).get(
+        "/api/source", params={"file": pdf_path.name}
+    )
+
+    assert response.status_code == 200
+    assert response.content == pdf_path.read_bytes()
 
 
 def test_source_route_rejects_allowlisted_symlink_outside_resource_root(tmp_path: Path):
