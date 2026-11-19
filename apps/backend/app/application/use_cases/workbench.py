@@ -1,13 +1,14 @@
 """Thin use cases for the existing HTTP and CLI workbench operations."""
 
-from pathlib import Path
 import tempfile
+from pathlib import Path
 
 from ...services.cases import suggest_cases
 from ...services.exports import package
-from ...services.recommendations import draft, deepseek_draft
+from ...services.recommendations import deepseek_draft, draft
 from ..ports.llm import LLMClient
 from .stage2 import Stage2Decisions
+from .teaching_adjustments import TeachingAdjustments
 
 
 class CurrentRun:
@@ -71,7 +72,16 @@ class RuleDraft:
     def execute(
         self, student_id: str, indicator_id: str, node_id: str | None = None
     ) -> dict:
-        return draft(self.current_run.execute(), student_id, indicator_id, node_id)
+        with self.current_run.uow_factory(immediate=False) as uow:
+            run = uow.runs.current()
+            sources = uow.stage2.list_sources(run["run_id"])
+        return draft(
+            run,
+            student_id,
+            indicator_id,
+            node_id,
+            source_verifications=sources,
+        )
 
 
 class DeepSeekDraft:
@@ -83,14 +93,18 @@ class DeepSeekDraft:
     def execute(
         self, student_id: str, indicator_id: str, node_id: str | None = None
     ) -> dict:
+        with self.current_run.uow_factory(immediate=False) as uow:
+            run = uow.runs.current()
+            sources = uow.stage2.list_sources(run["run_id"])
         return deepseek_draft(
-            self.current_run.execute(),
+            run,
             student_id,
             indicator_id,
             self.config.model_api_key or self.config.deepseek_api_key,
             self.config.model_name,
             client=self.client,
             node_id=node_id,
+            source_verifications=sources,
         )
 
 
@@ -114,7 +128,15 @@ class ExportPackage:
             reviews = uow.reviews.list(run["run_id"])
             sources = uow.stage2.list_sources(run["run_id"])
             cases = uow.stage2.list_cases(run["run_id"])
-        return package(run, reviews, case_ids, sources=sources, cases=cases)
+            teaching_adjustments = uow.teaching_adjustments.list()
+        return package(
+            run,
+            reviews,
+            case_ids,
+            sources=sources,
+            cases=cases,
+            teaching_adjustments=teaching_adjustments,
+        )
 
 
 class WorkbenchUseCases:
@@ -134,6 +156,7 @@ class WorkbenchUseCases:
         self.list_reviews = ListReviews(uow_factory)
         self.save_review = save_review
         self.stage2 = Stage2Decisions(uow_factory)
+        self.teaching_adjustments = TeachingAdjustments(uow_factory)
         self.list_cases = ListCases(self.current_run)
         self.rule_draft = RuleDraft(self.current_run)
         self.deepseek_draft = DeepSeekDraft(self.current_run, config, llm_client)

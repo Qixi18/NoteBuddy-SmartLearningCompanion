@@ -63,6 +63,33 @@ class SaveReview:
             }:
                 raise ValueError("复核测验节点无效")
             cited = payload.get("evidence_record_ids", [])
+            if review_node_id is None and isinstance(cited, list):
+                cited_nodes = {
+                    row["节点编号"]
+                    for row in run["responses"]
+                    if row["记录编号"] in cited
+                    and row["学生编号"] == student_id
+                    and row["材料编号"] in item_ids
+                }
+                if len(cited_nodes) == 1:
+                    review_node_id = next(iter(cited_nodes))
+                    scoped_allowed = {
+                        row["记录编号"]
+                        for row in run["responses"]
+                        if row["学生编号"] == student_id
+                        and row["材料编号"] in item_ids
+                        and row["节点编号"] == review_node_id
+                    }
+            if review_node_id is None and isinstance(cited, list) and cited:
+                cited_nodes = {
+                    row["节点编号"]
+                    for row in run["responses"]
+                    if row["记录编号"] in cited
+                    and row["学生编号"] == student_id
+                    and row["材料编号"] in item_ids
+                }
+                if len(cited_nodes) > 1:
+                    raise ValueError("教师复核必须关联单一测验节点")
             if (
                 not isinstance(cited, list)
                 or any(not isinstance(record_id, str) for record_id in cited)

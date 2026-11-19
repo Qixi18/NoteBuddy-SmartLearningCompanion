@@ -7,7 +7,7 @@ import re
 import shutil
 import sqlite3
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from ...application.ports.unit_of_work import UnitOfWork
@@ -15,7 +15,7 @@ from ..database import models as database_models
 
 RUN_ID = re.compile(r"^[0-9a-f]{16,64}$")
 REVIEW_STATUSES = {"accepted", "edited", "rejected", "needs_observation"}
-ALEMBIC_HEAD = "b2f4d2a8c1e0"
+ALEMBIC_HEAD = "c46d02ef11a1"
 
 
 class MigrationTargetError(ValueError):
@@ -425,9 +425,9 @@ def create_verified_backup(
         p.relative_to(backup_dir).as_posix(): sha256(p) for p in backup_files
     }
     if source_manifest != backup_manifest:
-        raise IOError("备份文件 hash 核验失败")
+        raise OSError("备份文件 hash 核验失败")
     report = {
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "source": str(data_dir),
         "backup": str(backup_dir),
         "file_count": len(source_manifest),
@@ -537,11 +537,11 @@ def migrate_json_to_sqlite(
         uow.flush()
         for run_id, snapshot_path, snapshot_text, _ in runs:
             if uow.runs.load_snapshot(run_id) != snapshot_text:
-                raise IOError(f"快照一致性核验失败：{run_id}")
+                raise OSError(f"快照一致性核验失败：{run_id}")
             expected_projection = _expected_projection_counts(json.loads(snapshot_text))
             actual_projection = uow.runs.projection_counts(run_id)
             if actual_projection != expected_projection:
-                raise IOError(
+                raise OSError(
                     f"规范化投影计数不一致：{run_id}; expected={expected_projection}; actual={actual_projection}"
                 )
             for key, value in actual_projection.items():
@@ -550,7 +550,7 @@ def migrate_json_to_sqlite(
             relative: sha256(data_dir / relative) for relative in initial_hashes
         }
         if final_hashes != initial_hashes:
-            raise IOError("迁移期间 source 文件清单或内容发生变化")
+            raise OSError("迁移期间 source 文件清单或内容发生变化")
         actual_reviews = sum(
             len(history)
             for run_id, *_ in runs
@@ -562,7 +562,7 @@ def migrate_json_to_sqlite(
             for records in review_map.values()
         )
         if actual_reviews != expected_reviews:
-            raise IOError(
+            raise OSError(
                 f"复核数量核验失败：expected={expected_reviews}, actual={actual_reviews}"
             )
     counts = {

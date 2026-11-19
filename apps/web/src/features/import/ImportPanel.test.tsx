@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ImportPanel } from './ImportPanel';
 
@@ -46,6 +46,26 @@ describe('ImportPanel', () => {
     chooseFiles(input);
     fireEvent.submit(input.closest('form')!);
     await waitFor(() => expect(onImported).toHaveBeenCalledWith('run-enter'));
+  });
+
+  it('shows import progress and disables resubmission while the request is pending', async () => {
+    let resolveResponse!: (response: Response) => void;
+    const fetch = vi.fn(() => new Promise<Response>(resolve => { resolveResponse = resolve; }));
+    vi.stubGlobal('fetch', fetch);
+    const onImported = vi.fn().mockResolvedValue(undefined);
+    render(<ImportPanel onImported={onImported} onMessage={vi.fn()} />);
+    chooseFiles(screen.getByLabelText('选择 CSV 文件夹'));
+    fireEvent.click(screen.getByRole('button', { name: '检查文件并导入' }));
+
+    const pending = await screen.findByRole('button', { name: '正在导入…' });
+    expect((pending as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole('status').textContent).toContain('正在导入和分析');
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    await act(async () => resolveResponse(new Response('{"run_id":"run-pending","quality":{}}', {
+      status: 200, headers: { 'content-type': 'application/json' },
+    })));
+    await waitFor(() => expect(onImported).toHaveBeenCalledWith('run-pending'));
   });
 
   it('reports missing required files before making a request', async () => {

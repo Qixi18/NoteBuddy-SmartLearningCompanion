@@ -7,6 +7,7 @@ from .repositories import (
     Stage2Records,
     Students,
     Subjects,
+    TeachingAdjustments,
 )
 
 
@@ -14,6 +15,7 @@ class UnitOfWork(Protocol):
     runs: AnalysisRuns
     reviews: ReviewHistories
     stage2: Stage2Records
+    teaching_adjustments: TeachingAdjustments
     students: Students
     subjects: Subjects
     responses: Responses

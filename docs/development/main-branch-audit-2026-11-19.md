@@ -108,7 +108,7 @@
 | T03-REQ-007 信息不足时补充观察 | PASS | TR-02/03/04/08 unknown/needs-observation 测试; apps/backend/tests/test_task03_recommendations.py unknown/unanswered distinction cases | 自动/代码证据已核验；正式内容审核（如适用）仍独立签核 | 正式学科/教学/赛事内容签核仍需对应责任人独立完成（如适用） |
 | T03-REQ-008 教师可调整 | PASS | ReviewPanel 保存、版本追加与 E2E 草稿流程; apps/backend/tests/test_server.py::test_http_review_to_export; tests/workbench.spec.ts review workflow | 自动/代码证据已核验；正式内容审核（如适用）仍独立签核 | 正式学科/教学/赛事内容签核仍需对应责任人独立完成（如适用） |
 | T03-REQ-009 依据可核对 | PASS | Review 历史、node、evidence 和 ZIP 恢复/导出测试; apps/backend/tests/test_server.py invalid identity/evidence HTTP tests | 自动/代码证据已核验；正式内容审核（如适用）仍独立签核 | 正式学科/教学/赛事内容签核仍需对应责任人独立完成（如适用） |
-| T03-REQ-010 补充信息后说明调整过程 | NOT_MET | `adjustment_condition` 只是文本，没有跨 run 关联; apps/backend/app/services/task03/recommendation_service.py adjustment_condition only; no cross-run association | 需求未实现，非人工签核状态 | 产品/团队确认范围后需建设跨运行证据关联、重诊断与调整历史 |
+| T03-REQ-010 补充信息后说明调整过程 | PASS（本地功能分支） | `/api/teaching-adjustments`，Alembic `c46d02ef11a1`，TeachingAdjustmentsPanel；后端两运行工作流测试与 Playwright 创建/回访测试 | 工程能力已实现；教学效果及结论仍须教师审核 | 负责人需审核真实教学内容；不自动推断因果或干预效果 |
 | T03-REQ-011 不同案例对应不同建议 | BLOCKED | 候选可定位到学生/证据; apps/backend/tests/test_task02_cases.py case candidates; formal case signoff blocked | BLOCKED：需责任人签核原始出处、审核人和日期 | 需责任人提供人工审核记录、原始出处、日期与签核结论 |
 | T03-REQ-012 建议对应学生和证据 | PASS | `save_review.py` 作用域校验、跨节点及证据测试; apps/backend/tests/test_server.py::test_review_api_rejects_invalid_identity_and_cross_student_evidence | 自动/代码证据已核验；正式内容审核（如适用）仍独立签核 | 正式学科/教学/赛事内容签核仍需对应责任人独立完成（如适用） |
 | T03-REQ-013 模型内容合规 | BLOCKED | Mock 错误/超时测试；真实模型调用未授权，语义未自动证明; apps/backend/tests/test_server.py model timeout/malformed response Mock tests; live call blocked | BLOCKED：需责任人签核原始出处、审核人和日期 | 需责任人提供人工审核记录、原始出处、日期与签核结论 |
@@ -120,6 +120,34 @@
 - 增补对应 Vitest、Playwright、Python 参数解析测试。
 - 仅修改项目应用目录的两个 Python 文件格式。
 
+## 后续实施记录（2026-11-19，覆盖上文中的历史状态）
+
+本节记录规划评审后继续实施的功能分支结果。分支 `feat/teaching-loop-and-evidence-consistency` 基于本地提交 `e54a022`；改动仍在工作区，未提交、未合并 main、未写入远程。上文“当前 main”核验仍是基线报告；以下数字与验收结论只对应当前功能分支代码。
+
+### 规划任务实施
+
+- **节点级复核与导出：** 导出按节点分别取最新复核，保留原追加历史和现有 ZIP 成员。无节点旧请求只在有效证据唯一对应一个节点时推断，否则拒绝保存。
+- **最新来源签核进入规则草稿：** 规则和可选 DeepSeek 草稿读取当前来源签核历史；后续人工撤销/待核验会覆盖旧快照状态。未执行真实模型调用。
+- **教学调整闭环（T03-REQ-010）：** 新增 Alembic `c46d02ef11a1`、持久化调整记录和起始复核外键、GET/POST/PATCH API、Web“教学调整”子页面及 ZIP 成员 `teaching_adjustments.json`。记录连接起始运行/节点/复核版本与后续运行/节点/证据；教师标注可比性和结论，系统不推断干预效果。测试使用隔离模拟数据。
+- **复测与文档对齐：** BASE-08、ENV-04、ENV-09、ENV-11、EXP-04、EXP-07、UI-02、UI-05、UI-13、DB-02、DB-03 已补充或重跑证据，均为 PASS。改动清单无赛事 CSV/PDF 或 source-check 配置修改；统计算法与评分口径未变。修正体验文档中的旧导入交互与缺失教学调整流程、将设计宽度记录与最终 CSS 对齐，并校正追踪矩阵当前分支、基线和计数。矩阵为 P0 28 PASS、2 BLOCKED、0 NOT_RUN；P1 24 PASS、4 BLOCKED、4 NOT_RUN；P2 3 NOT_RUN。总数仍为 65。其余人工决策/学科签核、真实模型和正式比赛材料没有被工程测试替代。
+
+### 当前分支验证
+
+- 后端完整 pytest：128 passed、2 skipped、1 条 Starlette/httpx 弃用警告。两项 skip 是本机 Windows 创建 symlink 受 WinError 1314 限制。
+- `ruff check apps/backend` 已通过；`ruff format --check apps/backend` 在整理前报 3 个文件需格式化，随后格式化并复查通过（104 个文件已格式化）。
+- Web：`npm ci` 成功；Vitest 50 passed、1 skipped；`npm run build` 成功。
+- 独立临时 SQLite Alembic 从空库升级到 `c46d02ef11a1` 两次成功；新表及 `teaching_adjustment_origins.run_id` 外键存在。
+- Playwright 完整套件：最新完整运行 6 passed（25.6 秒），键盘专项单测曾另行 1 passed。覆盖九路由直接进入/刷新/历史导航、键盘打开/关闭导入弹窗及缺失文件播报；导入前后摘要变化；来源签核、教学方案、教师复核、案例证据跳转/确认、ZIP 成功下载/解压结构校验/下载开始提示、HTTP 500 下载失败提示；人为延迟生成/保存请求、重复触发不产生额外请求、切换学生后丢弃旧草稿；以及跨运行教学调整。五个关键页面在 1024/1280/1440/1920 共生成 20 张截图并检查无横向溢出。模拟审核数据不构成真实学科签核。
+- 当前工作区回归（初次完成时）：后端 131 passed、2 skipped；Ruff check 与 104 个 Python 文件格式检查通过；前端 55 passed、1 skipped 且生产构建成功。三个前端关键组件/Hook 文件的针对性运行 24 passed；`tests/test_capture_shots.py` 另 2 passed；`git diff --check` 无空白错误（仅报告 LF/CRLF 转换提示）。
+- 刷新失败保留行为：Hook 回归证明同一运行的案例/复核辅助请求失败时保留上次有效响应并提示错误；换到新运行时不会沿用旧运行的辅助数据。复核保存失败的测试确认表单编辑仍保留。
+- ENV-11 CLI 全链路：在 `data/cli-audit-d08d8a38e53946e1bc09372593668378` 临时目录完成帮助、数据库升级、模拟 CSV 导入、摘要、备份、新路径恢复和恢复后摘要；备份/恢复 SHA-256 一致、SQLite integrity=`ok`、foreign key violations=0。该隔离目录保留且被 Git 忽略。
+
+### 仍需人工完成
+
+- 对课程/教材原文、9 项数学指标、正式案例、教师结论与真实建议逐项签字并记页码/审核人/日期。
+- 负责人决定选三名学生后导出包的全量数据边界（EXP-06），确认 GitHub 分支保护（DOC-07）与正式赛事提交材料/截止要求（DOC-08/DOC-09）。
+- 如需真实 DeepSeek 质量验收，先由负责人明确 API 调用授权；当前未发起收费模型请求。
+
 
 
 
@@ -130,3 +158,29 @@
 pm run test:e2e 全部 2 passed。新增八路由直接 hash、刷新、当前导航标记、前进后退、未知 hash 回首页测试。测试新建过程中曾有 5 次测试装置/选择器/等待条件失败，修正后独立测试及全套通过；失败 trace 保留在忽略目录。
 
 
+
+
+### 2026-11-19 后续清单推进
+
+- 修复 API-05 的请求体读取边界：ASGI 层在 FastAPI JSON 解码前限制请求 body 为 20 MiB，超限统一返回 413；带 Content-Length 与分块传输超限、无效 UTF-8 三项回归均通过。慢速分块持续时间仍未验证，矩阵继续保留 NOT_RUN。
+- UI-07 补充跨页选择联动测试并通过：D01/T01I1/N01 从学生分析打开作答证据，再进入建议复核，范围选择保持一致。UI-08 补充 1024px 长文本/80 步过程滚动夹具，页面无横向溢出且过程容器可滚动；多题和大量质量异常组合尚未覆盖，矩阵继续保留 NOT_RUN。
+- 本次完整复测：后端 135 passed、2 skipped；前端 55 passed、1 skipped；生产构建成功；Playwright 7 passed；Ruff check 与 104 个文件格式检查通过。
+- 安全静态扫描覆盖 5 个文本构建/测试产物，未匹配凭证样式或 Windows 用户路径；未检查截图视觉内容或独立交付 ZIP，EXP-10 与 API-04 仍为 NOT_RUN。未读取本地 `.env` 值，也未发起模型请求。
+- UI-12 键盘审查发现 Chromium 中焦点会从导入 modal 逃至页面 `BODY`；已增加可见控件 Tab/Shift+Tab 首尾循环与测试，专项 Playwright 1 passed。模型异常浏览器场景通过拦截 `/api/deepseek` 模拟 502 验证，无真实模型调用。UI-12 全站审查仍未闭合。
+- 焦点环对比度计算发现原色 `#6995EE` 在白底仅 2.94:1；已调整为 `#557FCE`，白底/画布分别为 3.95:1/3.65:1。键盘 E2E 断言焦点环 3px 与 RGB 颜色、Tab 环绕、Shift+Tab、Escape 和焦点返回，专项 1 passed。
+- API-05 增加 body 总接收时限：最长 60 秒，超时返回 408/`REQUEST_BODY_TIMEOUT`；模拟慢 `receive` 测试证明请求不进入应用。请求大小、分块超限、无效 UTF-8 与总超时专项 4 passed；Ruff check/format 对相关文件通过。矩阵 API-05 更新 PASS。
+- API-05 修复后的完整回归：后端 `python -m pytest -q` 135 passed、2 skipped；Vitest 55 passed、1 skipped；Playwright 7 passed；Ruff check 与 104 文件格式检查通过；矩阵 65 项状态脚本复核为 52 PASS、6 BLOCKED、7 NOT_RUN。
+- UI-06 combined state acceptance now passes: Playwright covers empty store/loading/API unavailable and retry, pending and failed import with file selection retained, model 502 feedback, review save failure retaining edits and retry, and same-run auxiliary case failure retaining existing candidates. Hook/component tests cover auxiliary/model/API recovery.
+- UI-06 扩充后 Playwright 完整套件复跑：7 passed（31.2s）；覆盖 API 不可用加载/重试、导入服务器失败与保留选择、保存失败保留编辑、同运行辅助候选失败保留旧数据。
+- EXP-10 package scan added to `test_http_review_to_export`: scans every synthetic ZIP member for credential-like tokens, Windows user paths, and the isolated temporary fixture root. Focused export test passed; final screenshots and delivery ZIP remain unreviewed.
+
+- UI-08 收尾通过：扩充隔离合成夹具至 41 题、40 条超分质量异常，并保留 4000 字作答和 80 步过程；1024px 下浏览器确认可滚动、异常可操作、无页面横向溢出。主流程专项 E2E 1 passed。最新矩阵计数为 P0 28 PASS/2 BLOCKED，P1 25 PASS/4 BLOCKED/3 NOT_RUN，P2 3 NOT_RUN；合计 53 PASS、6 BLOCKED、6 NOT_RUN（65 项）。
+
+
+### 当前工作区收尾复核（2026-11-19）
+
+- UI-08 压力 E2E 扩展完成：隔离合成数据包含 41 道题、40 条超分质量异常、4000 字长作答和 80 步解答过程；1024px 下无横向溢出，证据和异常可定位/操作。
+- 最终回归：后端 `python -m pytest -q` 为 135 passed、2 skipped；前端 Vitest 为 55 passed、1 skipped；Chromium Playwright 为 7 passed；`ruff check apps/backend`、`ruff format --check apps/backend` 与 `npm run build` 通过；`git diff --check` 无空白错误。两个后端 skip 是本机 Windows symlink 权限限制。
+- 追踪矩阵 65 项：53 PASS、6 BLOCKED、6 NOT_RUN，无已复现未修 FAIL。未执行项为 UI-12 全站可访问性、EXP-10 最终截图/实际交付 ZIP、API-04 截图/日志/ZIP 全量敏感信息核查、UI-14 可选页面拆分、UI-15 806 行等真实规模性能、API-06 文件路径与数据保管边界。未完成项不影响本轮已验证的关键路径结论，但矩阵尚非全绿。
+- BLOCKED 项等待负责人/权限：EXP-06 导出数据范围决策、EXP-08 正式案例学科签核、EXP-09 赛事交付材料对应确认、DOC-07 GitHub 分支保护读取/设置权限、DOC-08 最新赛事交付与截止要求确认、DOC-09 最终冻结和签字。
+- 工作仍在 `feat/teaching-loop-and-evidence-consistency`，未提交、未合并 main、未写远程；未修改官方赛事 CSV/PDF，未读取 `.env` 值，未发起真实/付费模型调用。

@@ -1,20 +1,19 @@
-from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import io
-
-import pytest
 import json
 import sqlite3
 import sys
 import zipfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
+import pytest
 from alembic import command
 from alembic.config import Config
-
-from app.config import Settings, resolve_database_url, resolve_path
 from app.application.use_cases.save_review import SaveReview
+from app.config import Settings, resolve_database_url, resolve_path
+from app.domain.student.models import Student
 from app.infrastructure.database.backup import backup_database, restore_database
-from app.infrastructure.llm.deepseek_client import DeepSeekAdapter
 from app.infrastructure.database.mappers import (
     assessment_item_from_row,
     material_from_row,
@@ -32,13 +31,13 @@ from app.infrastructure.database.models import (
     StudentRow,
 )
 from app.infrastructure.database.unit_of_work import SqlAlchemyUnitOfWork
-from app.repositories.store import Store
 from app.infrastructure.files.local_file_storage import LocalFileStorage
+from app.infrastructure.llm.deepseek_client import DeepSeekAdapter
 from app.infrastructure.migration.json_to_sqlite import (
     create_verified_backup,
     discover,
 )
-from app.domain.student.models import Student
+from app.repositories.store import Store
 from app.services.analysis import analyze
 from app.services.task03.recommendation_service import deepseek_draft
 from test_core import _task03_run_without_unrelated_invalid_record, sample_tables
@@ -225,7 +224,7 @@ def test_json_source_backup_excludes_database_and_sidecars(tmp_path, monkeypatch
     database_backup = tmp_path / "sqlite-backup" / "smart_learning.db"
     database_info = backup_database(f"sqlite:///{database.as_posix()}", database_backup)
     assert database_info["integrity_check"] == ["ok"]
-    assert database_info["revision"] == "b2f4d2a8c1e0"
+    assert database_info["revision"] == "c46d02ef11a1"
     assert "analysis_runs" in database_info["tables"]
 
     wal = Path(f"{database}-wal")
@@ -422,7 +421,7 @@ def test_alembic_empty_upgrade_repeat_and_consistent_restore(tmp_path, monkeypat
     backup_info = backup_database(url, backup)
     restore_info = restore_database(backup, restored)
     assert backup_info["revision"] == restore_info["revision"]
-    assert restore_info["revision"] == "b2f4d2a8c1e0"
+    assert restore_info["revision"] == "c46d02ef11a1"
     assert restore_info["integrity_check"] == ["ok"]
     assert restore_info["foreign_key_violations"] == 0
     assert backup_info["tables"] == restore_info["tables"]
@@ -858,7 +857,7 @@ def test_cli_rejects_nonempty_target_without_opt_in_and_persists_report(
     report_path = next(backup_root.glob("*/migration-report.json"))
     report = json.loads(report_path.read_text(encoding="utf-8"))
     assert report["status"] == "failed"
-    assert report["database_preflight"]["revision"] == "b2f4d2a8c1e0"
+    assert report["database_preflight"]["revision"] == "c46d02ef11a1"
     assert report["database_preflight"]["table_counts"]["analysis_runs"] == 1
     assert not (report_path.parent / "source").exists()
 

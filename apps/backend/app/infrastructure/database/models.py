@@ -179,6 +179,35 @@ class ConfirmedCaseRow(Base):
     )
 
 
+class TeachingAdjustmentRow(Base):
+    __tablename__ = "teaching_adjustments"
+    adjustment_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    student_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    indicator_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[str] = mapped_column(String(64), nullable=False)
+    updated_at: Mapped[str] = mapped_column(String(64), nullable=False)
+    __table_args__ = ()
+
+
+class TeachingAdjustmentOriginRow(Base):
+    __tablename__ = "teaching_adjustment_origins"
+    adjustment_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    student_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    indicator_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    run_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    node_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    review_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    __table_args__ = (
+        ForeignKeyConstraint(["run_id"], ["analysis_runs.run_id"], ondelete="CASCADE"),
+        ForeignKeyConstraint(
+            ["adjustment_id"],
+            ["teaching_adjustments.adjustment_id"],
+            ondelete="CASCADE",
+        ),
+    )
+
+
 class AppStateRow(Base):
     __tablename__ = "app_state"
     key: Mapped[str] = mapped_column(String(128), primary_key=True)

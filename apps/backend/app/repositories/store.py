@@ -2,20 +2,20 @@
 
 from pathlib import Path
 
-from ..config import settings
-from ..services.task01.source_service import SourceService
-from ..services.task02.import_service import ImportService
 from ..application.use_cases.save_review import SaveReview
 from ..application.use_cases.workbench import WorkbenchUseCases
+from ..config import settings
 from ..infrastructure.database.engine import make_engine
 from ..infrastructure.database.session import Database
 from ..infrastructure.database.unit_of_work import SqlAlchemyUnitOfWork
 from ..infrastructure.llm.deepseek_client import DeepSeekAdapter
+from ..services.task01.source_service import SourceService
+from ..services.task02.import_service import ImportService
 from .analysis_run_repository import AnalysisRunRepository
+from .response_repository import ResponseRepository
 from .review_repository import ReviewRepository
 from .student_repository import StudentRepository
 from .subject_repository import SubjectRepository
-from .response_repository import ResponseRepository
 
 
 class Store:
@@ -82,6 +82,10 @@ class Store:
 
     def reviews(self, run_id: str) -> dict:
         return self.use_cases.list_reviews.execute(run_id)
+
+    def teaching_adjustments(self, student_id: str | None = None) -> list[dict]:
+        with self.uow_factory(immediate=False) as uow:
+            return uow.teaching_adjustments.list(student_id)
 
     def save_review(
         self, run_id: str, student_id: str, indicator_id: str, payload: dict

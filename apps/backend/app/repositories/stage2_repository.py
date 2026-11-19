@@ -24,9 +24,10 @@ class Stage2Repository(SqlAlchemyRepository):
             ).all()
             result: dict[str, list[dict]] = {}
             for row in rows:
-                result.setdefault(row.indicator_id, []).append(
-                    json.loads(row.payload_json)
-                )
+                record = json.loads(row.payload_json)
+                record.setdefault("version", row.version)
+                record.setdefault("status", row.status)
+                result.setdefault(row.indicator_id, []).append(record)
             return result
 
     def list_cases(self, run_id: str) -> dict[str, list[dict]]:

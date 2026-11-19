@@ -1,19 +1,19 @@
-import io
+import asyncio
 import csv
+import io
 import json
-import pytest
+import re
 import zipfile
 from dataclasses import replace
 from pathlib import Path
 
-from fastapi.testclient import TestClient
-from sqlalchemy.exc import IntegrityError, OperationalError
-
-from app.api.app import create_app
+import pytest
+from app.api.app import RequestBodyLimitMiddleware, create_app
 from app.config import settings
 from app.repositories.store import Store
-from app.services.analysis import analyze
-from app.services.analysis import TABLES
+from app.services.analysis import TABLES, analyze
+from fastapi.testclient import TestClient
+from sqlalchemy.exc import IntegrityError, OperationalError
 from test_core import sample_tables
 
 
@@ -44,6 +44,7 @@ def test_http_review_to_export(tmp_path):
         "adjustment_condition": "再次观察",
         "reason": "根据步骤",
         "evidence_record_ids": ["R2"],
+        "original_draft": response.json(),
     }
     saved = client.post("/api/review", json=body)
     assert saved.status_code == 200
@@ -53,6 +54,192 @@ def test_http_review_to_export(tmp_path):
         recommendations = json.loads(archive.read("recommendations.json"))
         assert recommendations[0]["recommendation"] == "先做一道练习"
         assert len(json.loads(archive.read("student_cases.json"))) == 3
+        contents = b"\n".join(archive.read(name) for name in archive.namelist())
+        assert (
+            re.search(
+                rb"(?i)(?:sk-[A-Za-z0-9_-]{20,}|Bearer\s+[A-Za-z0-9._~-]{20,})",
+                contents,
+            )
+            is None
+        )
+        assert (
+            re.search(rb"[A-Z]:\\Users\\[^\\\r\n\"<>]+", contents, re.IGNORECASE)
+            is None
+        )
+        assert str(tmp_path).replace("\\", "/").encode() not in contents
+
+
+def test_import_files_rejects_request_body_over_http_limit(tmp_path):
+    client = client_for(tmp_path)
+    response = client.post(
+        "/api/import-files",
+        content=b" " * (20 * 1024 * 1024 + 1),
+        headers={"content-type": "application/json"},
+    )
+    assert response.status_code == 413
+    assert response.json()["code"] == "REQUEST_TOO_LARGE"
+    assert client.get("/api/run").status_code == 200
+
+
+def test_import_files_rejects_chunked_body_over_http_limit(tmp_path):
+    client = client_for(tmp_path)
+
+    def body_chunks():
+        yield b" " * (10 * 1024 * 1024)
+        yield b" " * (10 * 1024 * 1024 + 1)
+
+    response = client.post(
+        "/api/import-files",
+        content=body_chunks(),
+        headers={"content-type": "application/json"},
+    )
+    assert response.status_code == 413
+    assert response.json()["code"] == "REQUEST_TOO_LARGE"
+
+
+def test_import_files_rejects_invalid_utf8_without_changing_current_run(tmp_path):
+    client = client_for(tmp_path)
+    response = client.post(
+        "/api/import-files",
+        content=b'{"files":{"x.csv":"\xff"}}',
+        headers={"content-type": "application/json"},
+    )
+    assert response.status_code == 400
+    assert response.json()["code"] == "HTTP_ERROR"
+    assert "traceback" not in response.text.lower()
+    assert client.get("/api/run").status_code == 200
+
+
+def test_request_body_middleware_times_out_slow_uploads():
+    async def no_op_app(scope, receive, send):
+        raise AssertionError("timed-out request must not reach the application")
+
+    async def slow_receive():
+        await asyncio.sleep(0.05)
+        return {"type": "http.request", "body": b"{", "more_body": True}
+
+    async def run():
+        sent = []
+
+        async def send(message):
+            sent.append(message)
+
+        middleware = RequestBodyLimitMiddleware(
+            no_op_app, max_bytes=100, max_duration_seconds=0.001
+        )
+        await middleware(
+            {
+                "type": "http",
+                "method": "POST",
+                "headers": [],
+                "path": "/api/import-files",
+            },
+            slow_receive,
+            send,
+        )
+        return sent
+
+    sent = asyncio.run(run())
+    assert sent[0]["status"] == 408
+    assert b"REQUEST_BODY_TIMEOUT" in sent[1]["body"]
+
+
+def test_node_scoped_reviews_are_exported_as_distinct_current_decisions(tmp_path):
+    tables = sample_tables()
+    second_node_response = dict(tables["作答记录"][1])
+    second_node_response.update(
+        {
+            "记录编号": "R5",
+            "作答事件编号": "E5",
+            "节点编号": "N02",
+            "修订版本": "1",
+            "_source_line": 7,
+        }
+    )
+    tables["作答记录"].append(second_node_response)
+    tables["测验节点"].append(
+        {"节点编号": "N02", "可用题目编号": "Q001", "模拟测验日期": "2026-06-17"}
+    )
+    client = client_for(tmp_path, tables=tables)
+
+    for node_id, record_id, recommendation in (
+        ("N01", "R2", "N01 教学建议"),
+        ("N02", "R5", "N02 教学建议"),
+    ):
+        draft_response = client.get(
+            "/api/draft",
+            params={"student": "D01", "indicator": "T01I1", "node": node_id},
+        ).json()
+        saved = client.post(
+            "/api/review",
+            json={
+                "student_id": "D01",
+                "indicator_id": "T01I1",
+                "status": "edited",
+                "diagnosis": f"{node_id} 诊断",
+                "recommendation": recommendation,
+                "reason": "按节点证据复核",
+                "evidence_record_ids": [record_id],
+                "original_draft": draft_response,
+            },
+        )
+        assert saved.status_code == 200, saved.text
+
+    archive_response = client.get("/api/export", params={"cases": "D01,D02,D03"})
+    assert archive_response.status_code == 200
+    with zipfile.ZipFile(io.BytesIO(archive_response.content)) as archive:
+        recommendations = json.loads(archive.read("recommendations.json"))
+
+    node_recommendations = [
+        entry
+        for entry in recommendations
+        if entry["student_id"] == "D01" and entry["indicator_id"] == "T01I1"
+    ]
+    assert {
+        (entry["node_id"], entry["recommendation"]) for entry in node_recommendations
+    } == {("N01", "N01 教学建议"), ("N02", "N02 教学建议")}
+
+
+def test_latest_source_verification_controls_task03_rule_draft(tmp_path):
+    tables = sample_tables()
+    tables["作答记录"] = [
+        row for row in tables["作答记录"] if row["记录编号"] in {"R1", "R2"}
+    ]
+    client = client_for(tmp_path, tables=tables)
+
+    revoked = client.post(
+        "/api/source-verification",
+        json={
+            "indicator_id": "T01I1",
+            "status": "rejected",
+            "material_ids": ["Q001"],
+            "reviewer": "教师甲",
+            "reason": "复核后撤销",
+        },
+    )
+    assert revoked.status_code == 200
+    refreshed = client.get(
+        "/api/draft", params={"student": "D01", "indicator": "T01I1", "node": "N01"}
+    ).json()
+    assert refreshed["material_ids"] == []
+
+    verified = client.post(
+        "/api/source-verification",
+        json={
+            "indicator_id": "T01I1",
+            "status": "verified",
+            "curriculum_locator": "课标第 1 页",
+            "textbook_locator": "教材第 1 页",
+            "material_ids": ["Q001"],
+            "reviewer": "教师甲",
+            "reason": "重新核验",
+        },
+    )
+    assert verified.status_code == 200
+    refreshed = client.get(
+        "/api/draft", params={"student": "D01", "indicator": "T01I1", "node": "N01"}
+    ).json()
+    assert refreshed["material_ids"] == ["Q001"]
 
 
 def test_export_rejects_empty_duplicate_and_unknown_case_ids(tmp_path):
@@ -431,6 +618,26 @@ def test_import_files_rejects_oversized_csv_without_changing_current_run(tmp_pat
         "/api/import-files",
         json={"files": {"作答记录.csv": "x" * (16 * 1024 * 1024 + 1)}},
     )
+    assert response.status_code == 422
+    assert response.json()["code"] == "VALIDATION_ERROR"
+    assert response.json()["request_id"]
+    assert client.get("/api/run").json()["run_id"] == before
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"files": []},
+        {"files": {"作答记录.csv": ["not", "text"]}},
+        {"files": {"作答记录.csv": 123}},
+    ],
+)
+def test_import_files_rejects_invalid_container_and_content_types(tmp_path, payload):
+    client = client_for(tmp_path)
+    before = client.get("/api/run").json()["run_id"]
+
+    response = client.post("/api/import-files", json=payload)
+
     assert response.status_code == 422
     assert response.json()["code"] == "VALIDATION_ERROR"
     assert response.json()["request_id"]

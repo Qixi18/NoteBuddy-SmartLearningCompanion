@@ -9,6 +9,7 @@ from ...repositories.review_repository import ReviewRepository
 from ...repositories.stage2_repository import Stage2Repository
 from ...repositories.student_repository import StudentRepository
 from ...repositories.subject_repository import SubjectRepository
+from ...repositories.teaching_adjustment_repository import TeachingAdjustmentRepository
 from .session import SessionFactory
 
 
@@ -37,6 +38,9 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
                 self.root, database=self.sessions, session=session
             )
             self.stage2 = Stage2Repository(self.sessions, session=session)
+            self.teaching_adjustments = TeachingAdjustmentRepository(
+                self.sessions, session=session
+            )
             self.students = StudentRepository(self.sessions, session=session)
             self.subjects = SubjectRepository(self.sessions, session=session)
             self.responses = ResponseRepository(self.sessions, session=session)

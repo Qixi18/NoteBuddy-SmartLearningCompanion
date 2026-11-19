@@ -10,6 +10,8 @@ from ...schemas.http import (
     SourceVerificationResponse,
     TeacherCaseRequest,
     TeacherCaseResponse,
+    TeachingAdjustmentCreateRequest,
+    TeachingAdjustmentUpdateRequest,
 )
 from ..dependencies import get_use_cases
 
@@ -47,3 +49,26 @@ def teacher_cases(use_cases: UseCases) -> dict:
 @router.post("/api/teacher-case", response_model=TeacherCaseResponse, tags=["stage2"])
 def save_teacher_case(payload: TeacherCaseRequest, use_cases: UseCases) -> dict:
     return use_cases.stage2.save_case(payload.model_dump())
+
+
+@router.get("/api/teaching-adjustments", tags=["teaching adjustments"])
+def teaching_adjustments(use_cases: UseCases) -> list[dict]:
+    return use_cases.teaching_adjustments.list()
+
+
+@router.post("/api/teaching-adjustments", tags=["teaching adjustments"])
+def create_teaching_adjustment(
+    payload: TeachingAdjustmentCreateRequest, use_cases: UseCases
+) -> dict:
+    return use_cases.teaching_adjustments.create(payload.model_dump())
+
+
+@router.patch(
+    "/api/teaching-adjustments/{adjustment_id}", tags=["teaching adjustments"]
+)
+def update_teaching_adjustment(
+    adjustment_id: str,
+    payload: TeachingAdjustmentUpdateRequest,
+    use_cases: UseCases,
+) -> dict:
+    return use_cases.teaching_adjustments.update(adjustment_id, payload.model_dump())

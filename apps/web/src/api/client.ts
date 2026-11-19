@@ -1,4 +1,4 @@
-import type { AnalysisRun, CaseSuggestion, Draft, ImportResult, ReviewMap, ReviewPayload, ReviewStatus, SourceVerification, SourceVerificationPayload, TeacherCase, TeacherCasePayload } from './types';
+import type { AnalysisRun, CaseSuggestion, Draft, ImportResult, ReviewMap, ReviewPayload, ReviewStatus, SourceVerification, SourceVerificationPayload, TeacherCase, TeacherCasePayload, TeachingAdjustment, TeachingAdjustmentCreate, TeachingAdjustmentUpdate } from './types';
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init);
@@ -25,6 +25,9 @@ export const learningApi = {
   saveSourceVerification: (payload: SourceVerificationPayload) => api<SourceVerification>('/api/source-verification', jsonRequest(payload)),
   teacherCases: () => api<Record<string, TeacherCase[]>>('/api/teacher-cases'),
   saveTeacherCase: (payload: TeacherCasePayload) => api<TeacherCase>('/api/teacher-case', jsonRequest(payload)),
+  teachingAdjustments: () => api<TeachingAdjustment[]>('/api/teaching-adjustments'),
+  createTeachingAdjustment: (payload: TeachingAdjustmentCreate) => api<TeachingAdjustment>('/api/teaching-adjustments', jsonRequest(payload)),
+  updateTeachingAdjustment: (id: string, payload: TeachingAdjustmentUpdate) => api<TeachingAdjustment>(`/api/teaching-adjustments/${encodeURIComponent(id)}`, { ...jsonRequest(payload), method: 'PATCH' }),
   exportUrl: (studentIds: string[]) => `/api/export?cases=${encodeURIComponent(studentIds.join(','))}`,
   sourceUrl: (file: string) => `/api/source?file=${encodeURIComponent(file)}`,
   async reviewHistory(key: string) {

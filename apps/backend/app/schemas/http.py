@@ -106,6 +106,35 @@ class TeacherCaseRequest(BaseModel):
     reviewer: str = Field(default="", max_length=200)
 
 
+class TeachingAdjustmentCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    student_id: str = Field(min_length=1)
+    indicator_id: str = Field(min_length=1)
+    origin_run_id: str = Field(min_length=1)
+    origin_node_id: str = Field(min_length=1)
+    review_version: int = Field(ge=1)
+    planned_activity: str = Field(min_length=1, max_length=4000)
+    planned_practice: list[str] = Field(min_length=1, max_length=20)
+    observation_points: list[str] = Field(min_length=1, max_length=20)
+    teacher: str = Field(min_length=1, max_length=200)
+    planned_at: str = Field(min_length=1, max_length=64)
+
+
+class TeachingAdjustmentUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    implementation: str = Field(min_length=1, max_length=8000)
+    implementation_status: Literal["completed", "partial", "not_completed"]
+    outcome_observations: str = Field(min_length=1, max_length=8000)
+    followup_run_id: str = Field(min_length=1)
+    followup_node_id: str = Field(min_length=1)
+    followup_evidence_record_ids: list[str] = Field(min_length=1)
+    comparability: Literal["comparable", "not_comparable", "undetermined"]
+    comparability_reason: str = Field(min_length=1, max_length=4000)
+    teacher_conclusion: str = Field(min_length=1, max_length=8000)
+    reviewer: str = Field(min_length=1, max_length=200)
+    concluded_at: str = Field(min_length=1, max_length=64)
+
+
 class ImportResponse(BaseModel):
     run_id: str
     quality: dict[str, Any]

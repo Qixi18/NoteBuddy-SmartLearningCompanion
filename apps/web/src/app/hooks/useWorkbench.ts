@@ -36,15 +36,16 @@ export function useWorkbench() {
         learningApi.reviews(), learningApi.cases(),
       ]);
       if (requestId === refreshRequest.current) {
-        if (currentRun.current?.run_id !== nextRun.run_id) {
+        const sameRun = currentRun.current?.run_id === nextRun.run_id;
+        if (!sameRun) {
           draftRequest.current += 1;
           setDraft(null);
           setNode('');
         }
         setRun(nextRun);
         currentRun.current = nextRun;
-        setReviews(reviewsResult.status === 'fulfilled' ? reviewsResult.value : {});
-        setSuggestions(casesResult.status === 'fulfilled' ? casesResult.value : []);
+        setReviews(current => reviewsResult.status === 'fulfilled' ? reviewsResult.value : sameRun ? current : {});
+        setSuggestions(current => casesResult.status === 'fulfilled' ? casesResult.value : sameRun ? current : []);
         setStudentState(current => nextRun.students.some(item => item['学生编号'] === current)
           ? current : nextRun.students[0]?.['学生编号'] ?? '');
         setIndicatorState(current => nextRun.objectives.some(item => item['指标编号'] === current)
@@ -126,12 +127,42 @@ export function useWorkbench() {
     announce('复核已保存，历史版本已更新。');
   };
 
-  const exportCases = (ids: string[]) => {
+  const exportCases = async (ids: string[]) => {
     if (ids.length !== 3 || new Set(ids).size !== 3) {
       announce('请选择三名不同的学生', true);
       return;
     }
-    window.location.href = learningApi.exportUrl(ids);
+    announce('正在生成成果包…');
+    try {
+      const response = await fetch(learningApi.exportUrl(ids));
+      if (!response.ok) {
+        const body = await response.text();
+        let detail = body;
+        try {
+          const parsed: unknown = JSON.parse(body);
+          if (parsed && typeof parsed === 'object' && 'error' in parsed) {
+            detail = String(parsed.error);
+          }
+        } catch {
+          // Keep a readable plain-text server message when the error is not JSON.
+        }
+        throw new Error(detail || `请求失败（${response.status}）`);
+      }
+      const blob = await response.blob();
+      if (blob.size === 0) throw new Error('服务返回了空成果包');
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = '智慧学伴成果包.zip';
+      document.body.append(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+      announce('成果包下载已开始。');
+    } catch (reason) {
+      const detail = reason instanceof Error ? reason.message : '请检查本地服务后重试';
+      announce(`成果包下载失败：${detail}`, true);
+    }
   };
 
   return {

@@ -3,7 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import draftFixture from '../../../../../contracts/api/draft.json';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { reviewForNode, useWorkbench } from './useWorkbench';
-import type { Review } from '../../api/types';
+import type { CaseSuggestion, Review, ReviewMap } from '../../api/types';
 
 const apiMocks = vi.hoisted(() => ({
   run: vi.fn(),
@@ -124,6 +124,56 @@ describe('useWorkbench node scope', () => {
     expect(result.current.run?.run_id).toBe('run-1');
     expect(result.current.error).toBe(true);
     expect(result.current.message).toContain('复核历史读取失败');
+  });
+
+  it('keeps last known auxiliary data when refresh of the same run fails', async () => {
+    const currentRun = { run_id: 'run-1', students: [], objectives: [], responses: [], items: [] };
+    const savedReviews = { 'D01:I1': [{ version: 1 }] } as unknown as ReviewMap;
+    const savedCases = [{ student_id: 'D01', type: 'case' }] as unknown as CaseSuggestion[];
+    apiMocks.run.mockResolvedValue(currentRun);
+    apiMocks.reviews.mockResolvedValueOnce(savedReviews).mockRejectedValueOnce(new Error('reviews offline'));
+    apiMocks.cases.mockResolvedValueOnce(savedCases).mockRejectedValueOnce(new Error('cases offline'));
+    const { result } = renderHook(() => useWorkbench());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => { await result.current.refresh(); });
+
+    expect(result.current.run?.run_id).toBe('run-1');
+    expect(result.current.reviews).toEqual(savedReviews);
+    expect(result.current.suggestions).toEqual(savedCases);
+    expect(result.current.error).toBe(true);
+  });
+
+  it('shows a connection error and can recover after the run API returns', async () => {
+    apiMocks.run.mockRejectedValueOnce(new Error('Failed to fetch')).mockResolvedValueOnce({
+      run_id: 'run-recovered', students: [], objectives: [], responses: [], items: [],
+    });
+    apiMocks.reviews.mockResolvedValue({});
+    apiMocks.cases.mockResolvedValue([]);
+    const { result } = renderHook(() => useWorkbench());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.error).toBe(true);
+    expect(result.current.message).toContain('Failed to fetch');
+
+    await act(async () => { await result.current.refresh(); });
+    expect(result.current.run?.run_id).toBe('run-recovered');
+    expect(result.current.error).toBe(false);
+  });
+
+  it('announces model provider failures without replacing the active draft', async () => {
+    apiMocks.run.mockResolvedValue({ run_id: 'run-1', students: [], objectives: [], responses: [], items: [] });
+    apiMocks.reviews.mockResolvedValue({});
+    apiMocks.cases.mockResolvedValue([]);
+    apiMocks.modelDraft.mockRejectedValue(new Error('模型服务暂不可用'));
+    const { result } = renderHook(() => useWorkbench());
+    await waitFor(() => expect(result.current.run?.run_id).toBe('run-1'));
+    act(() => { result.current.setStudent('D01'); result.current.setIndicator('T01I1'); result.current.setNode('N01'); });
+
+    await act(async () => { await result.current.makeDraft('deepseek', 'N01'); });
+
+    expect(result.current.error).toBe(true);
+    expect(result.current.message).toContain('模型服务暂不可用');
+    expect(result.current.draft).toBeNull();
   });
 
   it('keeps the selected node while changing student and clears the old draft', async () => {

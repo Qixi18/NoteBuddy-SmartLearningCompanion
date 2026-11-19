@@ -9,6 +9,7 @@ import { EvidencePanel } from '../features/task02/components/EvidencePanel';
 import { QualityPanel } from '../features/task02/components/QualityPanel';
 import { ReviewPanel } from '../features/task03/components/ReviewPanel';
 import { TeacherCaseEditor } from '../features/task03/components/TeacherCaseEditor';
+import { TeachingAdjustmentsPanel } from '../features/task03/components/TeachingAdjustmentsPanel';
 import { ExportPanel } from '../features/export/ExportPanel';
 import { routes, type RoutePath } from '../app/navigation';
 import { findingLabel, severityLabel } from '../features/task02/qualityLabels';
@@ -138,6 +139,7 @@ export function WorkbenchPage(props: PageProps) {
       <ReviewPanel run={run} student={props.student} indicator={props.indicator} node={props.node} review={review} draft={props.draft} onDraft={props.onDraft} onSave={props.onSave} initialFields={initialReviewFields} onFieldsChange={fields => setReviewEdits(old => ({ ...old, [reviewScope]: fields }))} />
       <details className="review-save-note"><summary>复核保存与导出说明</summary><p>复核版本保存诊断、建议、调整条件、结构化方案与证据引用。完整方案只在材料来源签核仍有效时进入导出。</p></details>
     </>;
+    case '/plan/adjustments': return <TeachingAdjustmentsPanel run={run} reviews={props.reviews} />;
     case '/plan/cases': return <div className="cases-layout"><CaseEvidence run={run} suggestions={props.suggestions} reviews={props.reviews} draft={props.draft} onOpenReview={(studentId, indicatorId, nodeId) => { props.onStudent(studentId); props.onIndicator(indicatorId); props.onNode(nodeId); onNavigate('/plan/reviews'); }} /><TeacherCaseEditor run={run} reviews={props.reviews} /><ExportPanel students={run.students} suggestions={props.suggestions} onExport={props.onExport} /></div>;
     default: return <Overview run={run} onNavigate={onNavigate} />;
   }

@@ -66,6 +66,18 @@ describe('ReviewPanel', () => {
     await act(async () => resolveSave());
   });
 
+  it('announces a save failure and keeps the teacher edits in the form', async () => {
+    const onSave = vi.fn().mockRejectedValue(new Error('本地服务暂不可用'));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } })));
+    render(<ReviewPanel student="D01" indicator="T01I1" node="N01" draft={draftFixture as Draft} onDraft={vi.fn()} onSave={onSave} />);
+    fireEvent.change(screen.getByLabelText('诊断'), { target: { value: '教师编辑后保留的诊断' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存复核' }));
+
+    expect((await screen.findByRole('alert')).textContent).toContain('本地服务暂不可用');
+    expect((screen.getByLabelText('诊断') as HTMLTextAreaElement).value).toBe('教师编辑后保留的诊断');
+    expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
   it('labels each historical review with its node, including legacy draft fallback', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
       'D01:T01I1': [

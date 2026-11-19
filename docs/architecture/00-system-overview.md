@@ -27,11 +27,11 @@ React pages/features → api/client.ts → FastAPI routes → Application Use Ca
 
 - TASK 01 当前展示课程目标、题目与来源索引；不解析 PDF 全文，也不建立完整教材知识库。
 - TASK 02 导入六类 CSV，选择最高修订版本、隔离冲突和无效作答，计算确定性指标、质量报告与观察，并给出三类案例候选。
-- TASK 03 生成规则草稿或可选模型草稿，校验证据、追加教师复核与案例确认历史，并导出成果 ZIP。结构化方案只有在其引用的来源签核仍为当前有效版本时才进入正式导出。
+- TASK 03 生成规则草稿或可选模型草稿，校验证据、追加教师复核与案例确认历史，并导出成果 ZIP。结构化方案只有在其引用的来源签核仍为当前有效版本时才进入正式导出。教学调整记录将已接受/修改的起始复核、实施信息、后续运行证据和教师可比性判断串联起来；系统保存教师结论，不自动认定干预有效。
 
 ## 运行数据
 
-仓库根目录 `data/` 是本地数据，不提交 Git。SQLite 文件是正式运行数据源；每次分析在 `analysis_runs.snapshot_json` 留存不可变完整快照，规范化实体以 `(run_id, id)` 关联，`app_state` 保存当前运行，`source_verifications`、`teacher_reviews`、`teacher_cases` 分别追加来源签核、教学复核和案例确认版本。迁移前的 JSON 文件留作只读备份，来源 CSV/PDF 保留在用户指定目录。
+仓库根目录 `data/` 是本地数据，不提交 Git。SQLite 文件是正式运行数据源；每次分析在 `analysis_runs.snapshot_json` 留存不可变完整快照，规范化实体以 `(run_id, id)` 关联，`app_state` 保存当前运行，`source_verifications`、`teacher_reviews`、`teacher_cases` 分别追加来源签核、教学复核和案例确认版本。`teaching_adjustments` 保存跨运行教学调整，`teaching_adjustment_origins` 将每条记录关联到起始运行、节点和复核版本；后续运行、证据和教师判断在调整记录及其历史中保留。迁移前的 JSON 文件留作只读备份，来源 CSV/PDF 保留在用户指定目录。
 
 ## 未来工作
 

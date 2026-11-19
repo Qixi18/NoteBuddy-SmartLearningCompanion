@@ -22,6 +22,8 @@ erDiagram
     RESPONSE_EVENTS ||--o{ RESPONSES : groups
     ANALYSIS_RUNS ||--o{ RESPONSES : scopes
     ANALYSIS_RUNS ||--o{ TEACHER_REVIEWS : scopes
+    ANALYSIS_RUNS ||--o{ TEACHING_ADJUSTMENT_ORIGINS : starts
+    TEACHING_ADJUSTMENTS ||--|| TEACHING_ADJUSTMENT_ORIGINS : records
     ANALYSIS_RUNS {
       string run_id PK
       string created_at
@@ -85,6 +87,22 @@ erDiagram
       string status
       text payload_json
     }
+    TEACHING_ADJUSTMENTS {
+      string adjustment_id PK
+      string student_id
+      string indicator_id
+      text payload_json
+      string created_at
+      string updated_at
+    }
+    TEACHING_ADJUSTMENT_ORIGINS {
+      string adjustment_id PK,FK
+      string student_id
+      string indicator_id
+      string run_id FK
+      string node_id
+      int review_version
+    }
     APP_STATE {
       string key PK
       text value
@@ -93,7 +111,7 @@ erDiagram
 
 复合主键以 `(run_id, entity_id)` 隔离跨运行的相同赛事 ID。作答事件与原始作答分表；`responses.is_selected` 由当前分析结果投影，历史原始字段保存在 data_json。`learning_item_objectives` 支持多对多。对可能含无效上游引用的源作答，记录保留在快照和 responses，不强制学生/材料外键；有效核心实体和事件关系仍受约束。
 
-`analysis_runs.snapshot_json` 保存原分析结果全文作为不可变兼容和恢复载体；学生、班级、目标、材料、节点、作答和人工记录仍有可查询关系表。Diagnosis/Evidence/Recommendation 从分析快照和建议服务即时派生；来源签核、教师复核和正式案例分别保存在追加式 `source_verifications`、`teacher_reviews`、`teacher_cases`。
+`analysis_runs.snapshot_json` 保存原分析结果全文作为不可变兼容和恢复载体；学生、班级、目标、材料、节点、作答和人工记录仍有可查询关系表。Diagnosis/Evidence/Recommendation 从分析快照和建议服务即时派生；来源签核、教师复核和正式案例分别保存在追加式 `source_verifications`、`teacher_reviews`、`teacher_cases`。教学调整存放在 `teaching_adjustments`，其结构化起始关系在 `teaching_adjustment_origins` 以外键关联起始 `run_id`，并固定学生、指标、节点及教师复核版本。后续运行、节点、证据与人工可比性结论保存在调整 payload 和版本历史中；服务不据分数变化推断干预效果。
 
 ## 事务及 Repository
 
@@ -101,4 +119,4 @@ erDiagram
 
 `SessionFactory` 管理 Session 生命周期，FastAPI shutdown 会 dispose Engine。SQLite 一致性备份使用 SQLite backup API，恢复拒绝覆盖已有目标并校验 integrity、foreign keys、schema revision 与表计数。恢复演练覆盖多个 run 的同名实体、多版本 Review、current pointer、快照 hash，并在恢复库上执行成果 ZIP 导出。Alembic 是正式 schema 初始化和升级入口；应用启动不自动建表/迁移。
 
-Repository 文件：`analysis_run_repository.py`、`review_repository.py` 等保留在兼容目录；接口在 `application/ports/repositories.py` 与 `unit_of_work.py`，SQLAlchemy adapter 经 `infrastructure/database/unit_of_work.py` 注入共享 Session。`Store` 是 CLI/兼容调用的组合根，不承担新的业务事务。Domain/ORM 映射集中于 `infrastructure/database/mappers.py`。schema 初始版本在 `apps/backend/alembic/versions/`。数据库约束、跨连接读写和事务失败用临时 SQLite 测试。
+Repository 文件：`analysis_run_repository.py`、`review_repository.py`、`teaching_adjustment_repository.py` 等保留在兼容目录；接口在 `application/ports/repositories.py` 与 `unit_of_work.py`，SQLAlchemy adapter 经 `infrastructure/database/unit_of_work.py` 注入共享 Session。`Store` 是 CLI/兼容调用的组合根，不承担新的业务事务。Domain/ORM 映射集中于 `infrastructure/database/mappers.py`。schema 初始版本与教学调整迁移在 `apps/backend/alembic/versions/`。数据库约束、跨连接读写和事务失败用临时 SQLite 测试。

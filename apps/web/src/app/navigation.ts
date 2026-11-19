@@ -6,6 +6,7 @@ export const routes = [
   { path: '/insights/evidence', title: '作答证据', section: '学情洞察', description: '从记录、修订、评分点和原始 CSV 行核查证据。' },
   { path: '/insights/quality', title: '数据质量', section: '学情洞察', description: '核对原始行、事件、修订、评分和异常处置。' },
   { path: '/plan/reviews', title: '建议复核', section: '教学方案', description: '选择学生、指标和节点，查看草稿并保存教师复核。' },
+  { path: '/plan/adjustments', title: '教学调整', section: '教学方案', description: '记录教师实际干预，并关联后续运行证据与可比性判断。' },
   { path: '/plan/cases', title: '案例与导出', section: '教学方案', description: '核对系统候选与证据范围，再导出三名不同学生的成果包。' },
 ] as const;
 

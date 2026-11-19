@@ -292,6 +292,63 @@ def test_tr07_needs_two_distinct_full_score_items_and_verified_mapping():
     assert single["unknown_reason"] == "insufficient_distinct_items"
 
 
+def test_latest_human_source_signoff_controls_rule_resources_over_snapshot():
+    first = _response("R-1", "Q001", 2, 2, points="Q001P1=1；Q001P2=1")
+    second = _response("R-2", "Q002", 2, 2, points="Q002P1=1；Q002P2=1")
+    run = _run([first, second])
+    run["source_index"][0]["verification"] = "verified"
+    run["source_index"][0]["indicator_check"] = _verified_check(material_ids=["Q001"])
+
+    revoked = draft(
+        run,
+        "D01",
+        "T03I1",
+        "N02",
+        source_verifications={
+            "T03I1": [
+                {"version": 1, "status": "verified", "material_ids": ["Q001"]},
+                {"version": 2, "status": "rejected", "material_ids": ["Q001"]},
+            ]
+        },
+    )
+    assert revoked["material_ids"] == []
+    assert revoked["rule_id"] == "TR-08"
+
+    class UnexpectedModelCall:
+        def complete(self, _body):
+            raise AssertionError("撤销最新签核后不能调用模型草稿")
+
+    from app.services.task03.recommendation_service import deepseek_draft
+
+    model_result = deepseek_draft(
+        run,
+        "D01",
+        "T03I1",
+        client=UnexpectedModelCall(),
+        node_id="N02",
+        source_verifications={
+            "T03I1": [
+                {"version": 1, "status": "verified", "material_ids": ["Q001"]},
+                {"version": 2, "status": "rejected", "material_ids": ["Q001"]},
+            ]
+        },
+    )
+    assert model_result["rule_id"] == "TR-08"
+    assert model_result["material_ids"] == []
+
+    verified = draft(
+        run,
+        "D01",
+        "T03I1",
+        "N02",
+        source_verifications={
+            "T03I1": [{"version": 1, "status": "verified", "material_ids": ["Q001"]}]
+        },
+    )
+    assert verified["material_ids"] == ["Q001"]
+    assert verified["rule_id"] == "TR-07"
+
+
 def test_tr08_conflicting_evidence_fails_closed_and_all_rules_keep_legacy_fields():
     row = _response("R-X", "Q001", 1, 2, points="Q001P1=1；Q001P2=0")
     result = draft(

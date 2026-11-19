@@ -1,0 +1,57 @@
+import { useEffect, useMemo, useState } from 'react';
+import type { AnalysisRun, Review, ReviewMap, TeachingAdjustment, TeachingAdjustmentCreate, TeachingAdjustmentUpdate } from '../../../api/types';
+import { learningApi } from '../../../api/client';
+import { Panel } from '../../../components/Panel';
+
+export function TeachingAdjustmentsPanel({ run, reviews }: { run: AnalysisRun; reviews: ReviewMap }) {
+  const [records, setRecords] = useState<TeachingAdjustment[]>([]);
+  const [selected, setSelected] = useState('');
+  const [message, setMessage] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [create, setCreate] = useState({ student_id: run.students[0]?.['学生编号'] ?? '', indicator_id: run.objectives[0]?.['指标编号'] ?? '', origin_node_id: run.nodes[0]?.['节点编号'] ?? '', review_version: 0, planned_activity: '', planned_practice: '', observation_points: '', teacher: '', planned_at: new Date().toISOString().slice(0, 10) });
+  const [update, setUpdate] = useState({ implementation: '', implementation_status: 'completed' as TeachingAdjustmentUpdate['implementation_status'], outcome_observations: '', followup_node_id: run.nodes[0]?.['节点编号'] ?? '', followup_evidence_record_ids: [] as string[], comparability: 'undetermined' as TeachingAdjustmentUpdate['comparability'], comparability_reason: '', teacher_conclusion: '', reviewer: '', concluded_at: new Date().toISOString().slice(0, 10) });
+
+  const load = async () => {
+    try { const value = await learningApi.teachingAdjustments(); setRecords(value); if (!selected && value.length) setSelected(value[0].adjustment_id); }
+    catch (error) { setMessage(error instanceof Error ? error.message : String(error)); }
+  };
+  useEffect(() => { void load(); }, [run.run_id]);
+
+  const approvedReviews = useMemo(() => Object.entries(reviews).flatMap(([key, history]) => history.flatMap((review: Review) => {
+    const node = review.node_id ?? review.original_draft?.node_id;
+    if (!node || !['accepted', 'edited'].includes(review.status)) return [];
+    return [{ student_id: key.split(':')[0], indicator_id: key.split(':')[1], node_id: node, version: review.version, review }];
+  })), [reviews]);
+  const matchingReviews = approvedReviews.filter(item => item.student_id === create.student_id && item.indicator_id === create.indicator_id && item.node_id === create.origin_node_id);
+  const current = records.find(item => item.adjustment_id === selected);
+  const followupEvidence = run.responses.filter(row => row['学生编号'] === current?.student_id && row['节点编号'] === update.followup_node_id && run.items.some(item => item['材料编号'] === row['材料编号'] && item['指标编号'] === current?.indicator_id));
+  const originReview = current && records ? current.review_version : 0;
+
+  useEffect(() => {
+    if (current) setUpdate(old => ({ ...old, implementation: current.implementation ?? '', implementation_status: current.implementation_status ?? 'completed', outcome_observations: current.outcome_observations ?? '', followup_node_id: current.followup_node_id ?? run.nodes[0]?.['节点编号'] ?? '', followup_evidence_record_ids: current.followup_evidence_record_ids ?? [], comparability: current.comparability === 'pending' ? 'undetermined' : current.comparability, comparability_reason: current.comparability_reason ?? '', teacher_conclusion: current.teacher_conclusion ?? '', reviewer: current.reviewer ?? '', concluded_at: current.concluded_at ?? new Date().toISOString().slice(0, 10) }));
+  }, [selected, current?.updated_at, run.run_id]);
+
+  const saveNew = async () => {
+    if (saving) return; setSaving(true); setMessage('');
+    try {
+      const payload: TeachingAdjustmentCreate = { student_id: create.student_id, indicator_id: create.indicator_id, origin_run_id: run.run_id, origin_node_id: create.origin_node_id, review_version: create.review_version, planned_activity: create.planned_activity.trim(), planned_practice: create.planned_practice.split('\n').map(x => x.trim()).filter(Boolean), observation_points: create.observation_points.split('\n').map(x => x.trim()).filter(Boolean), teacher: create.teacher.trim(), planned_at: create.planned_at };
+      const saved = await learningApi.createTeachingAdjustment(payload); setRecords(old => [...old, saved]); setSelected(saved.adjustment_id); setMessage('已保存教学计划与起始证据引用。');
+    } catch (error) { setMessage(error instanceof Error ? error.message : String(error)); } finally { setSaving(false); }
+  };
+  const saveUpdate = async () => {
+    if (!current || saving) return; setSaving(true); setMessage('');
+    try {
+      const payload: TeachingAdjustmentUpdate = { ...update, followup_run_id: run.run_id, followup_evidence_record_ids: update.followup_evidence_record_ids, comparability_reason: update.comparability_reason.trim(), teacher_conclusion: update.teacher_conclusion.trim(), reviewer: update.reviewer.trim(), concluded_at: update.concluded_at };
+      const saved = await learningApi.updateTeachingAdjustment(current.adjustment_id, payload); setRecords(old => old.map(item => item.adjustment_id === saved.adjustment_id ? saved : item)); setMessage('已保存实施、后续证据和教师判断。系统没有推断干预效果。');
+    } catch (error) { setMessage(error instanceof Error ? error.message : String(error)); } finally { setSaving(false); }
+  };
+
+  return <div className="adjustments-layout">
+    <Panel title="创建教学调整记录"><p className="muted">选择当前运行中已接受或修改的教师复核，记录计划与初始节点。保存后可在再次导入分析运行时登记后续证据。</p>
+      <div className="scope-fields"><label>学生<select value={create.student_id} onChange={e => setCreate(old => ({ ...old, student_id: e.target.value, review_version: 0 }))}>{run.students.map(item => <option key={item['学生编号']} value={item['学生编号']}>{item['学生编号']}</option>)}</select></label><label>指标<select value={create.indicator_id} onChange={e => setCreate(old => ({ ...old, indicator_id: e.target.value, review_version: 0 }))}>{run.objectives.map(item => <option key={item['指标编号']} value={item['指标编号']}>{item['指标编号']} · {item['观察指标']}</option>)}</select></label><label>起始节点<select value={create.origin_node_id} onChange={e => setCreate(old => ({ ...old, origin_node_id: e.target.value, review_version: 0 }))}>{run.nodes.map(item => <option key={item['节点编号']} value={item['节点编号']}>{item['节点编号']}</option>)}</select></label><label>教师复核版本<select value={create.review_version} onChange={e => setCreate(old => ({ ...old, review_version: Number(e.target.value) }))}><option value={0}>请选择已接受复核</option>{matchingReviews.map(item => <option key={item.version} value={item.version}>v{item.version} · {item.review.reviewer || '教师'} · 证据 {item.review.evidence_record_ids.join('、')}</option>)}</select></label></div>
+      <label>计划活动<textarea value={create.planned_activity} onChange={e => setCreate(old => ({ ...old, planned_activity: e.target.value }))} /></label><label>练习（每行一项）<textarea value={create.planned_practice} onChange={e => setCreate(old => ({ ...old, planned_practice: e.target.value }))} /></label><label>观察点（每行一项）<textarea value={create.observation_points} onChange={e => setCreate(old => ({ ...old, observation_points: e.target.value }))} /></label><div className="scope-fields"><label>计划教师<input value={create.teacher} onChange={e => setCreate(old => ({ ...old, teacher: e.target.value }))} /></label><label>计划日期<input type="date" value={create.planned_at} onChange={e => setCreate(old => ({ ...old, planned_at: e.target.value }))} /></label></div><button disabled={saving || !create.review_version} onClick={() => void saveNew()}>保存计划</button>
+    </Panel>
+    <Panel title="教学调整历史"><label>选择记录<select value={selected} onChange={e => setSelected(e.target.value)}><option value="">选择一条记录</option>{records.map(item => <option key={item.adjustment_id} value={item.adjustment_id}>{item.student_id} · {item.indicator_id} · {item.origin_run_id} · {item.origin_node_id}</option>)}</select></label>{current ? <><p>起始运行 {current.origin_run_id} · 节点 {current.origin_node_id} · 教师复核 v{originReview}</p><p>计划：{current.planned_activity}；练习：{current.planned_practice.join('、')}；观察：{current.observation_points.join('、')}</p><label>实际实施<textarea value={update.implementation} onChange={e => setUpdate(old => ({ ...old, implementation: e.target.value }))} /></label><label>实施情况<select value={update.implementation_status} onChange={e => setUpdate(old => ({ ...old, implementation_status: e.target.value as typeof update.implementation_status }))}><option value="completed">已完成</option><option value="partial">部分完成</option><option value="not_completed">未实施</option></select></label><label>后续观察<textarea value={update.outcome_observations} onChange={e => setUpdate(old => ({ ...old, outcome_observations: e.target.value }))} /></label><div className="scope-fields"><label>后续运行<strong>{run.run_id}</strong></label><label>后续节点<select value={update.followup_node_id} onChange={e => setUpdate(old => ({ ...old, followup_node_id: e.target.value, followup_evidence_record_ids: [] }))}>{run.nodes.map(item => <option key={item['节点编号']} value={item['节点编号']}>{item['节点编号']}</option>)}</select></label></div><details><summary>选择后续证据（{update.followup_evidence_record_ids.length}）</summary>{followupEvidence.length ? followupEvidence.map(row => <label className="check-row" key={row['记录编号']}><input type="checkbox" checked={update.followup_evidence_record_ids.includes(row['记录编号'])} onChange={e => setUpdate(old => ({ ...old, followup_evidence_record_ids: e.target.checked ? [...old.followup_evidence_record_ids, row['记录编号']] : old.followup_evidence_record_ids.filter(id => id !== row['记录编号']) }))} />{row['记录编号']} · {row['材料编号']} · {row['评分状态']} · 第 {row._source_line} 行</label>) : <p className="muted">当前运行此范围没有作答证据。</p>}</details><label>可比性<select value={update.comparability} onChange={e => setUpdate(old => ({ ...old, comparability: e.target.value as typeof update.comparability }))}><option value="comparable">教师判断：可比较</option><option value="not_comparable">教师判断：不可比较</option><option value="undetermined">尚未确定</option></select></label><label>可比性依据<textarea value={update.comparability_reason} onChange={e => setUpdate(old => ({ ...old, comparability_reason: e.target.value }))} placeholder="说明题目、满分、难度或测量范围的依据" /></label><label>教师结论<textarea value={update.teacher_conclusion} onChange={e => setUpdate(old => ({ ...old, teacher_conclusion: e.target.value }))} placeholder="只记录人工判断与观察，不把分数变化自动归因于干预" /></label><div className="scope-fields"><label>审核教师<input value={update.reviewer} onChange={e => setUpdate(old => ({ ...old, reviewer: e.target.value }))} /></label><label>审核日期<input type="date" value={update.concluded_at} onChange={e => setUpdate(old => ({ ...old, concluded_at: e.target.value }))} /></label></div><button disabled={saving || !update.followup_evidence_record_ids.length} onClick={() => void saveUpdate()}>保存后续记录</button>{current.history.length > 0 && <details><summary>实施与复核历史（{current.history.length}）</summary>{current.history.map((entry, index) => <article className="row" key={`${entry.updated_at}:${index}`}><strong>{entry.updated_at} · {entry.implementation_status}</strong><p>实施：{entry.implementation || '未登记'}</p><p>观察：{entry.outcome_observations || '未登记'}</p><p>后续运行：{entry.followup_run_id ?? '未登记'} · 节点 {entry.followup_node_id ?? '未登记'} · 证据 {entry.followup_evidence_record_ids.join('、') || '无'}</p><p>可比性：{entry.comparability} · {entry.comparability_reason}</p><p>教师结论：{entry.teacher_conclusion || '未登记'} · {entry.reviewer}</p></article>)}</details>}</> : <p className="muted">暂无记录。创建计划后，可在导入新的分析运行后登记后续信息。</p>}{message && <p role="status">{message}</p>}
+    </Panel>
+  </div>;
+}

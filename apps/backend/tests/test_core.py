@@ -308,6 +308,54 @@ def test_non_sample_bundle_import(tmp_path: Path):
     assert len(store.run_repository.list_run_ids()) == 2
 
 
+def test_run_scoped_projections_isolate_reused_student_and_record_ids(tmp_path: Path):
+    tables_a = sample_tables()
+    tables_b = sample_tables()
+    tables_b["作答记录"][1]["得分"] = "0"
+    run_a = analyze(tables_a, {"bundle": "a"})
+    run_b = analyze(tables_b, {"bundle": "b"})
+    assert run_a["run_id"] != run_b["run_id"]
+
+    store = make_store(tmp_path)
+    persist_run(store, run_a)
+    persist_run(store, run_b)
+
+    with store.uow_factory(immediate=False) as uow:
+        a_counts = uow.runs.projection_counts(run_a["run_id"])
+        b_counts = uow.runs.projection_counts(run_b["run_id"])
+        a_r2 = next(
+            row
+            for row in uow.responses.list_by_student(run_a["run_id"], "D01")
+            if row.record_id == "R2"
+        )
+        b_r2 = next(
+            row
+            for row in uow.responses.list_by_student(run_b["run_id"], "D01")
+            if row.record_id == "R2"
+        )
+
+    assert a_counts["students"] == b_counts["students"] == 3
+    assert a_counts["responses"] == b_counts["responses"]
+    assert a_r2.score != b_r2.score
+    assert store.current()["run_id"] == run_b["run_id"]
+    assert store.load(run_a["run_id"])["run_id"] == run_a["run_id"]
+
+
+def test_failed_import_does_not_replace_current_run(tmp_path: Path):
+    store = make_store(tmp_path / "state")
+    run = analyze(sample_tables(), {})
+    persist_run(store, run)
+    before_ids = set(store.run_repository.list_run_ids())
+    broken_bundle = tmp_path / "broken-bundle"
+    broken_bundle.mkdir()
+
+    with pytest.raises(ValueError):
+        store.import_folder(broken_bundle)
+
+    assert store.current()["run_id"] == run["run_id"]
+    assert set(store.run_repository.list_run_ids()) == before_ids
+
+
 def test_review_and_export(tmp_path: Path):
     run = analyze(sample_tables(), {})
     store = make_store(tmp_path)

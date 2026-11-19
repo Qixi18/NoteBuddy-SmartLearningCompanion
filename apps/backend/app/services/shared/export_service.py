@@ -19,10 +19,12 @@ def package(
     *,
     sources: dict | None = None,
     cases: dict | None = None,
+    teaching_adjustments: list[dict] | None = None,
 ) -> bytes:
     case_ids = case_ids or []
     sources = sources or {}
     cases = cases or {}
+    teaching_adjustments = teaching_adjustments or []
     known_students = {s["学生编号"] for s in run["students"]}
     if (
         len(case_ids) != 3
@@ -36,55 +38,65 @@ def package(
             student_id, indicator_id = student["学生编号"], objective["指标编号"]
             baseline = draft(run, student_id, indicator_id)
             history = reviews.get(f"{student_id}:{indicator_id}", [])
-            final = history[-1] if history else None
-            review_node_id = final.get("node_id") if final else None
-            if final and review_node_id is None:
-                original = final.get("original_draft")
-                if isinstance(original, dict):
-                    review_node_id = original.get("node_id")
-            entry = {
-                **baseline,
-                "node_id": review_node_id or baseline.get("node_id"),
-                "review": final,
-            }
-            # A snapshot's historical source hints are not an explicit stage-2 signoff.
-            entry["material_ids"] = []
-            if final and final["status"] in {"accepted", "edited"}:
-                entry.update(
-                    {
-                        k: final[k]
-                        for k in (
-                            "diagnosis",
-                            "recommendation",
-                            "adjustment_condition",
-                            "source",
-                            "evidence_record_ids",
-                        )
-                        if k in final
-                    }
+            by_node: dict[str | None, list[dict]] = {}
+            for item in history:
+                node_id = item.get("node_id")
+                if node_id is None and isinstance(item.get("original_draft"), dict):
+                    node_id = item["original_draft"].get("node_id")
+                by_node.setdefault(node_id, []).append(item)
+            scoped_history = by_node or {None: []}
+            for review_node_id, node_history in scoped_history.items():
+                final = node_history[-1] if node_history else None
+                scoped_baseline = (
+                    draft(run, student_id, indicator_id, review_node_id)
+                    if review_node_id
+                    else baseline
                 )
-                plan = final.get("structured_plan")
-                verification_history = sources.get(indicator_id, [])
-                latest_source = (
-                    verification_history[-1] if verification_history else None
-                )
-                if (
-                    plan
-                    and latest_source
-                    and latest_source["status"] == "verified"
-                    and final.get("source_verification_versions", {}).get(indicator_id)
-                    == latest_source["version"]
-                    and set(plan.get("material_ids", [])).issubset(
-                        latest_source["material_ids"]
+                entry = {
+                    **scoped_baseline,
+                    "node_id": review_node_id or scoped_baseline.get("node_id"),
+                    "review": final,
+                }
+                # A snapshot's historical source hints are not an explicit stage-2 signoff.
+                entry["material_ids"] = []
+                if final and final["status"] in {"accepted", "edited"}:
+                    entry.update(
+                        {
+                            k: final[k]
+                            for k in (
+                                "diagnosis",
+                                "recommendation",
+                                "adjustment_condition",
+                                "source",
+                                "evidence_record_ids",
+                            )
+                            if k in final
+                        }
                     )
-                ):
-                    entry["structured_plan"] = plan
-                    entry["material_ids"] = plan["material_ids"]
-                elif plan:
-                    entry["structured_plan_status"] = "source_verification_changed"
-                accepted.append(entry)
-            else:
-                pending.append(entry)
+                    plan = final.get("structured_plan")
+                    verification_history = sources.get(indicator_id, [])
+                    latest_source = (
+                        verification_history[-1] if verification_history else None
+                    )
+                    if (
+                        plan
+                        and latest_source
+                        and latest_source["status"] == "verified"
+                        and final.get("source_verification_versions", {}).get(
+                            indicator_id
+                        )
+                        == latest_source["version"]
+                        and set(plan.get("material_ids", [])).issubset(
+                            latest_source["material_ids"]
+                        )
+                    ):
+                        entry["structured_plan"] = plan
+                        entry["material_ids"] = plan["material_ids"]
+                    elif plan:
+                        entry["structured_plan_status"] = "source_verification_changed"
+                    accepted.append(entry)
+                else:
+                    pending.append(entry)
     manifest = {
         "run_id": run["run_id"],
         "created_at": run["created_at"],
@@ -226,6 +238,7 @@ def package(
         "teacher_cases_history.json": {
             student_id: cases.get(student_id, []) for student_id in case_ids
         },
+        "teaching_adjustments.json": teaching_adjustments,
         "confirmed_cases.json": confirmed_cases,
         "node_scoped_metrics.json": node_scoped_metrics,
         "node_observations.json": node_observations,

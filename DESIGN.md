@@ -2,7 +2,7 @@
 name: 智慧学伴彩色证据工作台
 description: 面向比赛演示的成熟教学证据工作台，以清晰任务结构和语义化色彩呈现真实数据。
 status: active
-updated: 2026-11-18
+updated: 2026-11-19
 colors:
   canvas: '#F3F6FB'
   surface: '#FFFFFF'
@@ -94,10 +94,11 @@ Use the platform system sans stack for dependable Chinese rendering. Main page t
 ## Layout
 
 - Desktop-only, with 1024–1920px as the supported range. At 1024px, preserve usable controls and allow dense two-column workspaces to stack. Do not add mobile or tablet navigation work without a product change.
-- Fixed left navigation around 232px; sticky top bar around 68px; content width capped near 1480px with 24–40px side padding.
+- Fixed left navigation at 232px; sticky top bar at 68px; content width capped at 1520px with 24–42px side padding.
 - Global overview leads with the current run's truthful scale, data quality, scope limitations, and the next useful action.
 - Learning evidence uses clear master-detail layouts and compact filters. Tables or aligned rows should replace repeated long prose when the data is comparable.
 - Review uses a scope bar, evidence context, a distinct editable proposal, and an always-findable save action. Never show the same diagnosis and recommendation as both read-only copy and editable fields at the same time.
+- Teaching adjustments link a teacher-reviewed plan to later evidence for the same student, indicator, and node; show implementation, observations, and teacher comparability judgment without claiming score changes prove effectiveness.
 - Case export keeps candidate evidence, teacher confirmation, selected students, and package contents in a clear sequence.
 - Use panels only to mark meaningful work areas. Avoid nested bordered cards and large empty placeholders.
 
@@ -110,7 +111,7 @@ Use the platform system sans stack for dependable Chinese rendering. Main page t
 - Translate user-facing quality labels into Chinese while retaining original identifiers, enum values, record IDs, and source lines in traceable details.
 - Keep source verification states explicit. A pending relationship never appears confirmed.
 - Rule and model outputs are drafts. Teacher edits, review status, reason, reviewer, saved history, and structured-plan constraints remain accessible and honest.
-- Import stays local; source CSVs are not moved. Export labels reflect the actual API package and do not imply a complete narrative unless the package contains one.
+- Import uses the browser directory picker to send selected CSV contents to the local service; source CSVs are not moved. Export labels reflect the actual API package and do not imply a complete narrative unless the package contains one.
 
 ## Components and States
 

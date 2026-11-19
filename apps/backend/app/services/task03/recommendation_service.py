@@ -6,8 +6,8 @@ import json
 import os
 import re
 
-from ...config import settings
 from ...application.ports.llm import LLMClient, LLMError
+from ...config import settings
 
 
 def _evidence(
@@ -94,7 +94,25 @@ def _rubric(row: dict, item: dict) -> tuple[dict[str, float], dict[str, float], 
     return scores, expected, coherent
 
 
-def _verified_indicator_check(run: dict, indicator_id: str) -> dict | None:
+def _verified_indicator_check(
+    run: dict,
+    indicator_id: str,
+    source_verifications: dict[str, list[dict]] | None = None,
+) -> dict | None:
+    history = (source_verifications or {}).get(indicator_id, [])
+    if history:
+        latest = history[-1]
+        if latest.get("status") != "verified":
+            return None
+        return {
+            "status": "verified",
+            "material_ids": latest.get("material_ids", []),
+            "learning_card_ids": latest.get("learning_card_ids", []),
+            "resource_ids": latest.get("resource_ids", []),
+            "curriculum_locator": latest.get("curriculum_locator", ""),
+            "textbook_locator": latest.get("textbook_locator", ""),
+            "rubric_mappings": latest.get("rubric_mappings", []),
+        }
     entry = next(
         (
             row
@@ -167,7 +185,12 @@ def _out_of_scope(run: dict, objective: dict, node_id: str) -> bool:
 
 
 def draft(
-    run: dict, student_id: str, indicator_id: str, node_id: str | None = None
+    run: dict,
+    student_id: str,
+    indicator_id: str,
+    node_id: str | None = None,
+    *,
+    source_verifications: dict[str, list[dict]] | None = None,
 ) -> dict:
     objective = next(
         (row for row in run["objectives"] if row["指标编号"] == indicator_id), None
@@ -199,7 +222,7 @@ def draft(
     scored = [row for row in records if row.get("记录编号") in scored_ids]
     pending = [row for row in records if row.get("评分状态") == "待评分"]
     unanswered = [row for row in records if row.get("评分状态") == "未作答"]
-    check = _verified_indicator_check(run, indicator_id)
+    check = _verified_indicator_check(run, indicator_id, source_verifications)
     material_ids, source_locator = _mapped_resources(run, check)
     unknown_reason: str | None = None
     rule_id = "TR-08"
@@ -651,8 +674,15 @@ def deepseek_draft(
     model: str | None = None,
     client: LLMClient | None = None,
     node_id: str | None = None,
+    source_verifications: dict[str, list[dict]] | None = None,
 ) -> dict:
-    baseline = draft(run, student_id, indicator_id, node_id)
+    baseline = draft(
+        run,
+        student_id,
+        indicator_id,
+        node_id,
+        source_verifications=source_verifications,
+    )
     if baseline["scope_required"] or baseline.get("rule_id") in {"TR-01", "TR-08"}:
         return baseline
     key = (

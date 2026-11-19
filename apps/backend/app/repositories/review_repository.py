@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 
 from ..domain.teaching.models import TeacherReview
-from ..infrastructure.database.models import ReviewRow
 from ..infrastructure.database.mappers import review_from_row
+from ..infrastructure.database.models import ReviewRow
 from .base import SqlAlchemyRepository
 
 
@@ -58,7 +58,7 @@ class ReviewRepository(SqlAlchemyRepository):
             record = {
                 **payload,
                 "version": latest.version + 1 if latest else 1,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
             }
             active_session.add(
                 ReviewRow(

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
+from collections import deque
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -21,6 +23,95 @@ from ..repositories.store import Store
 from .routes import analysis, exports, health, imports, recommendations, reviews, stage2
 
 logger = logging.getLogger("smart_learning.api")
+MAX_REQUEST_BODY_BYTES = 20 * 1024 * 1024
+
+
+class RequestBodyLimitMiddleware:
+    """Bound request buffering before FastAPI decodes JSON payloads."""
+
+    def __init__(
+        self,
+        app,
+        max_bytes: int = MAX_REQUEST_BODY_BYTES,
+        max_duration_seconds: float = 60.0,
+    ):
+        self.app = app
+        self.max_bytes = max_bytes
+        self.max_duration_seconds = max_duration_seconds
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or scope["method"] in {"GET", "HEAD", "OPTIONS"}:
+            await self.app(scope, receive, send)
+            return
+
+        request_id = uuid.uuid4().hex
+        headers = dict(scope.get("headers", []))
+        raw_length = headers.get(b"content-length")
+        if raw_length:
+            try:
+                if int(raw_length) > self.max_bytes:
+                    await self._reject(scope, send, request_id)
+                    return
+            except ValueError:
+                pass
+
+        buffered = deque()
+        total = 0
+        more_body = True
+        try:
+            async with asyncio.timeout(self.max_duration_seconds):
+                while more_body:
+                    message = await receive()
+                    if message["type"] == "http.disconnect":
+                        return
+                    chunk = message.get("body", b"")
+                    total += len(chunk)
+                    if total > self.max_bytes:
+                        await self._reject(scope, send, request_id)
+                        return
+                    buffered.append(message)
+                    more_body = message.get("more_body", False)
+        except TimeoutError:
+            await self._reject(
+                scope,
+                send,
+                request_id,
+                status=408,
+                message="读取请求内容超时",
+                code="REQUEST_BODY_TIMEOUT",
+            )
+            return
+
+        async def replay():
+            if buffered:
+                return buffered.popleft()
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        await self.app(scope, replay, send)
+
+    @staticmethod
+    async def _reject(
+        scope,
+        send,
+        request_id: str,
+        status: int = 413,
+        message: str = "请求内容超过 20 MiB 限制",
+        code: str = "REQUEST_TOO_LARGE",
+    ):
+        response = JSONResponse(
+            status_code=status,
+            content={
+                "error": message,
+                "code": code,
+                "request_id": request_id,
+            },
+            headers={"X-Request-ID": request_id, "Cache-Control": "no-store"},
+        )
+        await response(scope, _empty_receive, send)
+
+
+async def _empty_receive():
+    return {"type": "http.request", "body": b"", "more_body": False}
 
 
 def create_app(store: Store | None = None, config: Settings = settings) -> FastAPI:
@@ -34,6 +125,7 @@ def create_app(store: Store | None = None, config: Settings = settings) -> FastA
             application.state.store.database.dispose()
 
     application = FastAPI(title="智慧学伴本地 API", version="0.1.0", lifespan=lifespan)
+    application.add_middleware(RequestBodyLimitMiddleware)
     application.state.store = store or Store(
         config.data_dir, config.resources_dir, config.database_url, config=config
     )

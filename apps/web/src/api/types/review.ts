@@ -57,6 +57,37 @@ export interface TeacherCase {
 
 export type TeacherCasePayload = Omit<TeacherCase, 'run_id' | 'version' | 'reviewed_at'>;
 
+export interface TeachingAdjustment {
+  adjustment_id: string;
+  student_id: string;
+  indicator_id: string;
+  origin_run_id: string;
+  origin_node_id: string;
+  review_version: number;
+  planned_activity: string;
+  planned_practice: string[];
+  observation_points: string[];
+  teacher: string;
+  planned_at: string;
+  implementation: string;
+  implementation_status: 'completed' | 'partial' | 'not_completed';
+  outcome_observations: string;
+  followup_run_id: string | null;
+  followup_node_id: string | null;
+  followup_evidence_record_ids: string[];
+  comparability: 'pending' | 'comparable' | 'not_comparable' | 'undetermined';
+  comparability_reason: string;
+  teacher_conclusion: string;
+  reviewer: string;
+  concluded_at: string | null;
+  created_at: string;
+  updated_at: string;
+  history: Array<Pick<TeachingAdjustment, 'implementation' | 'implementation_status' | 'outcome_observations' | 'followup_run_id' | 'followup_node_id' | 'followup_evidence_record_ids' | 'comparability' | 'comparability_reason' | 'teacher_conclusion' | 'reviewer' | 'concluded_at' | 'updated_at'>>;
+}
+
+export type TeachingAdjustmentCreate = Pick<TeachingAdjustment, 'student_id' | 'indicator_id' | 'origin_run_id' | 'origin_node_id' | 'review_version' | 'planned_activity' | 'planned_practice' | 'observation_points' | 'teacher' | 'planned_at'>;
+export type TeachingAdjustmentUpdate = Pick<TeachingAdjustment, 'implementation' | 'implementation_status' | 'outcome_observations' | 'followup_run_id' | 'followup_node_id' | 'followup_evidence_record_ids' | 'comparability' | 'comparability_reason' | 'teacher_conclusion' | 'reviewer' | 'concluded_at'>;
+
 export interface Review extends Omit<ReviewPayload, 'student_id' | 'indicator_id' | 'original_draft'> {
   node_id: string | null;
   version: number;

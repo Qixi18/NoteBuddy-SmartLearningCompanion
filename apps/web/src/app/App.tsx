@@ -46,7 +46,7 @@ export function App() {
   useEffect(() => {
     if (importOpen) {
       if (!dialogRef.current?.open) dialogRef.current?.showModal();
-      dialogRef.current?.querySelector<HTMLInputElement>('input')?.focus();
+      dialogRef.current?.querySelector<HTMLButtonElement>('button[type="button"]')?.focus();
     } else if (dialogRef.current?.open) dialogRef.current.close();
   }, [importOpen]);
 
@@ -91,7 +91,21 @@ export function App() {
       </main>
     </div>
 
-    <dialog className="import-dialog" ref={dialogRef} aria-labelledby="import-title" onCancel={event => { event.preventDefault(); setImportOpen(false); }} onClose={() => setImportOpen(false)}>
+    <dialog className="import-dialog" ref={dialogRef} aria-labelledby="import-title" onKeyDown={event => {
+      if (event.key !== 'Tab') return;
+      const controls = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, a[href], [tabindex]:not([tabindex="-1"])') ?? [])
+        .filter(element => !element.hidden && !(element instanceof HTMLInputElement && element.type === 'hidden') && element.getClientRects().length > 0);
+      const first = controls[0];
+      const last = controls.at(-1);
+      if (!first || !last) return;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }} onCancel={event => { event.preventDefault(); setImportOpen(false); }} onClose={() => setImportOpen(false)}>
       <div className="dialog-heading"><div><h2 id="import-title">导入数据</h2><p>创建新的分析运行；CSV 源文件保留在原位置。</p></div><button className="icon-button" aria-label="关闭导入窗口" onClick={() => setImportOpen(false)}>关闭</button></div>
       <ImportPanel onImported={imported} onMessage={workbench.announce} />
     </dialog>
