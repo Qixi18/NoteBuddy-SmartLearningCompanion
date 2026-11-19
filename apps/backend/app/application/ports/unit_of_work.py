@@ -1,6 +1,13 @@
 from typing import Protocol
 
-from .repositories import AnalysisRuns, Responses, ReviewHistories, Stage2Records, Students, Subjects
+from .repositories import (
+    AnalysisRuns,
+    Responses,
+    ReviewHistories,
+    Stage2Records,
+    Students,
+    Subjects,
+)
 
 
 class UnitOfWork(Protocol):

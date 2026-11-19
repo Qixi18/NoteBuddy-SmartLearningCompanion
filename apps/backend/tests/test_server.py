@@ -1,6 +1,7 @@
 import io
 import csv
 import json
+import pytest
 import zipfile
 from dataclasses import replace
 from pathlib import Path
@@ -54,6 +55,50 @@ def test_http_review_to_export(tmp_path):
         assert len(json.loads(archive.read("student_cases.json"))) == 3
 
 
+def test_export_rejects_empty_duplicate_and_unknown_case_ids(tmp_path):
+    client = client_for(tmp_path)
+    for case_ids in ("", "D01,D01,D03", "D01,D02,UNKNOWN"):
+        response = client.get("/api/export", params={"cases": case_ids})
+        assert response.status_code == 400
+        assert response.json()["code"] == "INVALID_REQUEST"
+        assert "三名不同的有效学生" in response.json()["error"]
+
+
+def test_export_selected_case_bundle_member_scope_is_explicit(tmp_path):
+    tables = sample_tables()
+    tables["模拟学生"].append({"学生编号": "D04", "模拟班级编号": "C3"})
+    outside_case = dict(tables["作答记录"][1])
+    outside_case.update(
+        {
+            "记录编号": "R5",
+            "学生编号": "D04",
+            "作答事件编号": "E5",
+            "修订版本": "1",
+            "得分": "2",
+            "_source_line": 7,
+        }
+    )
+    tables["作答记录"].append(outside_case)
+    client = client_for(tmp_path, tables=tables)
+    response = client.get("/api/export", params={"cases": "D01,D02,D03"})
+    assert response.status_code == 200
+
+    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+        selected_cases = json.loads(archive.read("student_cases.json"))
+        all_metrics = json.loads(archive.read("all_metrics.json"))
+        responses = json.loads(archive.read("responses.json"))
+        raw_responses = json.loads(archive.read("raw_responses.json"))
+        evidence = json.loads(archive.read("evidence_index.json"))
+        review_history = json.loads(archive.read("teacher_review_history.json"))
+
+    assert {entry["student_id"] for entry in selected_cases} == {"D01", "D02", "D03"}
+    assert any(entry["key"].startswith("D04") for entry in all_metrics)
+    assert any(row["学生编号"] == "D04" for row in responses)
+    assert any(row["学生编号"] == "D04" for row in raw_responses)
+    assert any(row["student_id"] == "D04" for row in evidence)
+    assert set(review_history).issubset({"D01:T01I1", "D02:T01I1", "D03:T01I1"})
+
+
 def test_shared_draft_contract_fixture(tmp_path):
     fixture = json.loads(
         (Path(__file__).parents[3] / "contracts/api/draft.json").read_text(
@@ -79,6 +124,43 @@ def test_deepseek_does_not_override_tr08_conflict_baseline(tmp_path):
     assert response.status_code == 200
     assert response.json()["rule_id"] == "TR-08"
     assert response.json()["unknown_reason"] == "evidence_conflict"
+    assert response.json()["source"] == "rule"
+
+
+def test_cross_node_draft_requires_explicit_node_and_does_not_call_model(
+    tmp_path, monkeypatch
+):
+    config = replace(settings, deepseek_api_key="test-only-key")
+    tables = sample_tables()
+    tables["测验节点"].append({"节点编号": "N02", "可用题目编号": "Q001"})
+    second_node = dict(tables["作答记录"][1])
+    second_node.update(
+        {
+            "记录编号": "R5",
+            "作答事件编号": "E5",
+            "节点编号": "N02",
+            "修订版本": "1",
+            "得分": "2",
+            "_source_line": 8,
+        }
+    )
+    tables["作答记录"].append(second_node)
+    client = client_for(tmp_path, config, tables)
+
+    def unexpected_call(*args, **kwargs):
+        raise AssertionError("跨节点范围未明确时不应请求模型")
+
+    monkeypatch.setattr(
+        "app.infrastructure.llm.deepseek_client.urllib.request.urlopen",
+        unexpected_call,
+    )
+    response = client.post(
+        "/api/deepseek", json={"student_id": "D01", "indicator_id": "T01I1"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["scope_required"] is True
+    assert response.json()["rule_id"] == "TR-08"
     assert response.json()["source"] == "rule"
 
 
@@ -134,6 +216,58 @@ def test_api_not_found_uses_common_error_contract(tmp_path):
     assert response.json()["request_id"]
 
 
+def test_review_api_rejects_invalid_identity_and_cross_student_evidence(tmp_path):
+    tables = sample_tables()
+    other_student = dict(tables["作答记录"][1])
+    other_student.update(
+        {
+            "记录编号": "R5",
+            "学生编号": "D02",
+            "作答事件编号": "E5",
+            "修订版本": "1",
+            "得分": "2",
+            "_source_line": 7,
+        }
+    )
+    tables["作答记录"].append(other_student)
+    client = client_for(tmp_path, tables=tables)
+    draft = client.get(
+        "/api/draft", params={"student": "D01", "indicator": "T01I1", "node": "N01"}
+    ).json()
+    base = {
+        "student_id": "D01",
+        "indicator_id": "T01I1",
+        "status": "edited",
+        "diagnosis": "复核作答",
+        "recommendation": "完成变式",
+        "reason": "按节点证据复核",
+        "evidence_record_ids": ["R2"],
+        "original_draft": draft,
+    }
+
+    invalid_payloads = (
+        {**base, "student_id": "UNKNOWN"},
+        {**base, "student_id": "  "},
+        {**base, "indicator_id": "I-UNKNOWN"},
+        {**base, "evidence_record_ids": ["R5"]},
+    )
+    for payload in invalid_payloads:
+        response = client.post("/api/review", json=payload)
+        assert response.status_code == 400
+        assert response.json()["code"] == "INVALID_REQUEST"
+        assert "Traceback" not in response.text
+    assert client.get("/api/reviews").json() == {}
+
+    for params in (
+        {"student": "", "indicator": "T01I1"},
+        {"student": "D01", "indicator": ""},
+        {"student": "D01", "indicator": "T01I1", "node": ""},
+    ):
+        response = client.get("/api/draft", params=params)
+        assert response.status_code == 422
+        assert response.json()["code"] == "VALIDATION_ERROR"
+
+
 def test_application_lifespan_disposes_engine_on_shutdown(tmp_path, monkeypatch):
     store = Store(tmp_path)
     store.database.create_schema_for_tests()
@@ -142,6 +276,48 @@ def test_application_lifespan_disposes_engine_on_shutdown(tmp_path, monkeypatch)
     with TestClient(create_app(store)) as client:
         assert client.get("/api/health").status_code == 200
     assert disposed == [True]
+
+
+def test_run_and_review_history_persist_after_service_restart(tmp_path):
+    store = Store(tmp_path)
+    store.database.create_schema_for_tests()
+    run = analyze(sample_tables(), {})
+    with store.uow_factory() as uow:
+        uow.runs.save(run)
+
+    with TestClient(create_app(store)) as client:
+        first = client.get("/api/run")
+        assert first.status_code == 200
+        assert first.json()["run_id"] == run["run_id"]
+        draft = client.get(
+            "/api/draft", params={"student": "D01", "indicator": "T01I1", "node": "N01"}
+        ).json()
+        saved = client.post(
+            "/api/review",
+            json={
+                "student_id": "D01",
+                "indicator_id": "T01I1",
+                "status": "edited",
+                "diagnosis": "复核步骤",
+                "recommendation": "完成一道变式",
+                "reason": "根据 R2 作答",
+                "evidence_record_ids": ["R2"],
+                "reviewer": "教师甲",
+                "original_draft": draft,
+            },
+        )
+        assert saved.status_code == 200, saved.text
+        assert saved.json()["version"] == 1
+
+    restarted_store = Store(tmp_path)
+    with TestClient(create_app(restarted_store)) as restarted:
+        current = restarted.get("/api/run")
+        history = restarted.get("/api/reviews")
+        assert current.status_code == 200
+        assert current.json()["run_id"] == run["run_id"]
+        assert history.status_code == 200
+        assert history.json()["D01:T01I1"][0]["version"] == 1
+        assert history.json()["D01:T01I1"][0]["node_id"] == "N01"
 
 
 def test_http_import_through_review_and_export(tmp_path: Path):
@@ -219,6 +395,45 @@ def test_failed_import_keeps_current_run(tmp_path: Path):
     failed = client.post("/api/import", json={"folder": str(source)})
     assert failed.status_code == 400
     assert "作答记录.csv 缺少字段：得分" in failed.json()["error"]
+    assert client.get("/api/run").json()["run_id"] == before
+    for name, required in TABLES.items():
+        rows = sample_tables().get(name, [])
+        headers = list(
+            dict.fromkeys(
+                required
+                + [key for row in rows for key in row if not key.startswith("_")]
+            )
+        )
+        with (source / f"{name}.csv").open("w", encoding="utf-8", newline="") as file:
+            writer = csv.DictWriter(file, fieldnames=headers, extrasaction="ignore")
+            writer.writeheader()
+            writer.writerows(rows)
+    requirements_path = source / "课程要求.csv"
+    requirements_path.write_text(
+        '主题编号,指标编号,观察指标\nT01,T01I1,"未闭合描述\n', encoding="utf-8"
+    )
+    malformed = client.post("/api/import", json={"folder": str(source)})
+    assert malformed.status_code == 400
+    assert "课程要求.csv 第 2 行 CSV 格式错误" in malformed.json()["error"]
+    assert client.get("/api/run").json()["run_id"] == before
+
+    requirements_path.write_bytes(b"\xff\xfe\xfa")
+    invalid_encoding = client.post("/api/import", json={"folder": str(source)})
+    assert invalid_encoding.status_code == 400
+    assert "课程要求.csv 不是 UTF-8 编码" in invalid_encoding.json()["error"]
+    assert client.get("/api/run").json()["run_id"] == before
+
+
+def test_import_files_rejects_oversized_csv_without_changing_current_run(tmp_path):
+    client = client_for(tmp_path)
+    before = client.get("/api/run").json()["run_id"]
+    response = client.post(
+        "/api/import-files",
+        json={"files": {"作答记录.csv": "x" * (16 * 1024 * 1024 + 1)}},
+    )
+    assert response.status_code == 422
+    assert response.json()["code"] == "VALIDATION_ERROR"
+    assert response.json()["request_id"]
     assert client.get("/api/run").json()["run_id"] == before
 
 
@@ -373,9 +588,42 @@ def test_source_route_enforces_allowlist_and_reports_missing_files(tmp_path: Pat
     assert allowed.content.startswith(b"%PDF")
     rejected = client.get("/api/source", params={"file": "private.pdf"})
     assert rejected.status_code == 400
+    for unsafe_name in (
+        "../allowed.pdf",
+        "..\\allowed.pdf",
+        "/allowed.pdf",
+        "allowed.pdf/../../secret.pdf",
+    ):
+        unsafe = client.get("/api/source", params={"file": unsafe_name})
+        assert unsafe.status_code == 400
+        assert unsafe.json()["code"] == "INVALID_REQUEST"
     missing = client.get("/api/source", params={"file": "missing.pdf"})
     assert missing.status_code == 400
     assert missing.json()["code"] == "RESOURCE_NOT_FOUND"
+
+
+def test_source_route_rejects_allowlisted_symlink_outside_resource_root(tmp_path: Path):
+    resources = tmp_path / "resources"
+    resources.mkdir()
+    outside = tmp_path / "outside.pdf"
+    outside.write_bytes(b"%PDF-1.4 outside")
+    link = resources / "allowed.pdf"
+    try:
+        link.symlink_to(outside)
+    except OSError as exc:
+        pytest.skip(f"当前 Windows 环境不允许创建符号链接：{exc}")
+
+    run = analyze(sample_tables(), {})
+    run["source_index"][0]["source_check"]["textbook_slices"] = ["allowed.pdf"]
+    store = Store(tmp_path / "state", resources)
+    store.database.create_schema_for_tests()
+    with store.uow_factory() as uow:
+        uow.runs.save(run)
+    response = TestClient(create_app(store)).get(
+        "/api/source", params={"file": "allowed.pdf"}
+    )
+    assert response.status_code == 400
+    assert response.json()["code"] == "RESOURCE_NOT_FOUND"
 
 
 def test_static_asset_errors_use_common_error_contract(tmp_path: Path):

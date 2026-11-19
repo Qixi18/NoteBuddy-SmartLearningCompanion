@@ -20,11 +20,16 @@ class SourceService:
     def resolve(self, run: dict, name: str) -> Path | None:
         if name not in self.allowed_names(run) or Path(name).name != name:
             raise ValueError("来源文件不在允许范围")
-        candidates = [
-            self.resources_dir / name,
-            Path(run.get("source_root", "")) / "5_课程标准及相关教学资源" / name,
+        roots = [
+            self.resources_dir,
+            Path(run.get("source_root", "")) / "5_课程标准及相关教学资源",
         ]
-        return next((path for path in candidates if path.is_file()), None)
+        for root in roots:
+            base = root.resolve()
+            path = (root / name).resolve()
+            if path.is_relative_to(base) and path.is_file():
+                return path
+        return None
 
     def read_pdf(self, run: dict, name: str) -> bytes:
         path = self.resolve(run, name)

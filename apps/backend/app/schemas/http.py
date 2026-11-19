@@ -3,7 +3,9 @@
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+MAX_IMPORT_FILES_BYTES = 16 * 1024 * 1024
 
 
 class ImportRequest(BaseModel):
@@ -22,6 +24,15 @@ class ImportRequest(BaseModel):
 class ImportFilesRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     files: dict[str, str]
+
+    @model_validator(mode="after")
+    def csv_content_within_size_limit(self):
+        total_bytes = sum(
+            len(content.encode("utf-8")) for content in self.files.values()
+        )
+        if total_bytes > MAX_IMPORT_FILES_BYTES:
+            raise ValueError("上传 CSV 内容总大小不能超过 16 MiB")
+        return self
 
 
 class DraftRequest(BaseModel):

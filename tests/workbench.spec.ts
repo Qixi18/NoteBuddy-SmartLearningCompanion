@@ -59,11 +59,70 @@ test('loads the local workbench and imports the sample bundle', async ({ page })
   await page.getByLabel('测验节点').selectOption('N01');
   await expect(page.getByText('C1 · 节点 N01')).toBeVisible();
 
+  await page.setViewportSize({ width: 1024, height: 900 });
   await page.getByRole('link', { name: '教学方案' }).click();
   await expect(page.getByRole('heading', { name: '建议复核', exact: true })).toBeVisible();
   await page.getByLabel('测验节点').selectOption('N01');
+  const scopeControls = page.locator('.scope-fields select');
+  await expect(scopeControls).toHaveCount(3);
+  for (const control of await scopeControls.all()) {
+    expect((await control.boundingBox())?.width ?? 0).toBeGreaterThan(300);
+  }
   await page.getByRole('button', { name: '生成规则草稿' }).click();
   await expect(page.getByRole('heading', { name: '教师复核内容' })).toBeVisible();
   await expect(page.getByText('未确认 · 请核对左侧证据和来源边界')).toBeVisible();
   expect(pageErrors).toEqual([]);
+});
+
+test('all eight routes render on direct hash load, refresh, history, and unknown hashes', async ({ page }) => {
+  const routes = [
+    ['/home', '全局概览'],
+    ['/knowledge/indicators', '学习要求与来源'],
+    ['/insights/classes', '班级概览'],
+    ['/insights/students', '学生分析'],
+    ['/insights/evidence', '作答证据'],
+    ['/insights/quality', '数据质量'],
+    ['/plan/reviews', '建议复核'],
+    ['/plan/cases', '案例与导出'],
+  ] as const;
+  const files = sampleCsvFiles();
+  expect(files).toHaveLength(6);
+  await page.goto('/#/knowledge/indicators');
+  const emptyState = page.getByRole('heading', { name: '先导入一份学情数据', level: 1 });
+  const knowledge = page.getByRole('heading', { name: '学习要求与来源', level: 1 });
+  await expect(emptyState.or(knowledge)).toBeVisible();
+  if (await emptyState.isVisible()) {
+    await page.getByRole('main').getByLabel('选择 CSV 文件夹').setInputFiles(bundlePath);
+    await expect(page.locator('.first-run .card form [role="status"]')).toContainText('6 个文件');
+    await page.getByRole('button', { name: '检查文件并导入' }).click();
+    await expect(page.locator('#message')).toContainText('数据已导入，当前运行已更新。');
+  }
+  await page.goto('/#/home');
+  await expect(page.getByRole('heading', { name: '全局概览', level: 1 })).toBeVisible();
+
+  for (const [path, title] of routes) {
+    await page.goto(`/#${path}`);
+    await expect(page.getByRole('heading', { name: title, level: 1 })).toBeVisible();
+    await page.reload();
+    await expect(page.getByRole('heading', { name: title, level: 1 })).toBeVisible();
+    if (path === '/home') {
+      await expect(page.getByRole('link', { name: '全局概览' })).toHaveAttribute('aria-current', 'page');
+    } else {
+      await expect(page.getByRole('link', { name: title, exact: true })).toHaveAttribute('aria-current', 'page');
+      const section = path.startsWith('/knowledge/') ? '学科知识' : path.startsWith('/insights/') ? '学情洞察' : '教学方案';
+      await expect(page.getByRole('link', { name: section, exact: true })).toHaveClass(/active/);
+    }
+  }
+
+  await page.goto('/#/home');
+  await page.getByRole('link', { name: '学科知识' }).click();
+  await expect(page.getByRole('heading', { name: '学习要求与来源', level: 1 })).toBeVisible();
+  await page.goBack();
+  await expect(page.getByRole('heading', { name: '全局概览', level: 1 })).toBeVisible();
+  await page.goForward();
+  await expect(page.getByRole('heading', { name: '学习要求与来源', level: 1 })).toBeVisible();
+
+  await page.goto('/#/made-up-route');
+  await expect(page).toHaveURL(/#\/home$/);
+  await expect(page.getByRole('heading', { name: '全局概览', level: 1 })).toBeVisible();
 });

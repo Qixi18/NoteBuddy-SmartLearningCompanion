@@ -44,16 +44,30 @@ def read_bundle(folder: Path, storage: FileStorage | None = None) -> tuple[dict,
             text = raw.decode("utf-8-sig")
         except UnicodeDecodeError as exc:
             raise ValueError(f"{path.name} 不是 UTF-8 编码") from exc
-        reader = csv.DictReader(io.StringIO(text, newline=""))
+        source = io.StringIO(text, newline="")
+        consumed_lines = 0
+
+        def source_lines():
+            nonlocal consumed_lines
+            for line in source:
+                consumed_lines += 1
+                yield line
+
+        reader = csv.DictReader(source_lines(), strict=True)
         missing = set(required) - set(reader.fieldnames or [])
         if missing:
             raise ValueError(f"{path.name} 缺少字段：{', '.join(sorted(missing))}")
         rows = []
-        for row in reader:
-            line = reader.line_num
-            if None in row:
-                raise ValueError(f"{path.name} 第 {line} 行字段数量不符")
-            rows.append({**row, "_source_line": line})
+        try:
+            for row in reader:
+                line = reader.line_num
+                if None in row:
+                    raise ValueError(f"{path.name} 第 {line} 行字段数量不符")
+                rows.append({**row, "_source_line": line})
+        except csv.Error as exc:
+            raise ValueError(
+                f"{path.name} 第 {consumed_lines} 行 CSV 格式错误：{exc}"
+            ) from exc
         tables[name] = rows
         files[name] = {
             "name": path.name,

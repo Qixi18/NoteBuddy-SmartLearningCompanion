@@ -1,3 +1,5 @@
+import pytest
+
 from app.services.task02.analysis_service import analyze
 
 
@@ -110,6 +112,64 @@ def test_node_metrics_preserve_legacy_aggregate_and_separate_denominators():
     )
 
 
+def test_class_weighted_ratio_is_recomputed_from_score_and_maximum_totals():
+    tables = _tables()
+    tables["模拟学生"].append({"学生编号": "D02", "模拟班级编号": "C1"})
+    tables["作答记录"] = [
+        _row("R-small", "E-small", "Q001", "N01", score="1", maximum="2"),
+        _row("R-large", "E-large", "Q001", "N01", score="8", maximum="10"),
+    ]
+    tables["题目与材料"][0]["满分"] = "2"
+    # Use a second item whose declared maximum agrees with its response.
+    tables["题目与材料"].append(
+        {"材料编号": "Q010", "主题编号": "T01", "指标编号": "I1", "满分": "10"}
+    )
+    tables["测验节点"][0]["可用题目编号"] = "Q001 Q010"
+    tables["作答记录"][1]["材料编号"] = "Q010"
+    tables["作答记录"][1]["学生编号"] = "D02"
+
+    run = analyze(tables, {})
+    class_metric = next(
+        metric
+        for metric in run["metrics"]
+        if metric["kind"] == "class_indicator" and metric["key"] == "C1:I1@N01"
+    )
+    independent_score = sum(int(row["得分"]) for row in tables["作答记录"])
+    independent_maximum = sum(int(row["满分"]) for row in tables["作答记录"])
+    independent_weighted_ratio = independent_score / independent_maximum
+    unweighted_student_average = ((1 / 2) + (8 / 10)) / 2
+
+    assert class_metric["score"] == independent_score == 9
+    assert class_metric["maximum"] == independent_maximum == 12
+    assert class_metric["ratio"] == independent_weighted_ratio == 0.75
+    assert class_metric["ratio"] != unweighted_student_average
+
+
+def test_student_and_class_node_metrics_use_disjoint_node_records():
+    tables = _tables()
+    tables["模拟学生"].append({"学生编号": "D02", "模拟班级编号": "C1"})
+    tables["测验节点"].append({"节点编号": "N04", "可用题目编号": "Q001"})
+    tables["作答记录"] = [
+        _row("R-n01", "E-n01", "Q001", "N01", score="1", maximum="2"),
+        _row("R-n04", "E-n04", "Q001", "N04", score="2", maximum="2"),
+    ]
+    tables["作答记录"][1]["学生编号"] = "D02"
+
+    run = analyze(tables, {})
+    metrics = {
+        metric["key"]: metric
+        for metric in run["metrics"]
+        if metric["kind"] in {"student_indicator", "class_indicator"}
+        and metric.get("node_id")
+    }
+    assert metrics["D01:I1@N01"]["record_ids"] == ["R-n01"]
+    assert metrics["D01:I1@N01"]["score"] == 1
+    assert metrics["C1:I1@N01"]["record_ids"] == ["R-n01"]
+    assert metrics["C1:I1@N04"]["record_ids"] == ["R-n04"]
+    assert metrics["C1:I1@N04"]["score"] == 2
+    assert "R-n04" not in metrics["D01:I1@N01"]["record_ids"]
+
+
 def test_node_with_available_question_but_no_student_record_is_unknown_no_record():
     tables = _tables()
     tables["测验节点"].append({"节点编号": "N04", "可用题目编号": "Q001"})
@@ -124,6 +184,64 @@ def test_node_with_available_question_but_no_student_record_is_unknown_no_record
     assert observation["state"] == "no_record"
     assert observation["unknown_reason"] == "no_record"
     assert observation["available_item_count"] == 1
+
+
+@pytest.mark.parametrize(
+    ("row", "expected_state", "expected_score", "expected_ratio"),
+    [
+        (_row("R-zero", "E-zero", "Q001", "N01", score="0"), "scored", 0.0, 0.0),
+        (
+            _row("R-pending", "E-pending", "Q001", "N01", "待评分", score=""),
+            "pending",
+            None,
+            None,
+        ),
+        (
+            _row("R-unanswered", "E-unanswered", "Q001", "N01", "未作答", score=""),
+            "unanswered",
+            None,
+            None,
+        ),
+        (
+            _row("R-zero-max", "E-zero-max", "Q001", "N01", score="0", maximum="0"),
+            "excluded",
+            None,
+            None,
+        ),
+    ],
+)
+def test_node_observation_distinguishes_zero_from_empty_or_invalid_denominators(
+    row, expected_state, expected_score, expected_ratio
+):
+    tables = _tables()
+    tables["作答记录"] = [row]
+    if row["记录编号"] == "R-zero-max":
+        tables["题目与材料"][0]["满分"] = "0"
+    run = analyze(tables, {})
+    observation = next(
+        item
+        for item in run["observations"]
+        if item["student_id"] == "D01"
+        and item["indicator_id"] == "I1"
+        and item["node_id"] == "N01"
+    )
+
+    assert observation["state"] == expected_state
+    metric = next(
+        (
+            item
+            for item in run["metrics"]
+            if item.get("student_id") == "D01" and item.get("node_id") == "N01"
+        ),
+        None,
+    )
+    if expected_score is None:
+        assert metric is None
+        assert observation["scored_count"] == 0
+    else:
+        assert metric["score"] == expected_score
+        assert metric["ratio"] == expected_ratio
+        assert observation["scored_count"] == 1
 
 
 def test_quarantined_revision_events_are_excluded_not_absent():
@@ -147,6 +265,50 @@ def test_quarantined_revision_events_are_excluded_not_absent():
         assert observation["quarantined_record_ids"] == ["R1", "R2"]
         assert run["quality"]["disposition_counts"]["excluded"] == 2
         assert run["quality"]["disposition_counts"].get("superseded", 0) == 0
+
+
+@pytest.mark.parametrize("bad_version", ["0", "-1", "bad", "1.5", ""])
+def test_unorderable_revisions_quarantine_each_raw_row_once(bad_version):
+    tables = _tables()
+    tables["作答记录"] = [
+        _row("R1", "E-version", "Q001", "N01", version="1", line=2),
+        _row("R2", "E-version", "Q001", "N01", version=bad_version, line=3),
+    ]
+    run = analyze(tables, {})
+    dispositions = run["quality"]["record_dispositions"]
+    ids = [row["record_id"] for row in dispositions]
+
+    assert sorted(ids) == ["R1", "R2"]
+    assert len(ids) == len(set(ids))
+    assert sum(run["quality"]["disposition_counts"].values()) == 2
+    assert run["quality"]["disposition_counts"] == {"excluded": 2}
+    assert run["quality"]["eligible_scored"] == 0
+    assert not any(row["作答事件编号"] == "E-version" for row in run["responses"])
+
+
+def test_invalid_highest_revision_never_falls_back_to_valid_lower_revision():
+    tables = _tables()
+    tables["作答记录"] = [
+        _row("R1", "E-invalid-high", "Q001", "N01", score="1", version="1", line=2),
+        _row("R2", "E-invalid-high", "Q001", "N01", score="bad", version="2", line=3),
+    ]
+    run = analyze(tables, {})
+    dispositions = {
+        row["record_id"]: row["disposition"]
+        for row in run["quality"]["record_dispositions"]
+    }
+
+    assert dispositions == {"R1": "superseded", "R2": "excluded"}
+    assert run["quality"]["eligible_scored"] == 0
+    assert [row["记录编号"] for row in run["responses"]] == ["R2"]
+    assert all(
+        "R1" not in metric["record_ids"] and "R2" not in metric["record_ids"]
+        for metric in run["metrics"]
+    )
+    assert any(
+        finding["record_id"] == "R2" and finding["code"] == "invalid_score"
+        for finding in run["quality"]["findings"]
+    )
 
 
 def _rubric_run(point_scores, total_score="1", rubric=None):

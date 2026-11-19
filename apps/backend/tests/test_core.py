@@ -257,6 +257,27 @@ def test_csv_requires_fields_consumed_by_statistics(tmp_path: Path):
         raise AssertionError("统计直接读取的必需字段缺失时应在导入阶段返回可读错误")
 
 
+def test_csv_rejects_malformed_quoting_with_readable_error(tmp_path: Path):
+    import csv
+    from app.services.analysis import TABLES, read_bundle
+
+    for name, required in TABLES.items():
+        path = tmp_path / f"{name}.csv"
+        with path.open("w", encoding="utf-8", newline="") as file:
+            writer = csv.writer(file)
+            writer.writerow(required)
+            if name == "课程要求":
+                file.write('T01,T01I1,"未闭合描述\n')
+
+    try:
+        read_bundle(tmp_path)
+    except ValueError as exc:
+        assert "课程要求.csv" in str(exc)
+        assert "格式错误" in str(exc)
+    else:
+        raise AssertionError("格式损坏的 CSV 必须在导入时以可读错误拒绝")
+
+
 def test_non_sample_bundle_import(tmp_path: Path):
     import csv
     from app.services.analysis import TABLES
@@ -461,6 +482,29 @@ def test_public_bundle_if_available():
     assert run["quality"]["events"] == 799
     assert run["quality"]["finding_counts"]["multiple_revisions"] == 7
     assert run["quality"]["finding_counts"]["invalid_score"] >= 2
+    assert run["quality"]["eligible_scored"] == 786
+    eligible_keys = {
+        (row["record_id"], row["source_line"])
+        for row in run["quality"]["record_dispositions"]
+        if row["disposition"] == "scored"
+    }
+    response_rows = {
+        (row["记录编号"], row["_source_line"]): row for row in tables["作答记录"]
+    }
+    eligible_rows = [response_rows[key] for key in eligible_keys]
+    independent_score = sum(int(row["得分"]) for row in eligible_rows)
+    independent_maximum = sum(int(row["满分"]) for row in eligible_rows)
+    assert independent_score == 744
+    assert independent_maximum == 1304
+    assert (
+        sum(metric["score"] for metric in run["metrics"] if metric["kind"] == "class")
+        == independent_score
+    )
+    assert (
+        sum(metric["maximum"] for metric in run["metrics"] if metric["kind"] == "class")
+        == independent_maximum
+    )
+    assert abs((744 / 1304) - (independent_score / independent_maximum)) < 1e-12
     cases = suggest_cases(run)
     assert len({c["student_id"] for c in cases}) == 3
     assert {c["type"] for c in cases} == {"部分得分", "表现较好", "记录较少"}

@@ -5,8 +5,10 @@ import reviewRequest from '../../../../contracts/api/review-request.json';
 import reviewSuccess from '../../../../contracts/api/review-success.json';
 import draftFixture from '../../../../contracts/api/draft.json';
 import analysisRunFixture from '../../../../contracts/api/analysis-run.json';
+import sourceVerificationFixture from '../../../../contracts/api/source-verification.json';
+import teacherCaseFixture from '../../../../contracts/api/teacher-case.json';
 import { api, jsonRequest, learningApi } from './client';
-import type { AnalysisRun } from './types';
+import type { AnalysisRun, SourceVerificationPayload, TeacherCasePayload } from './types';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -50,5 +52,13 @@ describe('shared API fixtures', () => {
     expect(run.quality.disposition_counts?.scored).toBe(1);
     expect(run.quality.record_dispositions?.[1].disposition).toBe('superseded');
     expect(run.rubric_observations?.[0].points[0].point_id).toBe('Q001P1');
+  });
+
+  it('validates shared source verification and teacher case request fixtures', () => {
+    const sourcePayload = sourceVerificationFixture as unknown as SourceVerificationPayload;
+    const casePayload = teacherCaseFixture as unknown as TeacherCasePayload;
+    expect(sourcePayload.status).toBe('verified');
+    expect(sourcePayload.knowledge_links).toEqual([]);
+    expect(casePayload.review_refs[0]).toEqual({ indicator_id: 'T01I1', node_id: 'N01', version: 1 });
   });
 });

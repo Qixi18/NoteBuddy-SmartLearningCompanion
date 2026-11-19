@@ -501,6 +501,7 @@ summary { min-height: 28px; }
   .sidebar { width: 208px; }
   .workspace { margin-left: 208px; }
   .page-content { padding-inline: 22px; }
+  .scope-fields { grid-template-columns: 1fr; }
   .overview-detail-grid { grid-template-columns: 1fr 1fr; }
   .entry-list { gap: 9px; }
   .entry-link { gap: 9px; padding: 13px; }
