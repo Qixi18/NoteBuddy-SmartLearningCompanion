@@ -131,6 +131,9 @@ def build_case_report(
                     "reviewer": review.get("reviewer", ""),
                     "structured_plan": review.get("structured_plan"),
                     "teaching_plan_v2": review.get("teaching_plan_v2"),
+                    "source_verification_versions": review.get(
+                        "source_verification_versions", {}
+                    ),
                     "source_status": source.get("status", "unknown")
                     if source
                     else "unknown",

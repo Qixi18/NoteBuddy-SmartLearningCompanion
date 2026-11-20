@@ -37,7 +37,7 @@ describe('ExportPanel', () => {
     const button = await screen.findByRole('button', { name: '前往来源核验' });
     expect(release).toHaveBeenCalledWith(ids, 'N02', '', false);
     fireEvent.click(button);
-    expect(scope.onNavigate).toHaveBeenCalledWith('/knowledge/indicators');
+    expect(scope.onNavigate).toHaveBeenCalledWith('/requirements');
     expect((screen.getByRole('button', { name: '下载正式提交包' }) as HTMLButtonElement).disabled).toBe(true);
   });
 

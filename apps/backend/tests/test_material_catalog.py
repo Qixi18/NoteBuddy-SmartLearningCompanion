@@ -1,4 +1,5 @@
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 from app.services.task01.material_catalog_service import build_material_catalog
@@ -157,6 +158,34 @@ def test_catalog_includes_unscoped_material_only_after_verified_mapping(tmp_path
     ]
     assert visible[0]["material_id"] == "TB01"
     assert visible[0]["source_locator"] == "教材第 68 页"
+
+
+def test_catalog_inspects_a_shared_pdf_once_per_response():
+    run = {
+        "run_id": "run-3",
+        "source_index": [
+            {
+                "indicator_id": indicator,
+                "topic_id": "T01",
+                "source_check": {
+                    "curriculum_file_page": 1,
+                    "textbook_slices": ["shared.pdf"],
+                },
+            }
+            for indicator in ("I1", "I2", "I3")
+        ],
+        "items": [],
+    }
+    sources = Mock()
+    sources.inspect_pdf.return_value = {
+        "available": False,
+        "name": "shared.pdf",
+    }
+
+    catalog = build_material_catalog(run, sources, {})
+
+    assert len(catalog["indicators"]) == 3
+    assert sources.inspect_pdf.call_count == 2
 
 
 def test_material_catalog_http_contract_is_available(tmp_path):

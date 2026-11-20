@@ -31,6 +31,7 @@ def build_material_catalog(
         if item.get("材料编号")
     }
     indicators = []
+    inspected_documents = {}
     for entry in run.get("source_index", []):
         indicator_id = entry.get("indicator_id", "")
         topic_id = entry.get("topic_id", "")
@@ -89,7 +90,9 @@ def build_material_catalog(
         )
         documents = []
         for name, expected_page, source_kind in document_specs:
-            inspection = sources.inspect_pdf(run, name)
+            if name not in inspected_documents:
+                inspected_documents[name] = sources.inspect_pdf(run, name)
+            inspection = inspected_documents[name]
             documents.append(
                 {
                     **inspection,

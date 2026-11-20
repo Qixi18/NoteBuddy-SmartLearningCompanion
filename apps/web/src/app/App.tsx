@@ -1,41 +1,72 @@
 import { useEffect, useRef, useState } from 'react';
 import { useWorkbench } from './hooks/useWorkbench';
+import { useAnalysisScope } from './hooks/useAnalysisScope';
 import { ImportPanel } from '../features/import/ImportPanel';
 import { WorkbenchPage } from '../pages/WorkbenchPages';
-import { normalizeHash, routeFor, routes, type RoutePath } from './navigation';
-import { NavIcon } from '../components/NavIcon';
-
-const primary = [
-  { title: '全局概览', path: '/home' as RoutePath, icon: 'overview' as const },
-  { title: '学科知识', path: '/knowledge/indicators' as RoutePath, icon: 'subject' as const },
-  { title: '学情洞察', path: '/insights/classes' as RoutePath, icon: 'insights' as const },
-  { title: '教学方案', path: '/plan/reviews' as RoutePath, icon: 'teaching' as const },
-];
+import { parseNavigationHash, resolveCaseStudentIds, routeFor, serializeNavigation, type NavigationState } from './navigation';
+import { WorkflowNav } from '../components/WorkflowNav';
+import { ScopeBar } from '../components/ScopeBar';
 
 export function App() {
   const workbench = useWorkbench();
-  const [path, setPath] = useState<RoutePath>(() => normalizeHash(window.location.hash));
+  const [navigation, setNavigation] = useState<NavigationState>(() => parseNavigationHash(window.location.hash));
+  const path = navigation.path;
   const [importOpen, setImportOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
   const sidebar = useRef<HTMLElement>(null);
   const [focusEvidence, setFocusEvidence] = useState<{ recordId: string; sourceLine: number } | null>(null);
+  const evidenceReturnFocus = useRef<HTMLElement | null>(null);
+  const [dataRevision, setDataRevision] = useState(0);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const dirtyRef = useRef(false);
+  const lastCommittedHash = useRef(window.location.hash || '#/home');
+  const previousRunId = useRef<string | null>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const initialRoute = useRef(true);
   const page = routeFor(path);
+  const caseIds = resolveCaseStudentIds(navigation, workbench.run?.run_id ?? null, workbench.run?.students.map(student => student['学生编号']) ?? []);
+  const reportNodeId = workbench.run && navigation.runId === workbench.run.run_id && workbench.run.nodes.some(item => item['节点编号'] === navigation.reportNodeId)
+    ? navigation.reportNodeId ?? '' : '';
+
+  const { scope } = useAnalysisScope(workbench.run, navigation, {
+    student: workbench.setStudent,
+    indicator: workbench.setIndicator,
+    node: workbench.setNode,
+  });
 
   useEffect(() => {
     const sync = () => {
-      const next = normalizeHash(window.location.hash);
-      if (window.location.hash !== `#${next}`) window.history.replaceState(null, '', `#${next}`);
-      setPath(next);
+      if (dirtyRef.current) {
+        if (!window.confirm('当前内容尚未保存。离开将丢失本次编辑，是否继续？')) {
+          window.history.replaceState(null, '', lastCommittedHash.current);
+          return;
+        }
+        dirtyRef.current = false;
+        setHasUnsavedChanges(false);
+      }
+      const next = parseNavigationHash(window.location.hash);
+      const canonicalHash = serializeNavigation(next);
+      if (window.location.hash !== canonicalHash) window.history.replaceState(null, '', canonicalHash);
+      lastCommittedHash.current = canonicalHash;
+      setNavigation(next);
       setNavOpen(false);
     };
     if (!window.location.hash) window.history.replaceState(null, '', '#/home');
     else sync();
     window.addEventListener('hashchange', sync);
     return () => window.removeEventListener('hashchange', sync);
+  }, []);
+  useEffect(() => { dirtyRef.current = hasUnsavedChanges; }, [hasUnsavedChanges]);
+  useEffect(() => {
+    const protectClose = (event: BeforeUnloadEvent) => {
+      if (!dirtyRef.current) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', protectClose);
+    return () => window.removeEventListener('beforeunload', protectClose);
   }, []);
 
   useEffect(() => {
@@ -48,6 +79,19 @@ export function App() {
     if (initialRoute.current) initialRoute.current = false;
     else titleRef.current?.focus();
   }, [path]);
+  useEffect(() => {
+    const nextRunId = workbench.run?.run_id;
+    if (!nextRunId) return;
+    const previous = previousRunId.current;
+    previousRunId.current = nextRunId;
+    if (!previous || previous === nextRunId) return;
+    const next: NavigationState = { path: '/home', runId: nextRunId };
+    const hash = serializeNavigation(next);
+    window.history.replaceState(null, '', hash);
+    setNavigation(next);
+    setFocusEvidence(null);
+    workbench.announce('当前数据批次已变化，旧范围选择已清除。');
+  }, [workbench.run?.run_id]);
   useEffect(() => {
     if (importOpen) {
       if (!dialogRef.current?.open) dialogRef.current?.showModal();
@@ -66,15 +110,73 @@ export function App() {
     return () => wideLayout.removeEventListener('change', closeOnResize);
   }, [navOpen]);
 
-  const navigate = (next: RoutePath) => {
-    setNavOpen(false);
-    if (path !== next) window.location.hash = next;
-    else window.requestAnimationFrame(() => titleRef.current?.focus());
+  const confirmLeave = () => {
+    if (!hasUnsavedChanges) return true;
+    if (!window.confirm('当前内容尚未保存。离开将丢失本次编辑，是否继续？')) return false;
+    dirtyRef.current = false;
+    setHasUnsavedChanges(false);
+    return true;
   };
+  const navigate = (target: string | NavigationState) => {
+    const parsed = typeof target === 'string' ? parseNavigationHash(`#${target.replace(/^#/, '')}`) : target;
+    const next: NavigationState = typeof target === 'string' ? {
+      ...parsed,
+      runId: scope.runId || undefined,
+      caseStudentIds: navigation.caseStudentIds,
+      reportNodeId: navigation.reportNodeId,
+      nodeId: parsed.nodeId ?? (scope.nodeId || undefined),
+      indicatorId: parsed.indicatorId ?? (scope.indicatorId || undefined),
+      classId: parsed.classId ?? (scope.classId || undefined),
+      studentId: parsed.studentId ?? (scope.studentId || undefined),
+      recordId: parsed.path === '/performance' && parsed.view === 'evidence' ? navigation.recordId : undefined,
+      sourceLine: parsed.path === '/performance' && parsed.view === 'evidence' ? navigation.sourceLine : undefined,
+    } : { ...parsed, caseStudentIds: parsed.caseStudentIds ?? navigation.caseStudentIds, reportNodeId: parsed.reportNodeId ?? navigation.reportNodeId };
+    setNavOpen(false);
+    const nextHash = serializeNavigation(next);
+    if (window.location.hash !== nextHash && !confirmLeave()) return;
+    if (window.location.hash !== nextHash) window.location.hash = nextHash;
+    else {
+      setNavigation(next);
+      lastCommittedHash.current = nextHash;
+      window.requestAnimationFrame(() => titleRef.current?.focus());
+    }
+    if (navigation.path === '/performance' && navigation.view === 'evidence' && next.path === '/performance' && next.view === 'student') {
+      window.requestAnimationFrame(() => evidenceReturnFocus.current?.focus());
+    }
+  };
+  const selectStudent = (studentId: string) => {
+    if (!confirmLeave()) return;
+    workbench.setStudent(studentId);
+    const selected = workbench.run?.students.find(item => item['学生编号'] === studentId);
+    navigate({
+      path, view: navigation.view, runId: workbench.run?.run_id,
+      nodeId: scope.nodeId || undefined, indicatorId: scope.indicatorId || undefined,
+      classId: selected?.['模拟班级编号'],
+      studentId: studentId || undefined,
+    });
+  };
+  const selectIndicator = (indicatorId: string) => {
+    if (!confirmLeave()) return;
+    workbench.setIndicator(indicatorId);
+    navigate({ path, view: navigation.view, runId: workbench.run?.run_id, nodeId: scope.nodeId || undefined, classId: scope.classId || undefined, studentId: scope.studentId || undefined, indicatorId: indicatorId || undefined });
+  };
+  const selectNode = (nodeId: string) => {
+    if (!confirmLeave()) return;
+    workbench.setNode(nodeId);
+    navigate({ path, view: navigation.view, runId: workbench.run?.run_id, indicatorId: scope.indicatorId || undefined, classId: scope.classId || undefined, studentId: scope.studentId || undefined, nodeId: nodeId || undefined });
+  };
+  const selectCases = (ids: string[]) => {
+    const runId = workbench.run?.run_id;
+    const sanitized = (ids.slice(0, 3).map(id => id && workbench.run?.students.some(student => student['学生编号'] === id) ? id : '')).map((id, index, values) => id && values.indexOf(id) !== index ? '' : id);
+    navigate({ path, view: navigation.view, runId, nodeId: scope.nodeId || undefined, indicatorId: scope.indicatorId || undefined, classId: scope.classId || undefined, studentId: scope.studentId || undefined, caseStudentIds: sanitized, reportNodeId: reportNodeId || undefined });
+  };
+  const selectReportNode = (nodeId: string) => navigate({ path, view: navigation.view, runId: workbench.run?.run_id, nodeId: scope.nodeId || undefined, indicatorId: scope.indicatorId || undefined, classId: scope.classId || undefined, studentId: scope.studentId || undefined, caseStudentIds: caseIds, reportNodeId: nodeId || undefined });
+  const resetStaleScope = () => navigate({ path, view: navigation.view, runId: workbench.run?.run_id });
   const imported = async (id: string) => {
     const refreshed = await workbench.refresh();
     setImportOpen(false);
-    navigate('/home');
+    setFocusEvidence(null);
+    navigate({ path: '/home', runId: id });
     if (refreshed !== true) {
       workbench.announce(`数据已导入（运行 ${id}），但当前视图未能刷新：${refreshed}。`, true);
       return;
@@ -91,16 +193,7 @@ export function App() {
   }}>
     <aside id="workbench-navigation" ref={sidebar} className={`sidebar${navOpen ? ' is-open' : ''}`} aria-label="主导航">
       <a className="brand" href="#/home" onClick={event => { event.preventDefault(); navigate('/home'); }}><span className="brand-mark" aria-hidden="true">知</span><span>智慧学伴<small>证据工作台</small></span></a>
-      <nav aria-label="主要功能">
-        {primary.map(item => {
-          const active = page.section === item.title;
-          const children = routes.filter(route => route.section === item.title && route.title !== item.title);
-          return <div className="nav-group" key={item.title}>
-            <a className={`nav-link${active ? ' active' : ''}`} href={`#${item.path}`} aria-current={active && path === item.path ? 'page' : undefined} onClick={event => { event.preventDefault(); navigate(item.path); }}><NavIcon name={item.icon} /><span>{item.title}</span></a>
-            {children.length > 0 && <div className={`subnav${active ? ' is-current' : ''}`} aria-label={`${item.title}子页面`}>{children.map(child => <a key={child.path} className={`subnav-link${path === child.path ? ' active' : ''}`} href={`#${child.path}`} aria-current={path === child.path ? 'page' : undefined} onClick={event => { event.preventDefault(); navigate(child.path); }}>{child.title}</a>)}</div>}
-          </div>;
-        })}
-      </nav>
+      <WorkflowNav path={path} onNavigate={navigate} />
       <div className="sidebar-note"><span className="local-state-dot" aria-hidden="true" />本地工作台</div>
     </aside>
     {navOpen && <div className="mobile-nav-backdrop" aria-hidden="true" onClick={() => {
@@ -114,12 +207,14 @@ export function App() {
           <span className="menu-glyph" aria-hidden="true" /> 导航
         </button>
         <span className="mobile-brand">智慧学伴</span>
-        <div className="breadcrumb">智慧学伴 <span aria-hidden="true">/</span> {page.section}{page.title !== page.section && <> <span aria-hidden="true">/</span> {page.title}</>}</div><div className="topbar-actions">{workbench.run && <span className="local-processing"><span aria-hidden="true" />本地数据</span>}{workbench.run && <button className="topbar-import" onClick={() => { setNavOpen(false); setImportOpen(true); }}>导入数据</button>}</div></header>
+        <div className="breadcrumb">智慧学伴 <span aria-hidden="true">/</span> {page.section}{page.title !== page.section && <> <span aria-hidden="true">/</span> {page.title}</>}</div><div className="topbar-actions">{workbench.run && <span className="local-processing"><span aria-hidden="true" />本地数据</span>}{workbench.run && <button className="topbar-import" onClick={() => { if (!confirmLeave()) return; setNavOpen(false); setImportOpen(true); }}>导入数据</button>}</div></header>
       <main className="page-content" inert={navOpen}>
         {workbench.run && <div className="page-heading"><div><h1 ref={titleRef} tabIndex={-1}>{page.title}</h1><p>{page.description}</p></div><details className="run-details"><summary><span className="run-details-label">当前数据批次</span><strong>{new Date(workbench.run.created_at).toLocaleDateString('zh-CN')}</strong><span className="run-chevron" aria-hidden="true" /></summary><div className="run-details-popover"><span>运行编号</span><code>{workbench.run.run_id}</code><span>规则版本 {workbench.run.rule_version}</span></div></details></div>}
+        {workbench.run && path !== '/home' && <ScopeBar run={workbench.run} scope={scope} />}
         {workbench.message && <p id="message" className={`global-message${workbench.error ? ' error' : ''}`} role={workbench.error ? 'alert' : 'status'} aria-live={workbench.error ? 'assertive' : 'polite'}>{workbench.message}</p>}
+        {scope.notice && <p className="scope-expired-notice" role="status">{scope.notice} <button className="text-action" onClick={resetStaleScope}>重新选择范围</button></p>}
         {workbench.error && workbench.run && <div className="retry-row"><button className="secondary" onClick={() => void workbench.refresh()}>重试读取当前运行</button></div>}
-        {workbench.loading && !workbench.run ? <div className="loading-state" role="status">正在读取本机分析服务…</div> : workbench.error && !workbench.run ? <section className="empty-state connection-error"><h1>无法读取分析数据</h1><p role="alert">{workbench.message}</p><button className="secondary" onClick={() => void workbench.refresh()}>重试连接</button></section> : <WorkbenchPage key={workbench.run?.run_id ?? 'empty'} path={path} run={workbench.run} reviews={workbench.reviews} suggestions={workbench.suggestions} student={workbench.student} indicator={workbench.indicator} node={workbench.node} focusEvidence={focusEvidence} onEvidenceFocus={(recordId, sourceLine) => setFocusEvidence({ recordId, sourceLine })} draft={workbench.draft} onStudent={workbench.setStudent} onIndicator={workbench.setIndicator} onNode={workbench.setNode} onDraft={workbench.makeDraft} onSave={workbench.saveReview} onExport={workbench.exportCases} onNavigate={navigate} onImported={imported} onMessage={workbench.announce} />}
+        {workbench.loading && !workbench.run ? <div className="loading-state" role="status">正在读取本机分析服务…</div> : workbench.error && !workbench.run ? <section className="empty-state connection-error"><h1>无法读取分析数据</h1><p role="alert">{workbench.message}</p><button className="secondary" onClick={() => void workbench.refresh()}>重试连接</button></section> : <WorkbenchPage key={workbench.run?.run_id ?? 'empty'} path={path} view={navigation.view} run={workbench.run} reviews={workbench.reviews} suggestions={workbench.suggestions} student={workbench.student} indicator={workbench.indicator} node={workbench.node} focusEvidence={focusEvidence} caseIds={caseIds} onCaseIds={selectCases} reportNodeId={reportNodeId} onReportNode={selectReportNode} onEvidenceFocus={(recordId, sourceLine) => { evidenceReturnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; setFocusEvidence({ recordId, sourceLine }); }} draft={workbench.draft} onStudent={selectStudent} onIndicator={selectIndicator} onNode={selectNode} onDraft={workbench.makeDraft} onSave={workbench.saveReview} onExport={workbench.exportCases} onNavigate={navigate} onImported={imported} onMessage={workbench.announce} dataRevision={dataRevision} onDataChanged={() => setDataRevision(revision => revision + 1)} onDirtyChange={setHasUnsavedChanges} onBeforeScopeChange={confirmLeave} />}
       </main>
     </div>
 

@@ -41,6 +41,20 @@ describe('ReviewPanel', () => {
     expect((screen.getByRole('button', { name: '生成规则草稿' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it('shows a saved accepted plan as a read-only review and distinguishes its status', () => {
+    const review = {
+      status: 'accepted', node_id: 'N01', version: 3, original_draft: null, reviewer: '教师甲', updated_at: '2026-11-20',
+      diagnosis: '分数意义理解不稳', recommendation: '先用数轴表示', adjustment_condition: '若仍混淆则补充练习', reason: '对应本次作答',
+      source: 'rule', evidence_record_ids: [], model: null, prompt_version: null, structured_plan: null,
+    } as unknown as Review;
+    render(<ReviewPanel student="S1" indicator="I1" node="N01" review={review} draft={null} onDraft={vi.fn()} onSave={vi.fn()} />);
+    expect(screen.getByRole('heading', { name: '已复核建议' })).toBeTruthy();
+    expect(screen.getByText('分数意义理解不稳')).toBeTruthy();
+    expect(screen.getByText('先用数轴表示')).toBeTruthy();
+    expect(screen.getByText(/当前页面以已保存版本为只读内容/)).toBeTruthy();
+    expect(screen.queryByLabelText('建议')).toBeNull();
+  });
+
   it('passes the selected node when requesting a draft', () => {
     const onDraft = vi.fn();
     render(<ReviewPanel student="S1" indicator="I1" node="N02" draft={null} onDraft={onDraft} onSave={vi.fn()} />);

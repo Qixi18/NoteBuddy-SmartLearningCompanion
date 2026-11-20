@@ -93,9 +93,9 @@ Use the platform system sans stack for dependable Chinese rendering. Main page t
 
 ## Layout
 
-- Desktop-only, with 1024–1920px as the supported range. At 1024px, preserve usable controls and allow dense two-column workspaces to stack. Do not add mobile or tablet navigation work without a product change.
+- Desktop-first, with 1024–1920px as the supported range. At 1024px, preserve usable controls, stack dense two-column workspaces, and open evidence details full width. Narrower windows may wrap navigation or scroll dense tables locally; do not promise a complete mobile workbench.
 - Fixed left navigation at 232px; sticky top bar at 68px; content width capped at 1520px with 24–42px side padding.
-- Global overview leads with the current run's truthful scale, data quality, scope limitations, and the next useful action.
+- Start page identifies the current run, data boundaries, import action, and next useful task. Statistics remain secondary to the user's work.
 - Learning evidence uses clear master-detail layouts and compact filters. Tables or aligned rows should replace repeated long prose when the data is comparable.
 - Review uses a scope bar, evidence context, a distinct editable proposal, and an always-findable save action. Never show the same diagnosis and recommendation as both read-only copy and editable fields at the same time.
 - Teaching adjustments link a teacher-reviewed plan to later evidence for the same student, indicator, and node; show implementation, observations, and teacher comparability judgment without claiming score changes prove effectiveness.
@@ -104,8 +104,8 @@ Use the platform system sans stack for dependable Chinese rendering. Main page t
 
 ## Product Truth and Data Presentation
 
-- Product users include developers/demo presenters; the demonstrated workflow should still be understandable from an educator's perspective.
-- Keep the four primary areas: global overview, subject knowledge, learning insights, and teaching plan. TASK numbers remain internal.
+- Product users are teachers and people carrying out teacher review in demonstrations. Students may read reviewed tasks and hints; there is no separate student account or answer system.
+- Keep five primary pages: start, learning requirements, existing performance, learning recommendations, and cases/delivery. Analysis pages share validated scope; delivery case IDs and report node remain a separate run-bound selection. TASK numbers remain internal.
 - All displayed counts and claims come from current API data. Do not hardcode the screenshot fixture, invent trends, or add unsupported analysis.
 - Distinguish raw response rows, selected revisions, logical events, and eligible scored records. Pending is not zero; excluded evidence never enters score denominators; an item score is not a mastery claim.
 - Translate user-facing quality labels into Chinese while retaining original identifiers, enum values, record IDs, and source lines in traceable details.
@@ -115,7 +115,7 @@ Use the platform system sans stack for dependable Chinese rendering. Main page t
 
 ## Components and States
 
-- Navigation: named Chinese destinations, clear active state, visible focus, and subroutes grouped under the four primary areas.
+- Navigation: named Chinese destinations, clear active state, visible focus, and direct links to the five workflow pages. Reading location never implies a business sign-off.
 - Page heading: concise title, one useful task description, current-run details behind a secondary disclosure, and the import action.
 - Metric: number, unit, scope, denominator where relevant, and a restrained semantic tint.
 - Status: concise Chinese label, optional semantic color, and explanatory text for consequential states.

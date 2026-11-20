@@ -1,3 +1,5 @@
+import type { TeachingPlanV2 } from './teaching';
+
 export interface CaseReportEvidence {
   kind: 'coverage' | 'response';
   record_id?: string;
@@ -25,7 +27,8 @@ export interface CaseReportReview {
   reason: string;
   reviewer: string;
   structured_plan: { activity: string; steps: string[]; practice: string[]; observation_points: string[]; material_ids: string[] } | null;
-  teaching_plan_v2: { goal: string; steps: Array<{ step: string; rationale?: string }>; hints: Array<{ level: string; student_prompt: string; teacher_note: string }>; observation_points: string[]; adjustment_conditions: string[]; material_ids: string[] } | null;
+  teaching_plan_v2: TeachingPlanV2 | null;
+  source_verification_versions?: Record<string, number>;
   source_status: string;
 }
 
@@ -94,3 +97,4 @@ export interface SubmissionExportPayload {
   reviewer: string;
   content_reviewed: boolean;
 }
+

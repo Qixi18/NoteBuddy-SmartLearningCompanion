@@ -1,16 +1,15 @@
 import { useEffect, useState } from 'react';
 import { learningApi } from '../../api/client';
 import type { ReleasePreflight, Student } from '../../api/types';
-import type { RoutePath } from '../../app/navigation';
 import { Panel } from '../../components/Panel';
 
-const checkActions: Record<string, { label: string } & ({ target: string } | { route: RoutePath })> = {
-  confirmed_cases: { label: '前往案例确认', target: 'teacher-cases' },
-  evidence_references: { label: '前往案例证据签核', target: 'teacher-cases' },
-  teacher_reviews: { label: '前往建议复核', route: '/plan/reviews' },
-  source_signoffs: { label: '前往来源核验', route: '/knowledge/indicators' },
-  case_report: { label: '查看案例报告', target: 'case-report' },
-  class_report: { label: '查看班级报告', target: 'class-report' },
+const checkActions: Record<string, { label: string; route: string }> = {
+  confirmed_cases: { label: '前往案例确认', route: '/cases?view=prepare' },
+  evidence_references: { label: '前往案例证据签核', route: '/cases?view=prepare' },
+  teacher_reviews: { label: '前往建议复核', route: '/recommendations' },
+  source_signoffs: { label: '前往来源核验', route: '/requirements' },
+  case_report: { label: '查看案例报告', route: '/cases?view=report' },
+  class_report: { label: '查看班级报告', route: '/cases?view=report' },
 };
 
 type ExportProps = {
@@ -18,7 +17,7 @@ type ExportProps = {
   runId: string;
   ids: string[];
   node: string;
-  onNavigate: (path: RoutePath) => void;
+  onNavigate: (path: string) => void;
   onExport: (ids: string[]) => void;
 };
 
@@ -119,10 +118,7 @@ export function ExportPanel({ students, runId, ids, node, onNavigate, onExport }
           return <li className={`release-check status-${check.status}`} key={check.id}>
             <strong>{check.status === 'passed' ? '通过' : check.status === 'blocked' ? '阻断' : '待检查'} · {check.label}</strong>
             <p>{check.detail}</p>
-            {check.status === 'blocked' && action && <button className="text-action" onClick={() => {
-              if ('route' in action) onNavigate(action.route);
-              else document.getElementById(action.target)?.focus();
-            }}>{action.label} <span aria-hidden="true">↗</span></button>}
+            {check.status === 'blocked' && action && <button className="text-action" onClick={() => onNavigate(action.route)}>{action.label} <span aria-hidden="true">↗</span></button>}
           </li>;
         })}</ul>
       </>}

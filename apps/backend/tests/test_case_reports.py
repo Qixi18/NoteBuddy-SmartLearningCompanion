@@ -88,6 +88,7 @@ def test_case_report_uses_confirmed_stored_evidence_and_review_snapshot(report_d
     assert report["reviews"][0]["version"] == 3
     assert report["reviews"][0]["structured_plan"]["material_ids"] == ["Q1"]
     assert report["reviews"][0]["source_status"] == "verified"
+    assert report["reviews"][0]["source_verification_versions"] == {"I1": 1}
 
 
 def test_case_report_refuses_to_promote_candidates_or_other_run_cases(report_data):

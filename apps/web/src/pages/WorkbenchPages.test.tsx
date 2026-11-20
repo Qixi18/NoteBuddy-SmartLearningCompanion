@@ -5,6 +5,7 @@ import type { AnalysisRun, CaseSuggestion, Draft, Review } from '../api/types';
 import draftFixtureJson from '../../../../contracts/api/draft.json';
 import { WorkbenchPage } from './WorkbenchPages';
 import { learningApi } from '../api/client';
+import { parseNavigationHash } from '../app/navigation';
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
@@ -49,6 +50,12 @@ describe('WorkbenchPage empty state', () => {
     expect(screen.queryByText(/方案 PDF/)).toBeNull();
   });
 
+  it('does not invent a student target on the recommendation page', () => {
+    render(<WorkbenchPage {...defaults} path="/recommendations" student="" />);
+    expect(screen.getByText('请选择一名学生，再查看或生成对应范围的学习建议。')).not.toBeNull();
+    expect(screen.queryByRole('button', { name: '生成规则草稿' })).toBeNull();
+  });
+
   it('shows source availability and explains when model drafting is unavailable', async () => {
     vi.spyOn(learningApi, 'readiness').mockResolvedValue({
       sources: { status: 'available_unverified', pdf_count: 9 },
@@ -74,14 +81,13 @@ describe('WorkbenchPage empty state', () => {
     render(<WorkbenchPage {...defaults} run={run} path="/insights/classes" />);
     fireEvent.click(screen.getByText('查看本班学生（1）'));
     fireEvent.click(screen.getByRole('button', { name: 'D01' }));
-    expect(defaults.onStudent).toHaveBeenCalledWith('D01');
-    expect(defaults.onNavigate).toHaveBeenCalledWith('/insights/students');
+    expect(parseNavigationHash(`#${defaults.onNavigate.mock.calls.at(-1)?.[0]}`)).toMatchObject({ path: '/performance', view: 'student', studentId: 'D01' });
   });
 
   it('drills from a student and node scope into matching evidence', () => {
     render(<WorkbenchPage {...defaults} path="/insights/students" />);
     fireEvent.click(screen.getByRole('button', { name: '查看此范围作答证据' }));
-    expect(defaults.onNavigate).toHaveBeenCalledWith('/insights/evidence');
+    expect(parseNavigationHash(`#${defaults.onNavigate.mock.calls.at(-1)?.[0]}`)).toMatchObject({ path: '/performance', view: 'evidence', studentId: 'D01', indicatorId: 'I1', nodeId: 'N1' });
   });
 
   it('preserves unsaved review edits when navigating away and back', () => {
@@ -105,9 +111,6 @@ describe('WorkbenchPage empty state', () => {
     expect(screen.getByText('诊断：有证据的诊断')).not.toBeNull();
     expect(screen.queryByText('无关指标的复核')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '在建议复核中查看此证据' }));
-    expect(defaults.onStudent).toHaveBeenCalledWith('D01');
-    expect(defaults.onIndicator).toHaveBeenCalledWith('I1');
-    expect(defaults.onNode).toHaveBeenCalledWith('N1');
-    expect(defaults.onNavigate).toHaveBeenCalledWith('/plan/reviews');
+    expect(parseNavigationHash(`#${defaults.onNavigate.mock.calls.at(-1)?.[0]}`)).toMatchObject({ path: '/recommendations', view: 'read', studentId: 'D01', indicatorId: 'I1', nodeId: 'N1' });
   });
 });

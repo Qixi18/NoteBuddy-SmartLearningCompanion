@@ -21,6 +21,20 @@ vi.mock('../../api/client', () => ({
 afterEach(() => vi.clearAllMocks());
 
 describe('useWorkbench node scope', () => {
+  it('does not choose a student before the teacher selects one', async () => {
+    apiMocks.run.mockResolvedValue({
+      run_id: 'run-1', students: [{ '学生编号': 'D01', '模拟班级编号': 'DC01' }],
+      objectives: [{ '指标编号': 'I1' }], nodes: [], responses: [], items: [],
+    });
+    apiMocks.reviews.mockResolvedValue({});
+    apiMocks.cases.mockResolvedValue([]);
+
+    const { result } = renderHook(() => useWorkbench());
+    await waitFor(() => expect(result.current.run?.run_id).toBe('run-1'));
+    expect(result.current.student).toBe('');
+    expect(result.current.indicator).toBe('I1');
+  });
+
   it('treats a missing first run as a normal first-use state', async () => {
     apiMocks.run.mockRejectedValue(new Error('尚未导入赛事数据'));
     const { result } = renderHook(() => useWorkbench());
@@ -80,6 +94,23 @@ describe('useWorkbench node scope', () => {
     await act(async () => result.current.refresh());
     await waitFor(() => expect(result.current.run?.run_id).toBe('run-2'));
     await waitFor(() => expect(result.current.draft).toBeNull());
+    expect(result.current.node).toBe('');
+  });
+
+  it('clears the selected student and node when a different run becomes current', async () => {
+    const run1 = { run_id: 'run-1', students: [{ '学生编号': 'D01', '模拟班级编号': 'DC01' }], objectives: [{ '指标编号': 'I1' }], nodes: [{ '节点编号': 'N1' }], responses: [], items: [] };
+    const run2 = { ...run1, run_id: 'run-2', students: [...run1.students, { '学生编号': 'D02', '模拟班级编号': 'DC02' }] };
+    apiMocks.run.mockResolvedValueOnce(run1).mockResolvedValueOnce(run2);
+    apiMocks.reviews.mockResolvedValue({});
+    apiMocks.cases.mockResolvedValue([]);
+    const { result } = renderHook(() => useWorkbench());
+    await waitFor(() => expect(result.current.run?.run_id).toBe('run-1'));
+    act(() => { result.current.setStudent('D01'); result.current.setIndicator('I1'); result.current.setNode('N1'); });
+
+    await act(async () => { await result.current.refresh(); });
+
+    expect(result.current.run?.run_id).toBe('run-2');
+    expect(result.current.student).toBe('');
     expect(result.current.node).toBe('');
   });
 

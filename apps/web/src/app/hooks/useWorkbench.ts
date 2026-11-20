@@ -41,14 +41,15 @@ export function useWorkbench() {
           draftRequest.current += 1;
           setDraft(null);
           setNode('');
+          setStudentState('');
+          setIndicatorState(nextRun.objectives[0]?.['指标编号'] ?? '');
         }
         setRun(nextRun);
         currentRun.current = nextRun;
         setReviews(current => reviewsResult.status === 'fulfilled' ? reviewsResult.value : sameRun ? current : {});
         setSuggestions(current => casesResult.status === 'fulfilled' ? casesResult.value : sameRun ? current : []);
-        setStudentState(current => nextRun.students.some(item => item['学生编号'] === current)
-          ? current : nextRun.students[0]?.['学生编号'] ?? '');
-        setIndicatorState(current => nextRun.objectives.some(item => item['指标编号'] === current)
+        setStudentState(current => sameRun && nextRun.students.some(item => item['学生编号'] === current) ? current : '');
+        setIndicatorState(current => sameRun && nextRun.objectives.some(item => item['指标编号'] === current)
           ? current : nextRun.objectives[0]?.['指标编号'] ?? '');
         const failed = [reviewsResult.status === 'rejected' ? '复核历史' : '', casesResult.status === 'rejected' ? '案例候选' : ''].filter(Boolean);
         setMessage(failed.length ? `当前运行已加载；${failed.join('、')}读取失败，可重试读取。` : '');

@@ -73,6 +73,19 @@ describe('TASK02 result panels', () => {
     expect(screen.getByText(/C1：1\/2（50.0%，1 条）/)).toBeTruthy();
   });
 
+  it('keeps the class comparison inside the selected indicator scope', () => {
+    const scopedRun = {
+      ...run,
+      objectives: [...run.objectives, { '主题编号': 'T01', '指标编号': 'I2', '观察指标': '几何' }],
+      metrics: [...run.metrics, { kind: 'class_indicator', key: 'C1:I2@N01', class_id: 'C1', indicator_id: 'I2', node_id: 'N01', score: 2, maximum: 2, ratio: 1, count: 1, record_ids: ['R-X'], event_ids: ['E-X'] }],
+    } as AnalysisRun;
+    render(<ClassPanel run={scopedRun} node="N01" indicator="I1" />);
+    fireEvent.click(screen.getByText('节点 N01 的指标明细'));
+
+    expect(screen.getByText(/C1：1\/2（50\.0%，1 条）/)).toBeTruthy();
+    expect(screen.queryByText(/I2 · 几何/)).toBeNull();
+  });
+
   it('shows common-item scope and deduplicated issue counts with student drilldown', async () => {
     vi.spyOn(learningApi, 'classInsights').mockResolvedValue({
       run_id: 'run1', node_id: 'N01', classes: [],
@@ -133,6 +146,15 @@ describe('TASK02 result panels', () => {
     render(<EvidencePanel run={run} student="D01" indicator="I1" focusEvidence={{ recordId: 'R2', sourceLine: 3 }} />);
     const target = document.getElementById('evidence-R2-3') as HTMLDetailsElement;
     expect(target.open).toBe(true);
+  });
+
+  it('returns from evidence on Escape or the return control', () => {
+    const onClose = vi.fn();
+    render(<EvidencePanel run={run} student="D01" indicator="I1" onClose={onClose} />);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: '返回学生分析' }));
+    expect(onClose).toHaveBeenCalledTimes(2);
   });
 
   it('does not mark a duplicate record ID from another source row as selected', () => {

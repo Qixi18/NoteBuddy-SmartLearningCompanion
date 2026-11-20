@@ -85,7 +85,7 @@ function EvidenceContext({ run, student, indicator, node, draft }: { run?: Analy
   </aside>;
 }
 
-export function ReviewPanel({ run, student, indicator, node, review, draft, modelConfigured, onDraft, onSave, initialFields, onFieldsChange }: { run?: AnalysisRun; student: string; indicator: string; node: string; review?: Review; draft: Draft | null; modelConfigured?: boolean; onDraft: (provider: 'rule' | 'deepseek', node: string) => Promise<void>; onSave: (payload: ReviewFields) => Promise<void>; initialFields?: ReviewFields; onFieldsChange?: (fields: ReviewFields) => void }) {
+export function ReviewPanel({ run, student, indicator, node, review, draft, modelConfigured, onDraft, onSave, initialFields, onFieldsChange, onDirtyChange }: { run?: AnalysisRun; student: string; indicator: string; node: string; review?: Review; draft: Draft | null; modelConfigured?: boolean; onDraft: (provider: 'rule' | 'deepseek', node: string) => Promise<void>; onSave: (payload: ReviewFields) => Promise<void>; initialFields?: ReviewFields; onFieldsChange?: (fields: ReviewFields) => void; onDirtyChange?: (dirty: boolean) => void }) {
   const [fields, setFields] = useState<ReviewFields>(initialFields ?? emptyFields);
   const [verification, setVerification] = useState<SourceVerification | null>(null);
   const [source, setSource] = useState('');
@@ -175,14 +175,32 @@ export function ReviewPanel({ run, student, indicator, node, review, draft, mode
       ...(fields.evidence_refs ?? []).filter(ref => ref.kind !== 'coverage'),
       ...(includeCoverage && coverageRef ? [coverageRef] : []),
     ];
-    try { await onSave({ ...fields, evidence_refs }); } catch (reason) { setFailure(reason instanceof Error ? reason.message : String(reason)); }
+    try { await onSave({ ...fields, evidence_refs }); onDirtyChange?.(false); } catch (reason) { setFailure(reason instanceof Error ? reason.message : String(reason)); }
     finally { setSaving(false); }
   };
   const activityDiffers = draft?.activity?.trim() && draft.activity.trim() !== draft.recommendation.trim();
   const hasTeachingDetails = Boolean(activityDiffers || draft?.steps?.length || draft?.material_ids.length || draft?.observation_point?.trim());
+  const reviewPlanValid = review?.teaching_plan_v2
+    ? isTeachingPlanV2SourceCurrentlyVerified(review.teaching_plan_v2, indicator, verification)
+    : review?.structured_plan ? isStructuredPlanCurrentlyVerified(review, indicator, verification) : true;
+  const reviewIsCurrent = Boolean(review && ['accepted', 'edited'].includes(review.status) && reviewPlanValid);
 
-  return <Panel title="生成与复核" className="review-panel">
+  return <div onInputCapture={() => onDirtyChange?.(true)} onChangeCapture={() => onDirtyChange?.(true)}><Panel title="生成与复核" className="review-panel">
     <div className="review-tool-intro"><p>选择规则或模型生成待复核草稿。系统提供依据，教师确认后才形成复核结论。</p><span className="draft-status">{review ? `已有复核版本 ${review.version}` : draft ? '待教师复核' : '尚未生成草稿'}</span></div>
+    {review && <section className={`review-version-status review-version-${review.status}`} aria-label="已保存建议状态">
+      <h3>{review.status === 'rejected' ? '此版本已驳回' : review.status === 'needs_observation' ? '此版本需要补充观察' : reviewIsCurrent ? '已复核建议' : '历史复核版本'}</h3>
+      <p>版本 {review.version} · {statusLabels[review.status]} · {review.reviewer || '未填写复核人'}{review.reason ? ` · ${review.reason}` : ''}</p>
+      {(review.status === 'accepted' || review.status === 'edited') && review.structured_plan && !isStructuredPlanCurrentlyVerified(review, indicator, verification) && <p className="review-alert">来源签核已变化、撤销或无法确认；该方案仅供历史查看，不能作为当前有效方案。</p>}
+      {(review.status === 'accepted' || review.status === 'edited') && review.teaching_plan_v2 && !isTeachingPlanV2SourceCurrentlyVerified(review.teaching_plan_v2, indicator, verification) && <p className="review-alert">方案材料来源与当前签核不一致或无法确认；该版本仅供历史查看。</p>}
+      <div className="saved-review-reader"><h4>{review.teaching_plan_v2?.goal || review.structured_plan?.activity || '学习建议'}</h4><p><strong>诊断：</strong>{review.diagnosis || '未填写'}</p><p><strong>建议：</strong>{review.recommendation || '未填写'}</p>
+        {review.teaching_plan_v2?.steps.length ? <><strong>学习步骤</strong><ol>{review.teaching_plan_v2.steps.map((step, index) => <li key={`${index}:${step}`}>{step}</li>)}</ol></> : review.structured_plan?.steps.length ? <><strong>学习步骤</strong><ol>{review.structured_plan.steps.map((step, index) => <li key={`${index}:${step}`}>{step}</li>)}</ol></> : null}
+        {review.teaching_plan_v2?.material_ids.length ? <p><strong>材料：</strong>{review.teaching_plan_v2.material_ids.map(id => { const reason = review.teaching_plan_v2?.resource_reasons.find(item => item.material_id === id); return `${id}${reason ? `（${reason.explanation}）` : ''}`; }).join('；')}</p> : review.structured_plan?.material_ids.length ? <p><strong>材料：</strong>{review.structured_plan.material_ids.join('、')}</p> : null}
+        {review.teaching_plan_v2?.hints.length ? <ul>{review.teaching_plan_v2.hints.map((hint, index) => <li key={`${hint.level}:${index}`}><strong>{hintLabels[hint.level]}：</strong>{hint.student_prompt}</li>)}</ul> : null}
+        {review.teaching_plan_v2?.observation_points.length ? <p><strong>完成后观察：</strong>{review.teaching_plan_v2.observation_points.join('；')}</p> : review.structured_plan?.observation_points.length ? <p><strong>完成后观察：</strong>{review.structured_plan.observation_points.join('；')}</p> : null}
+        {review.adjustment_condition && <p><strong>调整条件：</strong>{review.adjustment_condition}</p>}
+      </div>
+      {!draft && <p className="muted">当前页面以已保存版本为只读内容。编辑时请生成当前范围的新草稿，再保存为新版本；不会用空草稿覆盖历史依据。</p>}
+    </section>}
     <div className="review-generate-row"><div className="actions"><button disabled={drafting || saving || !node} onClick={() => void generate('rule')}>{drafting ? '正在生成草稿…' : '生成规则草稿'}</button><button className="secondary" disabled={drafting || saving || !node || modelConfigured === false} aria-describedby={modelConfigured === false ? 'model-availability' : undefined} onClick={() => void generate('deepseek')}>{drafting ? '正在生成草稿…' : '使用模型生成草稿'}</button></div>{modelConfigured === false && <p id="model-availability" className="muted">本机未配置模型，可使用规则草稿。</p>}{source && <p className="review-source-note">{source}</p>}</div>
     {!node && <div className="review-empty"><strong>先选择一个测验节点</strong><p>建议只根据单一节点的可追溯记录生成；未选择时不会推断学习状态。</p></div>}
     {draft?.scope_required && <p className="scope-error" role="alert">范围错误：该指标在多个节点有记录，请明确选择单一测验节点后重新生成。当前草稿不可保存。</p>}
@@ -232,5 +250,5 @@ export function ReviewPanel({ run, student, indicator, node, review, draft, mode
       </section>
     </div>}
     {history.length > 0 && <details className="review-history"><summary>查看复核历史（{history.length}）</summary>{history.map(item => <details className="row" key={`${item.version}:${item.updated_at}`}><summary>版本 {item.version} · 节点 {item.node_id ?? item.original_draft?.node_id ?? '范围未记录'} · {statusLabels[item.status]} · {item.updated_at}</summary><p>诊断：{item.diagnosis}</p><p>建议：{item.recommendation}</p><p>理由：{item.reason}</p>{item.teaching_plan_v2 && <section className="review-history-plan"><h4>v2 分层教学方案</h4><p>目标：{item.teaching_plan_v2.goal}</p><p>材料：{item.teaching_plan_v2.material_ids.join('、')} · 模板 {item.teaching_plan_v2.template_version}</p>{isTeachingPlanV2SourceCurrentlyVerified(item.teaching_plan_v2, indicator, verification) ? <p role="status">来源签核版本当前匹配；导出时会再次核验作答证据指纹。</p> : <p className="review-alert">来源签核已变化、撤销或无法核验；方案保留为历史版本，导出时不会作为有效方案。</p>}<ol>{item.teaching_plan_v2.steps.map((step, index) => <li key={`${index}:${step}`}>{step}</li>)}</ol><h5>分层提示（教师复核版）</h5>{item.teaching_plan_v2.hints.map(hint => <div key={hint.level}><strong>{hintLabels[hint.level]}</strong><p>学生提示：{hint.student_prompt}</p><p>教师说明：{hint.teacher_note}</p></div>)}<p>观察：{item.teaching_plan_v2.observation_points.join('；')}</p><p>调整：{item.teaching_plan_v2.adjustment_conditions.join('；')}</p><small>证据：{item.teaching_plan_v2.evidence_refs.map(ref => `${ref.record_id} · 第 ${ref.source_line} 行`).join('、')}</small></section>}{item.structured_plan && <section className="review-history-plan"><h4>已保存的完整教学方案</h4><p>活动：{item.structured_plan.activity}</p><p>材料：{item.structured_plan.material_ids.join('、') || '无'}{Object.entries(item.source_verification_versions ?? {}).map(([sourceIndicator, version]) => ` · 来源签核版本 ${version}（${sourceIndicator}）`)}</p>{isStructuredPlanCurrentlyVerified(item, indicator, verification) ? <p role="status">本方案来源签核仍有效（版本 {verification?.version}）</p> : <p className="review-alert">来源签核已变化、撤销或无法核验；该方案仅作历史记录，导出时不会作为有效方案。</p>}{item.structured_plan.steps.length > 0 && <><strong>活动步骤</strong><ol>{item.structured_plan.steps.map((step, index) => <li key={`${index}:${step}`}>{step}</li>)}</ol></>}{item.structured_plan.practice.length > 0 && <><strong>练习</strong><ul>{item.structured_plan.practice.map((practice, index) => <li key={`${index}:${practice}`}>{practice}</li>)}</ul></>}{item.structured_plan.observation_points.length > 0 && <><strong>观察点</strong><ul>{item.structured_plan.observation_points.map((point, index) => <li key={`${index}:${point}`}>{point}</li>)}</ul></>}</section>}<small>复核人：{item.reviewer || '未填写'} · 来源：{item.source === 'rule' ? '规则生成' : '模型辅助生成'} · 引用记录 {item.evidence_record_ids.join('、') || '无'}</small></details>)}</details>}
-  </Panel>;
+  </Panel></div>;
 }
