@@ -25,7 +25,7 @@ package-dir = {"" = "apps/backend"}
 where = ["apps/backend"]
 
 [tool.setuptools.package-data]
-"app" = ["web/dist/index.html", "web/dist/assets/*"]
+"app" = ["content/*.json", "web/dist/index.html", "web/dist/assets/*"]
 
 [project.scripts]
 smart-learning = "app.cli:main"

@@ -49,7 +49,7 @@ class Store:
         self.imports = ImportService(
             self.run_repository, self.sources, self.uow_factory
         )
-        self.review_service = SaveReview(self.uow_factory)
+        self.review_service = SaveReview(self.uow_factory, self.sources)
         self.bind_config(self.config)
 
     def bind_config(self, config):
@@ -58,6 +58,7 @@ class Store:
             self._resources_dir,
             source_files_dir=config.source_files_dir,
         )
+        self.review_service.source_service = self.sources
         self.imports.sources = self.sources
         llm_client = (
             DeepSeekAdapter(

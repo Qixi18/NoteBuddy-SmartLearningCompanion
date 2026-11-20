@@ -27,6 +27,26 @@ export interface Draft {
   source_locator?: string | null;
   evidence_source_lines?: number[];
   resource_selection?: ResourceSelection | null;
+  teaching_plan_preview?: TeachingPlanV2 | null;
+  teaching_plan_preview_error?: string | null;
+}
+
+export interface TeachingPlanV2 {
+  schema_version: 2;
+  scope: { run_id: string; student_id: string; indicator_id: string; node_id: string };
+  goal: string;
+  purpose: 'remediation' | 'transfer' | 'diagnostic';
+  material_ids: string[];
+  resource_reasons: Array<{ material_id: string; resource_type: string; reason_codes: string[]; explanation: string }>;
+  steps: string[];
+  hints: Array<{ level: 'direction' | 'structure' | 'local_check'; student_prompt: string; teacher_note: string }>;
+  observation_points: string[];
+  adjustment_conditions: string[];
+  evidence_refs: Array<{ evidence_id: string; record_id: string; material_id: string; source_line: number }>;
+  source_versions: Record<string, number>;
+  evidence_fingerprint: string;
+  template_version: string;
+  teacher_review_required: true;
 }
 
 export interface ResourceSelectionEntry {

@@ -13,6 +13,7 @@ from ...services.task02.class_insight_service import build_class_insights
 from ...services.task02.evidence_bundle_service import build_evidence_bundle
 from ...services.task02.insight_service import build_student_insights
 from ...services.task03.resource_selection_service import select_resources
+from ...services.task03.teaching_plan_service import build_teaching_plan
 from ..ports.llm import LLMClient
 from .stage2 import Stage2Decisions
 from .teaching_adjustments import TeachingAdjustments
@@ -71,6 +72,26 @@ def _attach_resource_selection(run: dict, result: dict, sources: dict) -> dict:
     )
     result["resource_selection"] = select_resources(bundle, insights, catalog, purpose)
     result["resource_selection"]["candidate_node_item_count"] = len(node_items)
+    try:
+        objective = next(
+            (
+                row.get("观察指标", "")
+                for row in run.get("objectives", [])
+                if row.get("指标编号") == result["indicator_id"]
+            ),
+            "",
+        )
+        result["teaching_plan_preview"] = build_teaching_plan(
+            bundle,
+            insights,
+            result["resource_selection"],
+            objective,
+            set(result.get("evidence_record_ids", [])),
+        )
+        result["teaching_plan_preview_error"] = None
+    except ValueError as exc:
+        result["teaching_plan_preview"] = None
+        result["teaching_plan_preview_error"] = str(exc)
     return result
 
 

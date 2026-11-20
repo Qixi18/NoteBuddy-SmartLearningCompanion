@@ -85,7 +85,6 @@ def build_evidence_bundle(
         row
         for row in run.get("raw_responses", [])
         if row.get("学生编号") == scope.student_id
-        and row.get("指标编号") == scope.indicator_id
         and row.get("节点编号") == scope.node_id
         and row.get("材料编号") in item_ids
     ]
@@ -102,7 +101,9 @@ def build_evidence_bundle(
                 "event_id": row.get("作答事件编号"),
                 "source_line": row.get("_source_line"),
                 "student_id": row.get("学生编号"),
-                "indicator_id": row.get("指标编号"),
+                # Raw contest response files do not carry indicator IDs; the
+                # scoped item catalog above is the authoritative relationship.
+                "indicator_id": scope.indicator_id,
                 "node_id": row.get("节点编号"),
                 "material_id": row.get("材料编号"),
                 "state": row.get("评分状态", "unknown"),

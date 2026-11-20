@@ -133,6 +133,25 @@ def test_bundle_isolates_scope_and_keeps_full_item_and_response_evidence():
     assert "R2" not in str(bundle) and "R3" not in str(bundle)
 
 
+def test_indicator_scope_is_derived_from_item_links_when_raw_rows_omit_indicator():
+    run = sample_run()
+    for response in run["raw_responses"]:
+        response.pop("指标编号")
+    scope = AnalysisScope(
+        run_id="run-a", student_id="S1", indicator_id="I1", node_id="N1"
+    )
+
+    bundle = build_evidence_bundle(run, scope, {})
+
+    assert [row["record_id"] for row in bundle["responses"]] == ["R1", "R4", "R5"]
+    assert {row["indicator_id"] for row in bundle["responses"]} == {"I1"}
+    assert {row["disposition"] for row in bundle["responses"]} == {
+        "scored",
+        "excluded",
+        "unanswered",
+    }
+
+
 def test_no_record_has_stable_coverage_evidence_not_a_zero_score():
     run = sample_run()
     scope = AnalysisScope(

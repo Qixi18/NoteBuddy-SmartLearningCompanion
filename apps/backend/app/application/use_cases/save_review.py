@@ -1,12 +1,16 @@
 """Validate a teacher decision and append it through one Unit of Work."""
 
+from ...domain.assessment.evidence_bundle import AnalysisScope
 from ...domain.common.enums import ReviewStatus
 from ...domain.teaching.models import RecommendationDraft, TeacherReview
+from ...services.task02.evidence_bundle_service import build_evidence_bundle
+from ...services.task03.teaching_plan_service import validate_teaching_plan
 
 
 class SaveReview:
-    def __init__(self, uow_factory):
+    def __init__(self, uow_factory, source_service=None):
         self.uow_factory = uow_factory
+        self.source_service = source_service
 
     def execute(
         self, run_id: str, student_id: str, indicator_id: str, payload: dict
@@ -97,7 +101,62 @@ class SaveReview:
             ):
                 raise ValueError("复核引用了范围外或无效记录")
             structured_plan = payload.get("structured_plan")
+            teaching_plan_v2 = payload.get("teaching_plan_v2")
             source_versions: dict[str, int] = {}
+            if teaching_plan_v2 is not None:
+                if (
+                    structured_plan is not None
+                    or original is None
+                    or review_node_id is None
+                    or status not in {ReviewStatus.ACCEPTED, ReviewStatus.EDITED}
+                ):
+                    raise ValueError(
+                        "v2教学方案必须关联单一节点的原草稿，并经教师接受或修改"
+                    )
+                from .stage2 import Stage2Decisions
+
+                histories = Stage2Decisions(
+                    self.uow_factory, self.source_service
+                ).with_source_freshness(run, uow.stage2.list_sources(run_id))
+                scope = AnalysisScope(
+                    run_id=run_id,
+                    student_id=student_id,
+                    indicator_id=indicator_id,
+                    node_id=review_node_id,
+                )
+                bundle = build_evidence_bundle(run, scope, histories)
+                plan_errors = validate_teaching_plan(
+                    teaching_plan_v2, bundle, histories
+                )
+                original_ids = set(original.get("evidence_record_ids", []))
+                if any(
+                    ref.get("record_id") not in original_ids
+                    for ref in teaching_plan_v2.get("evidence_refs", [])
+                ):
+                    plan_errors.append(
+                        {
+                            "code": "evidence_not_draft_cited",
+                            "detail": "方案引用超出了原草稿已经列明的证据。",
+                        }
+                    )
+                if plan_errors:
+                    raise ValueError(
+                        "教学方案校验失败："
+                        + "；".join(issue["detail"] for issue in plan_errors)
+                    )
+                source_versions = teaching_plan_v2["source_versions"]
+                question_ids = [
+                    row["material_id"]
+                    for row in teaching_plan_v2["resource_reasons"]
+                    if row["resource_type"] == "题目"
+                ]
+                structured_plan = {
+                    "material_ids": question_ids,
+                    "activity": teaching_plan_v2["goal"],
+                    "steps": teaching_plan_v2["steps"],
+                    "practice": question_ids,
+                    "observation_points": teaching_plan_v2["observation_points"],
+                }
             if structured_plan is not None:
                 if (
                     not isinstance(structured_plan, dict)
@@ -193,6 +252,7 @@ class SaveReview:
                     "reason": str(payload.get("reason", "")),
                     "reviewer": str(payload.get("reviewer", "教师")),
                     "structured_plan": structured_plan,
+                    "teaching_plan_v2": teaching_plan_v2,
                     "source_verification_versions": source_versions,
                 },
             )

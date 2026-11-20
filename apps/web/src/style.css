@@ -458,6 +458,19 @@ h3 { margin-top: 18px; font-size: 15px; font-weight: 700; }
 .resource-selection li { color: var(--ink); font-size: 12px; }
 .resource-selection li small { display: block; margin-top: 2px; color: #64748b; font-size: 11px; }
 .resource-selection details { border-top: 1px solid #e1e8f1; padding-top: 8px; color: #52647c; font-size: 12px; }
+.teaching-plan-editor { margin: 14px 0; border: 1px solid #dce5f1; background: #fbfcff; }
+.teaching-plan-editor { display: grid; gap: 12px; }
+.teaching-plan-editor label { display: grid; gap: 5px; color: #43546b; font-size: 12px; font-weight: 700; }
+.teaching-plan-editor textarea { min-height: 62px; }
+.teaching-plan-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; color: #5f6e83; font-size: 11px; }
+.teaching-plan-materials { padding: 10px 12px; border-radius: 7px; background: #f1f5fa; }
+.teaching-plan-materials h3 { margin: 0 0 6px; font-size: 12px; }
+.teaching-plan-materials ul { margin: 0; padding-left: 18px; font-size: 12px; }
+.teaching-plan-hints { display: grid; gap: 11px; margin: 0; padding: 12px; border: 1px solid #dfe6ef; border-radius: 8px; }
+.teaching-plan-hints section { display: grid; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid #e6ebf2; }
+.teaching-plan-hints section:last-child { padding-bottom: 0; border-bottom: 0; }
+.teaching-plan-hints h4 { margin: 0; color: var(--ink); font-size: 12px; }
+.review-history-plan h5 { margin: 12px 0 6px; }
 .proposed-activity { margin: 0 0 14px; padding: 9px 11px; border: 1px solid #e1daf2; border-radius: 8px; background: #faf9fd; }
 .proposed-activity summary { color: #59488f; font-size: 12px; }
 .proposed-activity p, .proposed-activity ol { color: #4d4567; font-size: 12px; }

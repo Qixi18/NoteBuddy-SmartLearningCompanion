@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AnalysisRun, Draft, Review, SourceVerification } from '../../../api/types';
+import type { AnalysisRun, Draft, Review, SourceVerification, TeachingPlanV2 } from '../../../api/types';
 import { isStructuredPlanCurrentlyVerified, ReviewPanel } from './ReviewPanel';
 import draftFixtureJson from '../../../../../../contracts/api/draft.json';
 
@@ -126,6 +126,41 @@ describe('ReviewPanel', () => {
 
     expect(screen.getByText('暂不推荐')).toBeTruthy();
     expect(screen.getByText(/当前没有符合范围且来源已核验的材料/)).toBeTruthy();
+  });
+
+  it('adopts and edits a versioned plan, then saves it separately from the legacy plan', async () => {
+    const plan: TeachingPlanV2 = {
+      schema_version: 2,
+      scope: { run_id: 'RUN-1', student_id: 'D01', indicator_id: 'T01I1', node_id: 'N01' },
+      goal: '针对指标使用Q001核对步骤。', purpose: 'remediation', material_ids: ['Q001'],
+      resource_reasons: [{ material_id: 'Q001', resource_type: '题目', reason_codes: ['verified_indicator_match'], explanation: '节点内已核验' }],
+      steps: ['查看证据R2', '独立完成练习'],
+      hints: [
+        { level: 'direction', student_prompt: '先回想方法', teacher_note: '不直接给结果' },
+        { level: 'structure', student_prompt: '拆分步骤', teacher_note: '观察能否分解' },
+        { level: 'local_check', student_prompt: '核对局部步骤', teacher_note: '按错误位置反馈' },
+      ],
+      observation_points: ['记录独立完成情况'], adjustment_conditions: ['需要提示时安排回看'],
+      evidence_refs: [{ evidence_id: 'ev-r2', record_id: 'R2', material_id: 'Q001', source_line: 3 }],
+      source_versions: { T01I1: 1 }, evidence_fingerprint: 'fingerprint-1',
+      template_version: 'teaching-plan-2026.11.1', teacher_review_required: true,
+    };
+    const draft = { ...draftFixture, teaching_plan_preview: plan } as Draft;
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } })));
+    render(<ReviewPanel student="D01" indicator="T01I1" node="N01" draft={draft} onDraft={vi.fn()} onSave={onSave} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '载入分层方案草稿' }));
+    fireEvent.change(screen.getAllByLabelText('学生可见')[0], { target: { value: '用自己的话回忆方法' } });
+    expect(screen.getAllByText(/教师使用说明（不会进入学生提示投影）/)).toHaveLength(3);
+    fireEvent.click(screen.getByRole('button', { name: '保存复核' }));
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+      structured_plan: null,
+      teaching_plan_v2: expect.objectContaining({
+        hints: expect.arrayContaining([expect.objectContaining({ level: 'direction', student_prompt: '用自己的话回忆方法' })]),
+      }),
+    }));
   });
 
   it('prevents duplicate review saves while one is pending', async () => {

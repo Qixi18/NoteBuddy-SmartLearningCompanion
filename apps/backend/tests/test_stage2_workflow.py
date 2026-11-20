@@ -129,6 +129,89 @@ def test_source_signoff_structured_plan_case_and_export_roundtrip(tmp_path):
         assert "structured_plan" not in recommendation
 
 
+def test_teaching_plan_v2_is_revalidated_on_save_and_export(tmp_path):
+    from test_core import sample_tables
+
+    tables = sample_tables()
+    tables["作答记录"] = [row for row in tables["作答记录"] if row["记录编号"] != "R4"]
+    client = client_for(tmp_path, tables=tables)
+    signoff = {
+        "indicator_id": "T01I1",
+        "status": "verified",
+        "curriculum_locator": "课标第 62 页",
+        "textbook_locator": "教材第 68 页",
+        "material_ids": ["Q001"],
+        "reviewer": "数学教师甲",
+        "reason": "逐项核对来源",
+    }
+    assert client.post("/api/source-verification", json=signoff).status_code == 200
+    draft = client.get(
+        "/api/draft", params={"student": "D01", "indicator": "T01I1", "node": "N01"}
+    ).json()
+    plan = draft["teaching_plan_preview"]
+    assert plan is not None, draft
+    assert plan["schema_version"] == 2
+    assert plan["scope"] == {
+        "run_id": draft["run_id"],
+        "student_id": "D01",
+        "indicator_id": "T01I1",
+        "node_id": "N01",
+    }
+    assert plan["material_ids"] == ["Q001"]
+
+    saved = client.post(
+        "/api/review",
+        json={
+            "student_id": "D01",
+            "indicator_id": "T01I1",
+            "status": "edited",
+            "diagnosis": "教师核对步骤",
+            "recommendation": "再做变式",
+            "reason": "方案已复核",
+            "evidence_record_ids": draft["evidence_record_ids"],
+            "original_draft": draft,
+            "teaching_plan_v2": plan,
+            "reviewer": "数学教师甲",
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["teaching_plan_v2"] == plan
+    assert saved.json()["source_verification_versions"] == {"T01I1": 1}
+    assert saved.json()["structured_plan"]["material_ids"] == ["Q001"]
+
+    confirmed = client.post(
+        "/api/teacher-case",
+        json={
+            "student_id": "D01",
+            "status": "confirmed",
+            "narrative": "根据当前节点证据复核后形成方案。",
+            "limitations": "结论仅限已列出的有效评分记录。",
+            "evidence_record_ids": draft["evidence_record_ids"],
+            "review_refs": [{"indicator_id": "T01I1", "node_id": "N01", "version": 1}],
+            "reviewer": "数学教师甲",
+        },
+    )
+    assert confirmed.status_code == 200, confirmed.text
+
+    response = client.get("/api/export", params={"cases": "D01,D02,D03"})
+    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+        recommendations = json.loads(archive.read("recommendations.json"))
+        assert recommendations[0]["teaching_plan_v2"] == plan
+        assert len(json.loads(archive.read("confirmed_cases.json"))) == 1
+
+    revoked = client.post(
+        "/api/source-verification",
+        json={**signoff, "status": "rejected", "reason": "复核后撤销"},
+    )
+    assert revoked.status_code == 200
+    response = client.get("/api/export", params={"cases": "D01,D02,D03"})
+    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+        recommendation = json.loads(archive.read("recommendations.json"))[0]
+        assert "teaching_plan_v2" not in recommendation
+        assert recommendation["teaching_plan_v2_status"] == "evidence_or_source_changed"
+        assert json.loads(archive.read("confirmed_cases.json")) == []
+
+
 def test_unverified_source_and_unconfirmed_case_never_enter_confirmed_export(tmp_path):
     client = client_for(tmp_path)
     pending = client.post(

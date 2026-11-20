@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { AnalysisRun, CaseSuggestion, Draft, Review, ReviewStatus, StructuredPlan } from '../api/types';
+import type { AnalysisRun, CaseSuggestion, Draft, Review, ReviewStatus, StructuredPlan, TeachingPlanV2 } from '../api/types';
 import { Panel } from '../components/Panel';
 import { ImportPanel } from '../features/import/ImportPanel';
 import { ObjectivesPanel } from '../features/task01/components/ObjectivesPanel';
@@ -15,7 +15,7 @@ import { routes, type RoutePath } from '../app/navigation';
 import { findingLabel, severityLabel } from '../features/task02/qualityLabels';
 import { NavIcon } from '../components/NavIcon';
 
-type ReviewFields = { status: ReviewStatus; diagnosis: string; recommendation: string; adjustment_condition: string; reason: string; reviewer: string; structured_plan: StructuredPlan | null };
+type ReviewFields = { status: ReviewStatus; diagnosis: string; recommendation: string; adjustment_condition: string; reason: string; reviewer: string; structured_plan: StructuredPlan | null; teaching_plan_v2: TeachingPlanV2 | null };
 type PageProps = {
   path: RoutePath;
   run: AnalysisRun | null;
@@ -125,7 +125,8 @@ export function WorkbenchPage(props: PageProps) {
     adjustment_condition: review.adjustment_condition || '',
     reason: review.reason,
     reviewer: review.reviewer,
-    structured_plan: review.structured_plan ?? null,
+    structured_plan: review.teaching_plan_v2 ? null : review.structured_plan ?? null,
+    teaching_plan_v2: review.teaching_plan_v2 ?? null,
   } : undefined);
   switch (path) {
     case '/home': return <Overview run={run} onNavigate={onNavigate} />;

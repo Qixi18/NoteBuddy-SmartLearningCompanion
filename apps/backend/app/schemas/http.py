@@ -42,6 +42,70 @@ class DraftRequest(BaseModel):
     node_id: str | None = Field(default=None, min_length=1)
 
 
+class PlanScopePayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    run_id: str = Field(min_length=1)
+    student_id: str = Field(min_length=1)
+    indicator_id: str = Field(min_length=1)
+    node_id: str = Field(min_length=1)
+
+
+class PlanHintPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    level: Literal["direction", "structure", "local_check"]
+    student_prompt: str = Field(min_length=1, max_length=2000)
+    teacher_note: str = Field(default="", max_length=2000)
+
+
+class PlanResourceReasonPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    material_id: str = Field(min_length=1)
+    resource_type: str = Field(min_length=1)
+    reason_codes: list[str] = Field(min_length=1)
+    explanation: str = Field(min_length=1, max_length=2000)
+
+
+class PlanEvidenceRefPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    evidence_id: str = Field(min_length=1)
+    record_id: str = Field(min_length=1)
+    material_id: str = Field(min_length=1)
+    source_line: int = Field(ge=1)
+
+
+class TeachingPlanV2Payload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    schema_version: Literal[2]
+    scope: PlanScopePayload
+    goal: str = Field(min_length=1, max_length=4000)
+    purpose: Literal["remediation", "transfer", "diagnostic"]
+    material_ids: list[str] = Field(min_length=1, max_length=50)
+    resource_reasons: list[PlanResourceReasonPayload] = Field(
+        min_length=1, max_length=50
+    )
+    steps: list[str] = Field(min_length=1, max_length=20)
+    hints: list[PlanHintPayload] = Field(min_length=3, max_length=3)
+    observation_points: list[str] = Field(min_length=1, max_length=20)
+    adjustment_conditions: list[str] = Field(min_length=1, max_length=20)
+    evidence_refs: list[PlanEvidenceRefPayload] = Field(min_length=1, max_length=100)
+    source_versions: dict[str, int]
+    evidence_fingerprint: str = Field(min_length=1, max_length=128)
+    template_version: str = Field(min_length=1, max_length=100)
+    teacher_review_required: Literal[True]
+
+    @model_validator(mode="after")
+    def require_ordered_hints_and_unique_materials(self):
+        if [hint.level for hint in self.hints] != [
+            "direction",
+            "structure",
+            "local_check",
+        ]:
+            raise ValueError("提示须按方向、结构、局部检查三级排列")
+        if len(self.material_ids) != len(set(self.material_ids)):
+            raise ValueError("方案材料编号不得重复")
+        return self
+
+
 class ReviewRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     student_id: str = Field(min_length=1)
@@ -58,6 +122,7 @@ class ReviewRequest(BaseModel):
     original_draft: dict[str, Any] | None = None
     reviewer: str = "教师"
     structured_plan: "StructuredPlan | None" = None
+    teaching_plan_v2: TeachingPlanV2Payload | None = None
 
 
 class StructuredPlan(BaseModel):
@@ -284,6 +349,8 @@ class DraftResponse(BaseModel):
     source_locator: str | None = None
     evidence_source_lines: list[int] = Field(default_factory=list)
     resource_selection: ResourceSelectionResponse | None = None
+    teaching_plan_preview: TeachingPlanV2Payload | None = None
+    teaching_plan_preview_error: str | None = None
 
 
 class ReviewRecordResponse(BaseModel):
@@ -302,6 +369,7 @@ class ReviewRecordResponse(BaseModel):
     version: int
     updated_at: str
     structured_plan: StructuredPlan | None = None
+    teaching_plan_v2: TeachingPlanV2Payload | None = None
     source_verification_versions: dict[str, int] = Field(default_factory=dict)
 
 

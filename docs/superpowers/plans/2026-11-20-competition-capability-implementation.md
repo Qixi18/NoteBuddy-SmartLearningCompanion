@@ -181,15 +181,17 @@ P08当前状态：`engineering_pass/content_pending`。只有来源签核当前�
 
 **优先级/依赖：** P1核心；P08。
 
-**新增：** `apps/backend/app/domain/teaching/plan.py`、`services/task03/plan_service.py`、`apps/backend/tests/test_teaching_plan_v2.py`、`apps/web/src/features/task03/components/TeachingPlanEditor.tsx`。**修改：** `schemas/http.py`、`application/use_cases/save_review.py`、`ReviewPanel.tsx`、前端teaching/review类型与合同。
+**新增：** `apps/backend/app/domain/teaching/plan.py`、`apps/backend/app/services/task03/teaching_plan_service.py`、`apps/backend/app/content/teaching-plan-templates-v2.json`、`apps/backend/tests/test_teaching_plan_v2.py`、`apps/web/src/features/task03/components/TeachingPlanEditor.tsx`。**修改：** `schemas/http.py`、`application/use_cases/save_review.py`、`ReviewPanel.tsx`、前端teaching/review类型与合同。
 
 **接口：** `build_teaching_plan(bundle, insights, selection, templates: dict) -> TeachingPlanV2`；模板按目的和核验问题组织，实际内容保存在可版本化的本地内容目录。`validate_plan(plan, bundle, latest_sources) -> list[dict]`用于保存及导出。
 
-- [ ] 测试方案包含具体材料、逐项选择理由、步骤、提示、观察与调整条件；空泛的占位文本不满足正式方案必填要求。
-- [ ] 测试来源版本撤销/材料删除后保存新方案被拒绝，旧方案仍可回看且明确过期。
-- [ ] 实现三类需求模板及方向→结构→局部检查的提示层级；提示与教师答案分字段，学生练习视图不读取答案字段。
-- [ ] 增加`teaching_plan_v2`保存、历史回看与兼容投影；旧structured_plan不强制升级或改写。
-- [ ] 运行`python -m pytest apps/backend/tests/test_teaching_plan_v2.py -q`与ReviewPanel/TeachingPlanEditor测试；教师对正式三案例所有提示核对后才使用。
+- [x] 方案绑定学生/指标/节点/运行、材料及逐项理由、步骤、提示、观察与调整、作答证据指纹和来源版本；占位文案与范围外引用不能通过校验。
+- [x] 保存与导出重新计算证据和来源新鲜度；集成测试覆盖来源撤销、旧方案仅作历史记录且不进入有效导出。
+- [x] 三类本地版本模板分别组织补救、迁移、诊断目标与观察；方向→结构→局部检查按层输出，教师说明独立于学生提示并有安全投影测试。
+- [x] `teaching_plan_v2`支持保存、历史回看、旧格式兼容投影；旧结构化方案及历史 JSON 不强制升级或改写。
+- [x] 全后端189通过/2跳过、全前端70通过/1跳过、生产构建通过；学科负责人核对正式三案例的提示、材料和调整条件仍待完成。
+
+P09当前状态：`engineering_pass/content_pending`。模板是经教师修改前的方案草稿；正式使用前须逐条学科审核，导出会重新验证来源和证据指纹。
 
 ### P10 模型证据上下文与输出校验
 

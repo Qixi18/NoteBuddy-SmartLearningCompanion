@@ -1,4 +1,4 @@
-import type { Draft } from './teaching';
+import type { Draft, TeachingPlanV2 } from './teaching';
 import type { ReviewStatus } from './common';
 
 export interface ReviewPayload {
@@ -16,6 +16,7 @@ export interface ReviewPayload {
   original_draft?: Draft;
   reviewer?: string;
   structured_plan?: StructuredPlan | null;
+  teaching_plan_v2?: TeachingPlanV2 | null;
 }
 
 export interface StructuredPlan {
@@ -119,6 +120,7 @@ export interface Review extends Omit<ReviewPayload, 'student_id' | 'indicator_id
   reviewer: string;
   updated_at: string;
   source_verification_versions?: Record<string, number>;
+  teaching_plan_v2?: TeachingPlanV2 | null;
 }
 
 export type ReviewMap = Record<string, Review[]>;

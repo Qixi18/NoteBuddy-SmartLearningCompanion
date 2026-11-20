@@ -9,8 +9,11 @@ import zipfile
 from collections import Counter
 from datetime import UTC, datetime
 
+from ...domain.assessment.evidence_bundle import AnalysisScope
 from ..task02.case_service import suggest_cases
+from ..task02.evidence_bundle_service import build_evidence_bundle
 from ..task03.recommendation_service import draft
+from ..task03.teaching_plan_service import validate_teaching_plan
 
 
 def package(
@@ -77,12 +80,38 @@ def package(
                         }
                     )
                     plan = final.get("structured_plan")
+                    plan_v2 = final.get("teaching_plan_v2")
                     verification_history = sources.get(indicator_id, [])
                     latest_source = (
                         verification_history[-1] if verification_history else None
                     )
+                    plan_v2_valid = False
+                    if plan_v2:
+                        try:
+                            plan_bundle = build_evidence_bundle(
+                                run,
+                                AnalysisScope(
+                                    run_id=run["run_id"],
+                                    student_id=student_id,
+                                    indicator_id=indicator_id,
+                                    node_id=review_node_id,
+                                ),
+                                sources,
+                            )
+                            plan_v2_valid = not validate_teaching_plan(
+                                plan_v2, plan_bundle, sources
+                            )
+                        except (KeyError, TypeError, ValueError):
+                            plan_v2_valid = False
+                        if plan_v2_valid:
+                            entry["teaching_plan_v2"] = plan_v2
+                        else:
+                            entry["teaching_plan_v2_status"] = (
+                                "evidence_or_source_changed"
+                            )
                     if (
                         plan
+                        and (not plan_v2 or plan_v2_valid)
                         and latest_source
                         and latest_source["status"] == "verified"
                         and not latest_source.get("stale", False)
@@ -158,10 +187,30 @@ def package(
             )
             source_history = sources.get(ref["indicator_id"], [])
             latest_source = source_history[-1] if source_history else None
+            v2_plan = match.get("teaching_plan_v2") if match else None
+            v2_plan_valid = True
+            if v2_plan:
+                try:
+                    plan_bundle = build_evidence_bundle(
+                        run,
+                        AnalysisScope(
+                            run_id=run["run_id"],
+                            student_id=student_id,
+                            indicator_id=ref["indicator_id"],
+                            node_id=ref["node_id"],
+                        ),
+                        sources,
+                    )
+                    v2_plan_valid = not validate_teaching_plan(
+                        v2_plan, plan_bundle, sources
+                    )
+                except (KeyError, TypeError, ValueError):
+                    v2_plan_valid = False
             if (
                 not match
                 or match["status"] not in {"accepted", "edited"}
                 or not match.get("structured_plan")
+                or not v2_plan_valid
                 or not latest_source
                 or latest_source["status"] != "verified"
                 or latest_source.get("stale", False)
