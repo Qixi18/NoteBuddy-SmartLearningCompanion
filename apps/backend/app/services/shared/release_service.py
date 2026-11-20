@@ -1,0 +1,277 @@
+"""Machine-check and human-signoff gates for a competition submission."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+
+from ..task02.evidence_reference_service import validate_evidence_references
+
+
+def _check(
+    check_id: str, label: str, status: str, detail: str, *, category="machine"
+) -> dict:
+    return {
+        "id": check_id,
+        "label": label,
+        "status": status,
+        "category": category,
+        "detail": detail,
+    }
+
+
+def check_release(
+    run: dict,
+    sources: dict,
+    cases: dict[str, list[dict]],
+    reviews: dict[str, list[dict]],
+    report_data: dict,
+    case_ids: list[str],
+    *,
+    node_id: str,
+    content_reviewed: bool = False,
+    reviewer: str = "",
+) -> list[dict]:
+    students = {row.get("学生编号") for row in run.get("students", [])}
+    valid_selection = (
+        len(case_ids) == 3
+        and len(set(case_ids)) == 3
+        and set(case_ids).issubset(students)
+    )
+    checks = [
+        _check(
+            "case_selection",
+            "三名不同的有效案例学生",
+            "passed" if valid_selection else "blocked",
+            "已选择当前运行中的三名不同学生。"
+            if valid_selection
+            else "必须选择三名不同且属于当前运行的学生。",
+        )
+    ]
+    confirmed = {}
+    invalid_refs = []
+    stale_sources = []
+    invalid_reviews = []
+    for student_id in case_ids if valid_selection else []:
+        history = cases.get(student_id, [])
+        case = next(
+            (
+                row
+                for row in reversed(history)
+                if row.get("run_id") == run.get("run_id")
+            ),
+            None,
+        )
+        if not case or case.get("status") != "confirmed":
+            continue
+        confirmed[student_id] = case
+        if not case.get("review_refs"):
+            invalid_reviews.append(f"{student_id} 未关联教师复核版本")
+        try:
+            refs = validate_evidence_references(run, case.get("evidence_refs", []))
+            if not refs:
+                invalid_refs.append(f"{student_id} 没有有效证据引用")
+        except ValueError as exc:
+            refs = []
+            invalid_refs.append(f"{student_id}：{exc}")
+        for ref in case.get("review_refs", []):
+            history = reviews.get(f"{student_id}:{ref.get('indicator_id', '')}", [])
+            review = next(
+                (
+                    row
+                    for row in history
+                    if row.get("version") == ref.get("version")
+                    and row.get("node_id") == ref.get("node_id")
+                ),
+                None,
+            )
+            if (
+                not review
+                or review.get("status") not in {"accepted", "edited"}
+                or not review.get("reason", "").strip()
+            ):
+                invalid_reviews.append(
+                    f"{student_id} · {ref.get('indicator_id')} · 版本 {ref.get('version')}"
+                )
+                continue
+            plan = review.get("structured_plan") or review.get("teaching_plan_v2")
+            if review.get("teaching_plan_v2"):
+                v2 = review["teaching_plan_v2"]
+                hints = v2.get("hints", [])
+                complete_hints = bool(hints) and all(
+                    hint.get("student_prompt", "").strip()
+                    and hint.get("teacher_note", "").strip()
+                    for hint in hints
+                )
+                plan_complete = (
+                    bool(v2.get("goal", "").strip())
+                    and bool(v2.get("steps"))
+                    and complete_hints
+                    and bool(v2.get("observation_points"))
+                )
+            else:
+                structured = review.get("structured_plan") or {}
+                plan_complete = bool(
+                    structured.get("activity", "").strip()
+                    and structured.get("steps")
+                    and structured.get("practice")
+                    and structured.get("observation_points")
+                )
+            if not plan or not plan_complete:
+                invalid_reviews.append(
+                    f"{student_id} · {ref.get('indicator_id')} 教学方案或分层提示未完成复核"
+                )
+                continue
+            materials = (plan or {}).get("material_ids", [])
+            if materials:
+                indicator = ref.get("indicator_id", "")
+                source_history = sources.get(indicator, [])
+                latest = source_history[-1] if source_history else None
+                if (
+                    not latest
+                    or latest.get("status") != "verified"
+                    or latest.get("stale")
+                    or review.get("source_verification_versions", {}).get(indicator)
+                    != latest.get("version")
+                    or not set(materials).issubset(latest.get("material_ids", []))
+                ):
+                    stale_sources.append(f"{student_id} · {indicator}")
+    complete_cases = valid_selection and len(confirmed) == 3
+    checks.append(
+        _check(
+            "confirmed_cases",
+            "三份当前运行的教师确认案例",
+            "passed" if complete_cases else "blocked",
+            "三名学生均已确认案例。"
+            if complete_cases
+            else f"已确认 {len(confirmed)}/3；请完成未确认案例。",
+        )
+    )
+    checks.append(
+        _check(
+            "evidence_references",
+            "案例证据引用有效且可追溯",
+            "passed" if complete_cases and not invalid_refs else "blocked",
+            "证据引用均可由当前运行重算。"
+            if complete_cases and not invalid_refs
+            else ("；".join(invalid_refs) or "案例尚未全部确认。"),
+        )
+    )
+    checks.append(
+        _check(
+            "teacher_reviews",
+            "正式复核版本和教学方案完整",
+            "passed" if complete_cases and not invalid_reviews else "blocked",
+            "引用的复核版本均为教师接受或修改状态。"
+            if complete_cases and not invalid_reviews
+            else (
+                "缺少有效教师复核：" + "、".join(invalid_reviews)
+                if invalid_reviews
+                else "案例尚未全部确认。"
+            ),
+        )
+    )
+    checks.append(
+        _check(
+            "source_signoffs",
+            "教学材料来源签核仍有效",
+            "passed" if complete_cases and not stale_sources else "blocked",
+            "所用材料的来源签核与复核版本一致。"
+            if complete_cases and not stale_sources
+            else (
+                "来源缺失或过期：" + "、".join(stale_sources)
+                if stale_sources
+                else "案例尚未全部确认。"
+            ),
+        )
+    )
+    case_report_data = report_data.get("cases", {})
+    class_report_data = report_data.get("class", {})
+    case_report_ready = (
+        case_report_data.get("run_id") == run.get("run_id")
+        and case_report_data.get("status") == "ready"
+        and {row.get("student_id") for row in case_report_data.get("cases", [])}
+        == set(case_ids)
+    )
+    checks.append(
+        _check(
+            "case_report",
+            "三案例阅读报告完整",
+            "passed" if case_report_ready else "blocked",
+            "报告包含所选三名学生的当前教师确认版本。"
+            if case_report_ready
+            else "案例报告缺失、未完整确认或与所选学生不匹配。",
+        )
+    )
+    class_ready = (
+        class_report_data.get("run_id") == run.get("run_id")
+        and class_report_data.get("node_id") == node_id
+        and class_report_data.get("status") == "ready"
+    )
+    checks.append(
+        _check(
+            "class_report",
+            "当前运行的班级阅读报告",
+            "passed" if class_ready else "blocked",
+            "班级报告与当前运行、节点匹配。"
+            if class_ready
+            else "请为当前运行生成完整且节点匹配的班级报告。",
+        )
+    )
+    signoff = content_reviewed and bool(reviewer.strip())
+    checks.append(
+        _check(
+            "human_content_review",
+            "内容负责人逐页复核并签名",
+            "passed" if signoff else "not_checked",
+            f"人工复核人：{reviewer.strip()}。"
+            if signoff
+            else "机器无法代替内容审阅；提交前需由内容负责人确认报告并填写姓名。",
+            category="human",
+        )
+    )
+    checks.append(
+        _check(
+            "independent_evaluation",
+            "赛事独立数据与最终结论验收",
+            "not_checked",
+            "尚未绑定官方独立数据及人工验收结果。",
+            category="human",
+        )
+    )
+    return checks
+
+
+def release_fingerprint(
+    run: dict,
+    sources: dict,
+    cases: dict[str, list[dict]],
+    reviews: dict[str, list[dict]],
+    reports: dict,
+    case_ids: list[str],
+    node_id: str,
+    checks: list[dict],
+    reviewer: str,
+    content_reviewed: bool,
+) -> str:
+    payload = {
+        "run_id": run.get("run_id"),
+        "run_files": run.get("files", {}),
+        "case_ids": case_ids,
+        "node_id": node_id,
+        "cases": {student: cases.get(student, []) for student in case_ids},
+        "reviews": {
+            key: value
+            for key, value in reviews.items()
+            if key.partition(":")[0] in case_ids
+        },
+        "sources": sources,
+        "reports": reports,
+        "checks": checks,
+        "reviewer": reviewer.strip(),
+        "content_reviewed": content_reviewed,
+    }
+    encoded = json.dumps(
+        payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()

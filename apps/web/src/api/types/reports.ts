@@ -68,3 +68,29 @@ export interface CompetitionClassReport {
   common_observations: Array<{ indicator_id: string; issue_id: string; label: string; by_class: Array<{ class_id: string; affected_count: number; observed_student_count: number; evidence_refs: Array<{ record_id: string; source_line: number | null; material_id: string }> }> }>;
   limitations: string[];
 }
+
+export interface ReleaseCheck {
+  id: string;
+  label: string;
+  status: 'passed' | 'blocked' | 'not_checked';
+  category: 'machine' | 'human';
+  detail: string;
+}
+
+export interface ReleasePreflight {
+  run_id: string;
+  case_ids: string[];
+  node_id: string;
+  checks: ReleaseCheck[];
+  fingerprint: string;
+  release_status: 'blocked' | 'ready_with_open_checks' | 'ready';
+}
+
+export interface SubmissionExportPayload {
+  run_id: string;
+  case_ids: string[];
+  node_id: string;
+  preflight_fingerprint: string;
+  reviewer: string;
+  content_reviewed: boolean;
+}

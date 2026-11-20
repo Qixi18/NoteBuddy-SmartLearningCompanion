@@ -1,4 +1,4 @@
-import type { AnalysisRun, CaseReport, CaseReports, CaseSuggestion, ClassInsights, CompetitionClassReport, Draft, EvidenceBundle, ImportResult, MaterialCatalog, ReviewMap, ReviewPayload, ReviewStatus, SourceVerification, SourceVerificationPayload, StudentInsights, TeacherCase, TeacherCasePayload, TeachingAdjustment, TeachingAdjustmentCreate, TeachingAdjustmentUpdate } from './types';
+import type { AnalysisRun, CaseReports, CaseSuggestion, ClassInsights, CompetitionClassReport, Draft, EvidenceBundle, ImportResult, MaterialCatalog, ReleasePreflight, ReviewMap, ReviewPayload, ReviewStatus, SourceVerification, SourceVerificationPayload, StudentInsights, SubmissionExportPayload, TeacherCase, TeacherCasePayload, TeachingAdjustment, TeachingAdjustmentCreate, TeachingAdjustmentUpdate } from './types';
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init);
@@ -28,6 +28,15 @@ export const learningApi = {
   classInsights: (node: string) => api<ClassInsights>(`/api/class-insights?${new URLSearchParams({ node })}`),
   caseReports: (students: string[]) => api<CaseReports>(`/api/reports/cases?${students.map(student => `students=${encodeURIComponent(student)}`).join('&')}`),
   classReport: (node: string) => api<CompetitionClassReport>(`/api/reports/class?${new URLSearchParams({ node })}`),
+  releaseChecks: (caseIds: string[], node: string, reviewer: string, contentReviewed: boolean) => api<ReleasePreflight>(`/api/release-checks?${[...caseIds.map(id => `case_ids=${encodeURIComponent(id)}`), `node=${encodeURIComponent(node)}`, `reviewer=${encodeURIComponent(reviewer)}`, `content_reviewed=${contentReviewed}`].join('&')}`),
+  async exportSubmission(payload: SubmissionExportPayload): Promise<Blob> {
+    const response = await fetch('/api/export-submission', jsonRequest(payload));
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(typeof body === 'object' && body && 'error' in body ? String(body.error) : `请求失败 (${response.status})`);
+    }
+    return response.blob();
+  },
   saveSourceVerification: (payload: SourceVerificationPayload) => api<SourceVerification>('/api/source-verification', jsonRequest(payload)),
   teacherCases: () => api<Record<string, TeacherCase[]>>('/api/teacher-cases'),
   saveTeacherCase: (payload: TeacherCasePayload) => api<TeacherCase>('/api/teacher-case', jsonRequest(payload)),

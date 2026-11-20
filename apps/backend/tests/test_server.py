@@ -8,7 +8,8 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from app.api.app import RequestBodyLimitMiddleware, create_app, logger as api_logger
+from app.api.app import RequestBodyLimitMiddleware, create_app
+from app.api.app import logger as api_logger
 from app.config import settings
 from app.repositories.store import Store
 from app.services.analysis import TABLES, analyze
@@ -70,6 +71,57 @@ def test_http_review_to_export(tmp_path):
             is None
         )
         assert str(tmp_path).replace("\\", "/").encode() not in contents
+
+
+def test_release_preflight_blocks_missing_cases_and_invalidates_changed_review_fingerprint(
+    tmp_path,
+):
+    client = client_for(tmp_path)
+    params = {"case_ids": ["D01", "D02", "D03"], "node": "N01"}
+    preflight = client.get("/api/release-checks", params=params)
+    assert preflight.status_code == 200
+    before = preflight.json()
+    checks = {item["id"]: item for item in before["checks"]}
+    assert checks["case_selection"]["status"] == "passed"
+    assert checks["confirmed_cases"]["status"] == "blocked"
+    assert checks["human_content_review"]["status"] == "not_checked"
+    assert before["release_status"] == "blocked"
+
+    draft = client.get(
+        "/api/draft", params={"student": "D01", "indicator": "T01I1", "node": "N01"}
+    ).json()
+    saved = client.post(
+        "/api/review",
+        json={
+            "student_id": "D01",
+            "indicator_id": "T01I1",
+            "status": "edited",
+            "diagnosis": "需复核步骤",
+            "recommendation": "教师安排短练习",
+            "adjustment_condition": "再次观察",
+            "reason": "核对当前证据",
+            "source": "rule",
+            "evidence_record_ids": draft["evidence_record_ids"],
+            "original_draft": draft,
+        },
+    )
+    assert saved.status_code == 200
+    after = client.get("/api/release-checks", params=params).json()
+    assert before["fingerprint"] != after["fingerprint"]
+
+    response = client.post(
+        "/api/export-submission",
+        json={
+            "run_id": before["run_id"],
+            "case_ids": params["case_ids"],
+            "node_id": "N01",
+            "preflight_fingerprint": before["fingerprint"],
+            "reviewer": "内容负责人",
+            "content_reviewed": True,
+        },
+    )
+    assert response.status_code == 400
+    assert "预检后案例、复核、来源或报告已变化" in response.json()["error"]
 
 
 def test_import_files_rejects_request_body_over_http_limit(tmp_path):

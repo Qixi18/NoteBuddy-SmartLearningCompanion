@@ -146,7 +146,7 @@ export function WorkbenchPage(props: PageProps) {
       <details className="review-save-note"><summary>复核保存与导出说明</summary><p>复核版本保存诊断、建议、调整条件、结构化方案与证据引用。完整方案只在材料来源签核仍有效时进入导出。</p></details>
     </>;
     case '/plan/adjustments': return <TeachingAdjustmentsPanel run={run} reviews={props.reviews} />;
-    case '/plan/cases': return <div className="cases-layout"><CaseEvidence run={run} suggestions={props.suggestions} reviews={props.reviews} draft={props.draft} onOpenReview={(studentId, indicatorId, nodeId) => { props.onStudent(studentId); props.onIndicator(indicatorId); props.onNode(nodeId); onNavigate('/plan/reviews'); }} /><TeacherCaseEditor run={run} reviews={props.reviews} /><CaseReport run={run} /><ClassReport run={run} /><ExportPanel students={run.students} suggestions={props.suggestions} onExport={props.onExport} /></div>;
+    case '/plan/cases': return <div className="cases-layout"><CaseEvidence run={run} suggestions={props.suggestions} reviews={props.reviews} draft={props.draft} onOpenReview={(studentId, indicatorId, nodeId) => { props.onStudent(studentId); props.onIndicator(indicatorId); props.onNode(nodeId); onNavigate('/plan/reviews'); }} /><TeacherCaseEditor run={run} reviews={props.reviews} /><CaseReport run={run} /><ClassReport run={run} /><ExportPanel students={run.students} suggestions={props.suggestions} runId={run.run_id} nodes={run.nodes} onExport={props.onExport} /></div>;
     default: return <Overview run={run} onNavigate={onNavigate} />;
   }
 }

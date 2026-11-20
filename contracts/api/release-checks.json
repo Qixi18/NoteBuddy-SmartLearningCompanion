@@ -1,0 +1,18 @@
+{
+  "run_id": "<current-run-id>",
+  "case_ids": ["D01", "D02", "D03"],
+  "node_id": "N01",
+  "release_status": "blocked",
+  "fingerprint": "<sha256-of-current-snapshot-and-checks>",
+  "checks": [
+    {"id": "case_selection", "label": "三名不同的有效案例学生", "status": "passed", "category": "machine", "detail": "已选择当前运行中的三名不同学生。"},
+    {"id": "confirmed_cases", "label": "三份当前运行的教师确认案例", "status": "blocked", "category": "machine", "detail": "已确认 1/3；请完成未确认案例。"},
+    {"id": "evidence_references", "label": "案例证据引用有效且可追溯", "status": "blocked", "category": "machine", "detail": "案例尚未全部确认。"},
+    {"id": "teacher_reviews", "label": "正式复核版本和教学方案完整", "status": "blocked", "category": "machine", "detail": "案例尚未全部确认。"},
+    {"id": "source_signoffs", "label": "教学材料来源签核仍有效", "status": "blocked", "category": "machine", "detail": "案例尚未全部确认。"},
+    {"id": "case_report", "label": "三案例阅读报告完整", "status": "blocked", "category": "machine", "detail": "案例报告缺失、未完整确认或与所选学生不匹配。"},
+    {"id": "class_report", "label": "当前运行的班级阅读报告", "status": "passed", "category": "machine", "detail": "班级报告与当前运行、节点匹配。"},
+    {"id": "human_content_review", "label": "内容负责人逐页复核并签名", "status": "not_checked", "category": "human", "detail": "机器无法代替内容审阅；提交前需由内容负责人确认报告并填写姓名。"},
+    {"id": "independent_evaluation", "label": "赛事独立数据与最终结论验收", "status": "not_checked", "category": "human", "detail": "尚未绑定官方独立数据及人工验收结果。"}
+  ]
+}

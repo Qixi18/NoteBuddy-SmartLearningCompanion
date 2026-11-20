@@ -1,0 +1,8 @@
+{
+  "run_id": "<exact-run-id-from-preflight>",
+  "case_ids": ["D01", "D02", "D03"],
+  "node_id": "N01",
+  "preflight_fingerprint": "<exact-64-character-preflight-fingerprint>",
+  "reviewer": "内容负责人姓名",
+  "content_reviewed": true
+}

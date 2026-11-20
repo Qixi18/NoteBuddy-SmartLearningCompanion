@@ -8,6 +8,7 @@ from ...domain.assessment.evidence_bundle import AnalysisScope
 from ...services.cases import suggest_cases
 from ...services.exports import package
 from ...services.recommendations import deepseek_draft, draft
+from ...services.shared.release_service import check_release, release_fingerprint
 from ...services.shared.report_service import build_case_reports, build_class_report
 from ...services.task01.material_catalog_service import build_material_catalog
 from ...services.task02.class_insight_service import build_class_insights
@@ -327,6 +328,152 @@ class GetCompetitionReports:
         return build_class_report(run, node_id, insights)
 
 
+class PrepareSubmission:
+    def __init__(self, uow_factory, stage2: Stage2Decisions):
+        self.uow_factory = uow_factory
+        self.stage2 = stage2
+
+    def read_snapshot(self) -> tuple[dict, dict, dict, dict, list]:
+        with self.uow_factory(immediate=False) as uow:
+            run = uow.runs.current()
+            reviews = uow.reviews.list(run["run_id"])
+            cases = uow.stage2.list_cases(run["run_id"])
+            sources = uow.stage2.list_sources(run["run_id"])
+            adjustments = uow.teaching_adjustments.list()
+        return run, reviews, cases, sources, adjustments
+
+    def execute(
+        self,
+        case_ids: list[str],
+        node_id: str,
+        reviewer: str = "",
+        content_reviewed: bool = False,
+        *,
+        snapshot: tuple[dict, dict, dict, dict, list] | None = None,
+    ) -> dict:
+        run, reviews, cases, raw_sources, adjustments = snapshot or self.read_snapshot()
+        sources = raw_sources
+        sources = self.stage2.with_source_freshness(run, sources)
+        try:
+            case_report = build_case_reports(
+                run, case_ids, cases, reviews, sources, adjustments
+            )
+        except ValueError:
+            case_report = {
+                "run_id": run.get("run_id"),
+                "status": "incomplete",
+                "cases": [],
+                "comparison": [],
+                "limitations": [],
+            }
+        try:
+            insights = build_class_insights(run, node_id, sources)
+            class_report = build_class_report(run, node_id, insights)
+        except ValueError:
+            class_report = {
+                "run_id": run.get("run_id"),
+                "node_id": node_id,
+                "status": "incomplete",
+                "classes": [],
+                "comparisons": [],
+                "common_observations": [],
+                "limitations": [],
+            }
+        reports = {"cases": case_report, "class": class_report}
+        checks = check_release(
+            run,
+            sources,
+            cases,
+            reviews,
+            reports,
+            case_ids,
+            node_id=node_id,
+            content_reviewed=content_reviewed,
+            reviewer=reviewer,
+        )
+        fingerprint = release_fingerprint(
+            run,
+            sources,
+            cases,
+            reviews,
+            reports,
+            case_ids,
+            node_id,
+            checks,
+            reviewer,
+            content_reviewed,
+        )
+        blocking = any(item["status"] == "blocked" for item in checks)
+        unchecked = any(item["status"] == "not_checked" for item in checks)
+        return {
+            "run_id": run["run_id"],
+            "case_ids": case_ids,
+            "node_id": node_id,
+            "checks": checks,
+            "reports": reports,
+            "fingerprint": fingerprint,
+            "reviewer": reviewer.strip(),
+            "content_reviewed": content_reviewed,
+            "release_status": "blocked"
+            if blocking
+            else "ready_with_open_checks"
+            if unchecked
+            else "ready",
+            "_snapshot": (run, reviews, cases, sources, adjustments),
+        }
+
+
+class ExportSubmission:
+    def __init__(
+        self, prepared: PrepareSubmission, uow_factory, stage2: Stage2Decisions
+    ):
+        self.prepared = prepared
+        self.uow_factory = uow_factory
+        self.stage2 = stage2
+
+    def execute(self, payload: dict) -> bytes:
+        snapshot = self.prepared.read_snapshot()
+        current = self.prepared.execute(
+            payload["case_ids"],
+            payload["node_id"],
+            payload["reviewer"],
+            payload["content_reviewed"],
+            snapshot=snapshot,
+        )
+        if payload["run_id"] != current["run_id"]:
+            raise ValueError("当前运行已变化；请重新执行发布预检")
+        if payload["preflight_fingerprint"] != current["fingerprint"]:
+            raise ValueError("预检后案例、复核、来源或报告已变化；请重新执行发布预检")
+        blockers = [
+            item["label"] for item in current["checks"] if item["status"] == "blocked"
+        ]
+        if blockers:
+            raise ValueError("发布预检未通过：" + "、".join(blockers))
+        if not payload["content_reviewed"] or not payload["reviewer"].strip():
+            raise ValueError("请由内容负责人逐页审阅报告并填写姓名")
+        run, reviews, cases, sources, adjustments = current["_snapshot"]
+        submission = {
+            key: current[key]
+            for key in (
+                "checks",
+                "reports",
+                "fingerprint",
+                "reviewer",
+                "content_reviewed",
+                "release_status",
+            )
+        }
+        return package(
+            run,
+            reviews,
+            payload["case_ids"],
+            sources=sources,
+            cases=cases,
+            teaching_adjustments=adjustments,
+            submission=submission,
+        )
+
+
 class WorkbenchUseCases:
     """Composition object holding only the real workbench use cases."""
 
@@ -359,3 +506,7 @@ class WorkbenchUseCases:
         self.student_insights = GetStudentInsights(self.evidence_bundle)
         self.class_insights = GetClassInsights(self.current_run, self.stage2)
         self.competition_reports = GetCompetitionReports(uow_factory, self.stage2)
+        self.prepare_submission = PrepareSubmission(uow_factory, self.stage2)
+        self.export_submission = ExportSubmission(
+            self.prepare_submission, uow_factory, self.stage2
+        )

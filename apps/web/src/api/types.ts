@@ -4,3 +4,4 @@ export type { CatalogMaterial, IndicatorMaterialCatalog, LearningItem, MaterialC
 export type { CaseSuggestion, Draft, ResourceSelection, ResourceSelectionEntry, TeachingPlanV2 } from './types/teaching';
 export type { EvidenceReference, Review, ReviewMap, ReviewPayload, StructuredPlan, SourceVerification, SourceVerificationPayload, TeacherCase, TeacherCasePayload, TeachingAdjustment, TeachingAdjustmentCreate, TeachingAdjustmentUpdate } from './types/review';
 export type { CaseReport, CaseReports, CompetitionClassReport, CaseReportEvidence, CaseReportReview } from './types/reports';
+export type { ReleaseCheck, ReleasePreflight, SubmissionExportPayload } from './types/reports';

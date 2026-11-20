@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import csv
+import hashlib
+import html
 import io
 import json
 import zipfile
 from collections import Counter
 from datetime import UTC, datetime
+from pathlib import Path
 
 from ...domain.assessment.evidence_bundle import AnalysisScope
 from ..task02.case_service import suggest_cases
@@ -25,6 +28,7 @@ def package(
     sources: dict | None = None,
     cases: dict | None = None,
     teaching_adjustments: list[dict] | None = None,
+    submission: dict | None = None,
 ) -> bytes:
     case_ids = case_ids or []
     sources = sources or {}
@@ -132,7 +136,10 @@ def package(
                 else:
                     pending.append(entry)
     manifest = {
-        "package_type": "selected_student_cases",
+        "package_type": "competition_submission"
+        if submission
+        else "selected_student_cases",
+        "schema_version": "2.0" if submission else "1.0",
         "run_id": run["run_id"],
         "created_at": run["created_at"],
         "rule_version": run["rule_version"],
@@ -143,6 +150,14 @@ def package(
         "reviewed_recommendations": len(accepted),
         "pending_recommendations": len(pending),
     }
+    if submission:
+        manifest.update(
+            release_status=submission["release_status"],
+            release_fingerprint=submission["fingerprint"],
+            release_check_count=len(submission["checks"]),
+            content_reviewer=submission["reviewer"],
+            content_reviewed=submission["content_reviewed"],
+        )
     metric = run["metrics"]
     suggested = {c["student_id"]: c for c in suggest_cases(run)}
     course_relations = [
@@ -449,10 +464,69 @@ def package(
             if key.partition(":")[0] in case_ids
         },
     }
+    if submission:
+        files.update(
+            {
+                "release_checks.json": submission["checks"],
+                "case_reports.json": submission["reports"]["cases"],
+                "class_report.json": submission["reports"]["class"],
+                "submission.schema.json": json.loads(
+                    (
+                        Path(__file__).resolve().parents[2]
+                        / "content"
+                        / "submission.schema.json"
+                    ).read_text(encoding="utf-8")
+                ),
+            }
+        )
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
         for name, value in files.items():
             archive.writestr(name, json.dumps(value, ensure_ascii=False, indent=2))
+        if submission:
+            check_rows = "".join(
+                f"<tr><td>{html.escape(str(check['label']))}</td><td>{html.escape(str(check['status']))}</td><td>{html.escape(str(check['detail']))}</td></tr>"
+                for check in submission["checks"]
+            )
+            case_sections = "".join(
+                "<section><h2>案例 "
+                + html.escape(str(case.get("student_id", "")))
+                + " · "
+                + html.escape(str(case.get("status", "")))
+                + "</h2><p>"
+                + html.escape(str(case.get("narrative", case.get("message", ""))))
+                + "</p><p><b>解释限制：</b>"
+                + html.escape(str(case.get("limitations", "")))
+                + "</p><ul>"
+                + "".join(
+                    f"<li>{html.escape(str(item.get('source_locator') or item.get('description') or item.get('record_id') or '证据'))} · {html.escape(str(item.get('score', '')))} / {html.escape(str(item.get('maximum', '')))}</li>"
+                    for item in case.get("evidence", [])
+                )
+                + "</ul></section>"
+                for case in submission["reports"]["cases"].get("cases", [])
+            )
+            class_report = submission["reports"]["class"]
+            class_sections = (
+                "<section><h2>班级范围与覆盖</h2><ul>"
+                + "".join(
+                    f"<li>{html.escape(str(item.get('class_id', '')))} · {int(item.get('student_count', 0))} 名学生 · {int(item.get('scored_record_count', 0))} 条有效评分</li>"
+                    for item in class_report.get("classes", [])
+                )
+                + "</ul><h2>共同题目比较</h2><ul>"
+                + "".join(
+                    f"<li>{html.escape(str(item.get('indicator_id', '')))} · 共同材料 {html.escape('、'.join(item.get('common_material_ids', [])))} · 差异 {html.escape(str(item.get('difference', '不可计算')))}</li>"
+                    for item in class_report.get("comparisons", [])
+                )
+                + "</ul></section>"
+            )
+            archive.writestr(
+                "submission-report.html",
+                '<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>智慧学伴发布核验</title>'
+                "<style>body{font:16px/1.65 system-ui,sans-serif;max-width:1000px;margin:40px auto;padding:0 24px;color:#172b43}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccd5e0;padding:10px;text-align:left}th{background:#eef3fa}</style>"
+                f"<h1>智慧学伴竞赛发布核验</h1><p>运行：{html.escape(str(run['run_id']))} · 案例：{html.escape('、'.join(case_ids))}</p>"
+                f"<p>报告状态：{html.escape(submission['release_status'])} · 内容审阅人：{html.escape(submission['reviewer'])}</p>"
+                f"<table><thead><tr><th>检查项</th><th>状态</th><th>依据</th></tr></thead><tbody>{check_rows}</tbody></table>{case_sections}{class_sections}</html>",
+            )
         metric_csv = io.StringIO(newline="")
         writer = csv.DictWriter(
             metric_csv,
@@ -524,4 +598,25 @@ def package(
             "`pending_review.json` 单列未接受的建议；`recommendations.json` 仅含已接受或修改项。\n"
             "来源文件哈希与规则版本见 `manifest.json`。\n",
         )
-    return output.getvalue()
+    result = output.getvalue()
+    if not submission:
+        return result
+    with zipfile.ZipFile(io.BytesIO(result)) as existing:
+        members = {name: existing.read(name) for name in existing.namelist()}
+    formal_manifest = json.loads(members["manifest.json"])
+    formal_manifest["checksum_file"] = "checksums.json"
+    formal_manifest["hash_algorithm"] = "sha256"
+    members["manifest.json"] = json.dumps(
+        formal_manifest, ensure_ascii=False, indent=2
+    ).encode("utf-8")
+    checksums = {
+        name: hashlib.sha256(payload).hexdigest() for name, payload in members.items()
+    }
+    members["checksums.json"] = json.dumps(
+        checksums, ensure_ascii=False, indent=2, sort_keys=True
+    ).encode("utf-8")
+    verified_output = io.BytesIO()
+    with zipfile.ZipFile(verified_output, "w", zipfile.ZIP_DEFLATED) as archive:
+        for name, payload in members.items():
+            archive.writestr(name, payload)
+    return verified_output.getvalue()

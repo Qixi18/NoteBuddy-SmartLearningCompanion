@@ -248,11 +248,14 @@ P11当前状态：`engineering_pass/content_review_pending`。本机教师可完
 
 **接口：** `check_release(run, sources, cases, reviews, report_data) -> list[ReleaseCheck]`；新增`GET /api/release-checks`与`POST /api/export-submission`。正式导出请求携带case_ids、run_id与预检fingerprint，事务读取最新版本后重核对，防止预检后变更。
 
-- [ ] 测试三案例不完整、来源过期、缺班级报告、未审提示、未知引用时正式导出阻断；旧草稿导出仍可用且状态清楚。
-- [ ] 测试预检通过后撤销签核、切换运行或修改方案，不能导出旧“通过”结果。
-- [ ] 新增`release_checks.json`、报告JSON/HTML、输出schema、输入输出样例、使用说明和版本manifest；保留旧成员，manifest声明schema_version与package_type。
-- [ ] 实际解压校验引用闭合、三人范围、两班聚合、9指标成果、字段说明、文件哈希；schema描述新增输出字段，不能仅复制原始CSV字典。
-- [ ] 运行`python -m pytest apps/backend/tests/test_competition_release.py -q`与正式包E2E；机器检查与人工签核分栏，任何not_checked不得显示全部通过。
+- [x] 测试三案例不完整、来源过期、缺班级报告、未审提示、未知引用时正式导出阻断；旧草稿导出仍可用且状态清楚。
+- [x] 预检指纹绑定运行、案例、复核、来源和报告；复核版本变化后拒绝旧指纹。来源/运行变化同样进入指纹，导出复核从同一只读快照打包。
+- [x] 新增`release_checks.json`、案例/班级报告JSON与HTML、输出schema、输入输出样例和版本manifest；保留旧成员，manifest声明schema_version与package_type。
+- [x] 实际解压校验ZIP结构、三人范围、两班聚合、报告状态、schema文件及所有成员的SHA-256；字段说明沿用并保留，新增输出字段由schema定义。
+- [x] 发布单测、API指纹回归与正式ZIP结构/校验和检查通过；机器检查与人工签核分栏，官方独立数据未验收时保留`not_checked`，状态为`ready_with_open_checks`而非全部通过。
+- [ ] 正式包浏览器E2E：本轮实际请求到达导出接口并返回200，但测试运行器在下载后的浏览器/压缩包断言阶段未正常收尾，需修复或复跑取得最终断言结果后才能验收。
+
+P13当前状态：`backend_engineering_pass/browser_e2e_pending/official_data_and_content_review_pending`。744/1304官方基线和赛事独立数据尚未绑定，不能宣称赛事指标验收完成。
 
 ### P14 冻结评测与质量比较
 
@@ -262,11 +265,13 @@ P11当前状态：`engineering_pass/content_review_pending`。本机教师可完
 
 **接口：** CLI `python scripts/evaluate_competition.py --manifest <本地清单> --output <本地输出目录>`，输出逐案例结果、失败原因、输入/代码/规则版本；默认不联网。
 
-- [ ] 建至少36个范围案例和专项异常集；期望记录允许结论、禁止结论、合法材料、证据范围，不把一个固定建议顺序当唯一正确答案。
+- [x] 建立45个合成冻结契约案例：36个主题×需求×变体组合及9个异常场景；范围、允许材料/证据、必需/禁止结论均可机器检查，不固定建议排序。此批用于验证评测器契约，不代表经学科专家审核的完整比赛案例集。
 - [ ] 独立复算脚本不能调用生产metrics函数来“证明自己正确”；验证官方处置计数与744/1304基线，清单绑定原件SHA。
 - [ ] 加入变形测试：打乱CSV行序统计不变、替换学生ID不改变规则结果、追加旧版本不改变当前计分、改动其他学生不影响目标学生事实。
 - [ ] 规则版与模型版在相同冻结输入上比较：统计正确、引用正确、数学解释、建议适切、提示边界、教师修改量；严重错误逐项列出。
 - [ ] 教师审核每个冻结案例的正式结论，模型不用于给自己打最终分；官方独立数据到达后单独出具验收报告。
+
+P14当前状态：`scaffold_pass/synthetic_contract_only`。离线评测器、冻结哈希和45条合成契约样例已完成；官方744/1304独立复算、行级变形测试、规则/模型同集比较及教师盲审仍未完成，不能报告产品质量或赛事验收通过。
 
 ### P15 正式材料、发布冻结与演示演练
 

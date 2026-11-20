@@ -576,6 +576,17 @@ summary { min-height: 28px; }
 .class-comparison, .class-issue { margin-top: 14px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; }
 .class-comparison h5, .class-issue h5 { margin: 0; }
 .report-limitation-section { padding: 14px; background: #f5f8fc; border-radius: 10px; }
+.release-preflight { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--line); }
+.release-preflight > label:not(.check-row) { display: grid; gap: 6px; margin: 12px 0; max-width: 420px; }
+.release-check-list { display: grid; gap: 8px; padding: 0; list-style: none; }
+.release-check { padding: 12px 14px; border: 1px solid var(--line); border-radius: 9px; }
+.release-check p { margin: 5px 0 0; color: var(--muted); line-height: 1.55; }
+.release-check.status-passed { border-left: 4px solid #32a06b; }
+.release-check.status-blocked { border-left: 4px solid #ce594e; }
+.release-check.status-not_checked { border-left: 4px solid #d59b35; }
+.release-status { padding: 12px; border-radius: 9px; background: #f2f6fb; }
+.release-status.release-blocked { color: #873d37; background: #fff1ef; }
+.release-status.release-ready_with_open_checks { color: #785312; background: #fff8e9; }
 @media (max-width: 1120px) { .case-report-grid { grid-template-columns: 1fr; } }
 @media (max-width: 720px) { .report-toolbar, .report-toolbar > div { align-items: stretch; flex-direction: column; } .report-comparison-grid, .class-coverage-grid { grid-template-columns: 1fr; } }
 @media print {

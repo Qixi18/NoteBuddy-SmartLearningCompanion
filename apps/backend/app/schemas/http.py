@@ -203,6 +203,23 @@ class TeacherCaseRequest(BaseModel):
     reviewer: str = Field(default="", max_length=200)
 
 
+class SubmissionExportRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    run_id: str = Field(min_length=1)
+    case_ids: list[str] = Field(min_length=3, max_length=3)
+    node_id: str = Field(min_length=1)
+    preflight_fingerprint: str = Field(min_length=64, max_length=64)
+    reviewer: str = Field(min_length=1, max_length=200)
+    content_reviewed: bool
+
+    @field_validator("case_ids")
+    @classmethod
+    def selected_case_ids_are_unique(cls, value: list[str]) -> list[str]:
+        if len(set(value)) != len(value):
+            raise ValueError("案例学生不能重复")
+        return value
+
+
 class TeachingAdjustmentCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     student_id: str = Field(min_length=1)

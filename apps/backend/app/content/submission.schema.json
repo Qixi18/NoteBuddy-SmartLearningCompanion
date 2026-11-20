@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "智慧学伴竞赛成果包索引",
+  "type": "object",
+  "required": ["manifest.json", "release_checks.json", "case_reports.json", "class_report.json"],
+  "properties": {
+    "manifest.json": {
+      "type": "object",
+      "required": ["package_type", "schema_version", "run_id", "case_ids", "release_fingerprint"],
+      "properties": {
+        "package_type": {"const": "competition_submission"},
+        "schema_version": {"type": "string"},
+        "run_id": {"type": "string"},
+        "case_ids": {"type": "array", "minItems": 3, "maxItems": 3, "uniqueItems": true, "items": {"type": "string"}},
+        "release_fingerprint": {"type": "string", "minLength": 64, "maxLength": 64},
+        "release_status": {"enum": ["ready", "ready_with_open_checks"]}
+      }
+    },
+    "release_checks.json": {"type": "array", "items": {"type": "object", "required": ["id", "label", "status", "category", "detail"]}},
+    "case_reports.json": {"type": "object", "required": ["run_id", "status", "cases", "comparison", "limitations"]},
+    "class_report.json": {"type": "object", "required": ["run_id", "node_id", "status", "classes", "comparisons", "common_observations", "limitations"]}
+  }
+}

@@ -26,6 +26,7 @@ from .routes import (
     health,
     imports,
     recommendations,
+    release,
     reports,
     reviews,
     stage2,
@@ -239,6 +240,7 @@ def create_app(store: Store | None = None, config: Settings = settings) -> FastA
     application.include_router(reviews.router)
     application.include_router(stage2.router)
     application.include_router(reports.router)
+    application.include_router(release.router)
     application.include_router(exports.router)
 
     @application.get("/", include_in_schema=False)
