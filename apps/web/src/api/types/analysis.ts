@@ -161,6 +161,37 @@ export interface StudentInsights {
   claims: InsightClaim[];
 }
 
+export interface ClassInsights {
+  run_id: string;
+  node_id: string;
+  classes: Array<{ class_id: string; student_count: number; student_ids: string[]; scored_record_count: number }>;
+  comparisons: Array<{
+    indicator_id: string;
+    status: 'available' | 'unavailable_no_common_questions';
+    common_material_ids: string[];
+    classes: Array<{
+      class_id: string;
+      scored_record_count: number;
+      observed_student_count: number;
+      score: number;
+      maximum: number;
+      ratio: number | null;
+      common_score: number | null;
+      common_maximum: number | null;
+      common_ratio: number | null;
+      common_record_count: number;
+    }>;
+  }>;
+  issues: Array<{
+    indicator_id: string;
+    issue_id: string;
+    label: string;
+    by_class: Array<{ class_id: string; affected_count: number; affected_student_ids: string[]; observed_student_count: number; evidence_refs: Array<{ record_id: string; source_line: number | null; material_id: string }> }>;
+    limitations: string[];
+  }>;
+  limitations: string[];
+}
+
 export interface RubricObservation {
   record_id: string;
   event_id: string;

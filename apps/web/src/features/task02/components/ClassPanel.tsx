@@ -1,8 +1,29 @@
-import type { AnalysisRun } from '../../../api/types';
+import { useEffect, useState } from 'react';
+import { learningApi } from '../../../api/client';
+import type { AnalysisRun, ClassInsights } from '../../../api/types';
 import { MetricBar } from '../../../components/MetricBar';
 import { Panel } from '../../../components/Panel';
 
 export function ClassPanel({ run, node = '', onNode, onOpenStudent }: { run: AnalysisRun; node?: string; onNode?: (id: string) => void; onOpenStudent?: (studentId: string) => void }) {
+  const [insights, setInsights] = useState<ClassInsights | null>(null);
+  const [insightMessage, setInsightMessage] = useState('');
+  useEffect(() => {
+    let active = true;
+    setInsights(null);
+    if (!node) {
+      setInsightMessage('选择测验节点后查看共同题目和已核验问题计数。');
+      return () => { active = false; };
+    }
+    setInsightMessage('正在计算共同题目与去重问题计数…');
+    learningApi.classInsights(node).then(result => {
+      if (!active) return;
+      setInsights(result);
+      setInsightMessage('');
+    }).catch(error => {
+      if (active) setInsightMessage(`班级证据比较读取失败：${error instanceof Error ? error.message : String(error)}`);
+    });
+    return () => { active = false; };
+  }, [run.run_id, node]);
   const classes = [...new Set(run.students.map(student => student['模拟班级编号']))];
   const scoped = run.metrics.filter(metric => metric.kind === 'class_indicator' && metric.node_id === node);
   const hasNodeMetrics = run.metrics.some(metric => metric.kind === 'class_indicator' && Boolean(metric.node_id));
@@ -27,5 +48,6 @@ export function ClassPanel({ run, node = '', onNode, onOpenStudent }: { run: Ana
       <details><summary>节点 {node} 的指标明细</summary>{run.objectives.map(objective => <div className="row" key={objective['指标编号']}><strong>{objective['指标编号']} · {objective['观察指标']}</strong><p>{classes.map(classId => { const metric = scoped.find(item => item.class_id === classId && item.indicator_id === objective['指标编号']); return <span key={classId}>{classId}：{metric ? `${metric.score}/${metric.maximum}（${metric.ratio == null ? '无分母' : `${(metric.ratio * 100).toFixed(1)}%`}，${metric.count} 条）` : '无有效已评分记录'}；</span>; })}</p></div>)}</details>
     </>}
     <details><summary>跨节点历史汇总 · 不用于进步判断</summary><p className="muted">以下仅汇总已有有效评分；不同节点不能直接比较。</p>{combined.map(metric => <p key={metric.key}>{metric.key}：{metric.score}/{metric.maximum} 分 · {metric.count} 条</p>)}{byIndicator.map(metric => <p key={metric.key}>{metric.key}：{metric.score}/{metric.maximum} 分 · {metric.count} 条</p>)}</details>
+    {node && <section className="source-detail class-common-evidence" aria-label="班级共性与可比范围"><h3>班级共性与可比范围</h3>{insightMessage && <p className="muted" role="status">{insightMessage}</p>}{insights?.comparisons.map(comparison => <div className="row" key={comparison.indicator_id}><strong>{comparison.indicator_id} · 共同题目比较</strong>{comparison.status === 'available' ? <><p>共同观察题目：{comparison.common_material_ids.join('、')}</p>{comparison.classes.map(item => <p key={item.class_id}>{item.class_id}：共同题目 {item.common_score}/{item.common_maximum} 分 · {item.common_record_count} 条 · {item.observed_student_count} 名可观察学生</p>)}</> : <p>共同观察题目为空，当前不可比较。</p>}</div>)}{insights?.issues.length ? insights.issues.map(issue => <div className="row" key={`${issue.indicator_id}:${issue.issue_id}`}><strong>{issue.indicator_id} · {issue.label}</strong>{issue.by_class.map(item => <div key={item.class_id}><p>{item.class_id}：{item.affected_count}/{item.observed_student_count} 名可观察学生有跨题已核验评分点失分{item.affected_student_ids.length ? `（${item.affected_student_ids.join('、')}）` : ''}。{onOpenStudent && item.affected_student_ids.map(studentId => <button className="secondary" key={studentId} onClick={() => onOpenStudent(studentId)}>查看 {studentId} 证据</button>)}</p>{item.evidence_refs.length > 0 && <details><summary>查看原始记录来源（{item.evidence_refs.length}）</summary>{item.evidence_refs.map((ref, index) => <p key={`${ref.record_id}-${ref.source_line}-${index}`}>{item.class_id} · {ref.record_id} · {ref.material_id} · CSV第 {ref.source_line ?? '未知'} 行</p>)}</details>}</div>)}{issue.limitations.map(limitation => <small key={limitation}>{limitation}</small>)}</div>) : insights && <p className="muted">当前没有可用的已核验跨题问题映射；这不表示不存在共性问题。</p>}{insights?.limitations.map(limitation => <small key={limitation}>{limitation}</small>)}</section>}
   </Panel>;
 }

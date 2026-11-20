@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 from app.schemas.http import (
     AnalysisRunResponse,
+    ClassInsightsResponse,
     ErrorResponse,
     EvidenceBundleResponse,
     HealthResponse,
@@ -50,6 +51,9 @@ def test_shared_frontend_backend_contract_fixtures():
     student_insights = json.loads(
         (root / "contracts/api/student-insights.json").read_text(encoding="utf-8")
     )
+    class_insights = json.loads(
+        (root / "contracts/api/class-insights.json").read_text(encoding="utf-8")
+    )
     teacher_case = json.loads(
         (root / "contracts/api/teacher-case.json").read_text(encoding="utf-8")
     )
@@ -68,6 +72,10 @@ def test_shared_frontend_backend_contract_fixtures():
     assert (
         StudentInsightsResponse.model_validate(student_insights).model_dump()
         == student_insights
+    )
+    assert (
+        ClassInsightsResponse.model_validate(class_insights).model_dump()
+        == class_insights
     )
     assert (
         SourceVerificationRequest.model_validate(source_verification).model_dump()

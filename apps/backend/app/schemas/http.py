@@ -356,6 +356,64 @@ class StudentInsightsResponse(BaseModel):
     claims: list[InsightClaimResponse]
 
 
+class ClassSummaryResponse(BaseModel):
+    class_id: str
+    student_count: int
+    student_ids: list[str]
+    scored_record_count: int
+
+
+class ClassComparisonMetricsResponse(BaseModel):
+    class_id: str
+    scored_record_count: int
+    observed_student_count: int
+    score: float
+    maximum: float
+    ratio: float | None
+    common_score: float | None
+    common_maximum: float | None
+    common_ratio: float | None
+    common_record_count: int
+
+
+class ClassComparisonResponse(BaseModel):
+    indicator_id: str
+    status: Literal["available", "unavailable_no_common_questions"]
+    common_material_ids: list[str]
+    classes: list[ClassComparisonMetricsResponse]
+
+
+class ClassIssueEvidenceResponse(BaseModel):
+    record_id: str
+    source_line: int | None
+    material_id: str
+
+
+class ClassIssueCountResponse(BaseModel):
+    class_id: str
+    affected_count: int
+    affected_student_ids: list[str]
+    observed_student_count: int
+    evidence_refs: list[ClassIssueEvidenceResponse]
+
+
+class ClassIssueResponse(BaseModel):
+    indicator_id: str
+    issue_id: str
+    label: str
+    by_class: list[ClassIssueCountResponse]
+    limitations: list[str]
+
+
+class ClassInsightsResponse(BaseModel):
+    run_id: str
+    node_id: str
+    classes: list[ClassSummaryResponse]
+    comparisons: list[ClassComparisonResponse]
+    issues: list[ClassIssueResponse]
+    limitations: list[str]
+
+
 class TeacherCaseResponse(TeacherCaseRequest):
     run_id: str
     version: int

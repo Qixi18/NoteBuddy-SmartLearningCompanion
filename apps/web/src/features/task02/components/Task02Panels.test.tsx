@@ -14,6 +14,9 @@ beforeEach(() => {
     scope: { run_id: 'run1', student_id: 'D01', indicator_id: 'I1', node_id: 'N01' },
     bundle_fingerprint: 'bundle-1', claims: [],
   });
+  vi.spyOn(learningApi, 'classInsights').mockResolvedValue({
+    run_id: 'run1', node_id: 'N01', classes: [], comparisons: [], issues: [], limitations: [],
+  });
 });
 
 const run = {
@@ -68,6 +71,34 @@ describe('TASK02 result panels', () => {
     rerender(<ClassPanel run={run} node="N01" onNode={onNode} />);
     fireEvent.click(screen.getByText('节点 N01 的指标明细'));
     expect(screen.getByText(/C1：1\/2（50.0%，1 条）/)).toBeTruthy();
+  });
+
+  it('shows common-item scope and deduplicated issue counts with student drilldown', async () => {
+    vi.spyOn(learningApi, 'classInsights').mockResolvedValue({
+      run_id: 'run1', node_id: 'N01', classes: [],
+      comparisons: [{
+        indicator_id: 'I1', status: 'available', common_material_ids: ['Q001'],
+        classes: [
+          { class_id: 'C1', scored_record_count: 2, observed_student_count: 2, score: 3, maximum: 4, ratio: 0.75, common_score: 3, common_maximum: 4, common_ratio: 0.75, common_record_count: 2 },
+          { class_id: 'C2', scored_record_count: 2, observed_student_count: 2, score: 2, maximum: 4, ratio: 0.5, common_score: 2, common_maximum: 4, common_ratio: 0.5, common_record_count: 2 },
+        ],
+      }],
+      issues: [{
+        indicator_id: 'I1', issue_id: 'same-step', label: '步骤依据缺失',
+        by_class: [{ class_id: 'C1', affected_count: 1, affected_student_ids: ['D01'], observed_student_count: 2, evidence_refs: [{ record_id: 'R1', source_line: 2, material_id: 'Q001' }] }],
+        limitations: ['按学生去重。'],
+      }],
+      limitations: ['不输出班级能力排名或显著性结论。'],
+    });
+    const onOpenStudent = vi.fn();
+    render(<ClassPanel run={run} node="N01" onOpenStudent={onOpenStudent} />);
+    expect(await screen.findByText('共同观察题目：Q001')).toBeTruthy();
+    expect(screen.getByText(/C1：1\/2 名可观察学生有跨题/)).toBeTruthy();
+    fireEvent.click(screen.getByText('查看原始记录来源（1）'));
+    expect(screen.getByText(/C1 · R1 · Q001 · CSV第 2 行/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '查看 D01 证据' }));
+    expect(onOpenStudent).toHaveBeenCalledWith('D01');
+    expect(screen.getByText(/不输出班级能力排名/)).toBeTruthy();
   });
 
   it('lets the learner view select a node and labels unknown status explicitly', () => {

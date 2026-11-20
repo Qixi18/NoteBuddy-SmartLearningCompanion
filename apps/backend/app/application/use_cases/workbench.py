@@ -8,6 +8,7 @@ from ...services.cases import suggest_cases
 from ...services.exports import package
 from ...services.recommendations import deepseek_draft, draft
 from ...services.task01.material_catalog_service import build_material_catalog
+from ...services.task02.class_insight_service import build_class_insights
 from ...services.task02.evidence_bundle_service import build_evidence_bundle
 from ...services.task02.insight_service import build_student_insights
 from ..ports.llm import LLMClient
@@ -205,6 +206,19 @@ class GetStudentInsights:
         }
 
 
+class GetClassInsights:
+    def __init__(self, current_run: CurrentRun, stage2: Stage2Decisions):
+        self.current_run = current_run
+        self.stage2 = stage2
+
+    def execute(self, node_id: str) -> dict:
+        with self.current_run.uow_factory(immediate=False) as uow:
+            run = uow.runs.current()
+            sources = uow.stage2.list_sources(run["run_id"])
+        sources = self.stage2.with_source_freshness(run, sources)
+        return build_class_insights(run, node_id, sources)
+
+
 class WorkbenchUseCases:
     """Composition object holding only the real workbench use cases."""
 
@@ -235,3 +249,4 @@ class WorkbenchUseCases:
         self.export_package = ExportPackage(uow_factory, self.current_run, self.stage2)
         self.evidence_bundle = GetEvidenceBundle(uow_factory, self.stage2)
         self.student_insights = GetStudentInsights(self.evidence_bundle)
+        self.class_insights = GetClassInsights(self.current_run, self.stage2)

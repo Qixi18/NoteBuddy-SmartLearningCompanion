@@ -7,6 +7,7 @@ from ...application.use_cases.workbench import WorkbenchUseCases
 from ...schemas.http import (
     AnalysisRunResponse,
     CaseSuggestionResponse,
+    ClassInsightsResponse,
     DraftResponse,
     EvidenceBundleResponse,
     StudentInsightsResponse,
@@ -15,6 +16,18 @@ from ..dependencies import get_use_cases
 
 router = APIRouter()
 UseCases = Annotated[WorkbenchUseCases, Depends(get_use_cases)]
+
+
+@router.get(
+    "/api/class-insights",
+    response_model=ClassInsightsResponse,
+    tags=["analysis"],
+)
+def class_insights(
+    use_cases: UseCases,
+    node: str = Query(min_length=1),
+) -> dict:
+    return use_cases.class_insights.execute(node)
 
 
 @router.get(
