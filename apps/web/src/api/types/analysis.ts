@@ -102,6 +102,41 @@ export interface AnalysisRun {
   source_index: SourceIndexEntry[];
 }
 
+export interface EvidenceBundle {
+  scope: { run_id: string; student_id: string; indicator_id: string; node_id: string };
+  responses: Array<{
+    kind: 'response';
+    evidence_id: string;
+    record_id: string | null;
+    event_id: string | null;
+    source_line: number | null;
+    student_id: string;
+    indicator_id: string;
+    node_id: string;
+    material_id: string;
+    state: string;
+    score: string | null;
+    maximum: string | null;
+    raw_response: string;
+    solution_steps: string;
+    disposition: string;
+    rubric_observation: Record<string, unknown> | null;
+  }>;
+  items: Array<{ material_id: string; prompt: string; maximum: string; rubric: string }>;
+  rubric_definitions: Array<{ point_id: string; item_id: string; description: string; maximum: number }>;
+  coverage: {
+    expected_material_ids: string[];
+    observed_material_ids: string[];
+    unobserved_material_ids: string[];
+    record_count: number;
+    unknown_reason: string | null;
+    evidence_id: string;
+  };
+  source_versions: Record<string, number>;
+  issues: Array<Record<string, unknown>>;
+  fingerprint: string;
+}
+
 export interface RubricObservation {
   record_id: string;
   event_id: string;

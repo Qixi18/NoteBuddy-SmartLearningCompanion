@@ -6,6 +6,7 @@ import reviewSuccess from '../../../../contracts/api/review-success.json';
 import draftFixture from '../../../../contracts/api/draft.json';
 import analysisRunFixture from '../../../../contracts/api/analysis-run.json';
 import sourceVerificationFixture from '../../../../contracts/api/source-verification.json';
+import evidenceBundleFixture from '../../../../contracts/api/evidence-bundle.json';
 import teacherCaseFixture from '../../../../contracts/api/teacher-case.json';
 import { api, jsonRequest, learningApi } from './client';
 import type { AnalysisRun, SourceVerificationPayload, TeacherCasePayload } from './types';
@@ -62,5 +63,13 @@ describe('shared API fixtures', () => {
     expect(sourcePayload.rubric_mappings?.[0].rubric_point_ids).toEqual(['M01P1', 'M02P2']);
     expect(sourcePayload.expected_version).toBe(0);
     expect(casePayload.review_refs[0]).toEqual({ indicator_id: 'T01I1', node_id: 'N01', version: 1 });
+  });
+
+  it('keeps coverage-only evidence bundles explicit and score-free', () => {
+    const bundle = evidenceBundleFixture as unknown as import('./types').EvidenceBundle;
+    expect(bundle.coverage.record_count).toBe(0);
+    expect(bundle.coverage.unknown_reason).toBe('no_response_records_in_scope');
+    expect(bundle.coverage.unobserved_material_ids).toEqual(['Q001']);
+    expect(bundle.responses).toEqual([]);
   });
 });

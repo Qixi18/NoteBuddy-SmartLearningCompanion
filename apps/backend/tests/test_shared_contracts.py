@@ -5,6 +5,7 @@ import pytest
 from app.schemas.http import (
     AnalysisRunResponse,
     ErrorResponse,
+    EvidenceBundleResponse,
     HealthResponse,
     ImportFilesRequest,
     ReviewRecordResponse,
@@ -35,6 +36,9 @@ def test_shared_frontend_backend_contract_fixtures():
     source_verification = json.loads(
         (root / "contracts/api/source-verification.json").read_text(encoding="utf-8")
     )
+    evidence_bundle = json.loads(
+        (root / "contracts/api/evidence-bundle.json").read_text(encoding="utf-8")
+    )
     teacher_case = json.loads(
         (root / "contracts/api/teacher-case.json").read_text(encoding="utf-8")
     )
@@ -46,6 +50,10 @@ def test_shared_frontend_backend_contract_fixtures():
         == review_success
     )
     assert AnalysisRunResponse.model_validate(analysis_run).model_dump() == analysis_run
+    assert (
+        EvidenceBundleResponse.model_validate(evidence_bundle).model_dump()
+        == evidence_bundle
+    )
     assert (
         SourceVerificationRequest.model_validate(source_verification).model_dump()
         == source_verification

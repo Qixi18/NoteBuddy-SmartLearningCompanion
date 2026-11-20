@@ -184,6 +184,18 @@ class AnalysisRunResponse(BaseModel):
     observations: list[dict[str, Any]]
 
 
+class EvidenceBundleResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    scope: dict[str, str]
+    responses: list[dict[str, Any]]
+    items: list[dict[str, Any]]
+    rubric_definitions: list[dict[str, Any]]
+    coverage: dict[str, Any]
+    source_versions: dict[str, int]
+    issues: list[dict[str, Any]]
+    fingerprint: str
+
+
 class CaseSuggestionResponse(BaseModel):
     student_id: str
     class_id: str

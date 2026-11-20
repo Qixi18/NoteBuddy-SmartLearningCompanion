@@ -3,9 +3,11 @@
 import tempfile
 from pathlib import Path
 
+from ...domain.assessment.evidence_bundle import AnalysisScope
 from ...services.cases import suggest_cases
 from ...services.exports import package
 from ...services.recommendations import deepseek_draft, draft
+from ...services.task02.evidence_bundle_service import build_evidence_bundle
 from ..ports.llm import LLMClient
 from .stage2 import Stage2Decisions
 from .teaching_adjustments import TeachingAdjustments
@@ -139,6 +141,23 @@ class ExportPackage:
         )
 
 
+class GetEvidenceBundle:
+    def __init__(self, uow_factory):
+        self.uow_factory = uow_factory
+
+    def execute(self, student_id: str, indicator_id: str, node_id: str) -> dict:
+        with self.uow_factory(immediate=False) as uow:
+            run = uow.runs.current()
+            sources = uow.stage2.list_sources(run["run_id"])
+        scope = AnalysisScope(
+            run_id=run["run_id"],
+            student_id=student_id,
+            indicator_id=indicator_id,
+            node_id=node_id,
+        )
+        return build_evidence_bundle(run, scope, sources)
+
+
 class WorkbenchUseCases:
     """Composition object holding only the real workbench use cases."""
 
@@ -162,3 +181,4 @@ class WorkbenchUseCases:
         self.deepseek_draft = DeepSeekDraft(self.current_run, config, llm_client)
         self.read_source_pdf = ReadSourcePdf(self.current_run, source_service)
         self.export_package = ExportPackage(uow_factory, self.current_run)
+        self.evidence_bundle = GetEvidenceBundle(uow_factory)

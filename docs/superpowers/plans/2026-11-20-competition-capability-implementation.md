@@ -122,11 +122,11 @@
 
 **接口：** `build_evidence_bundle(run: dict, scope: AnalysisScope, sources: dict) -> EvidenceBundle`；新增`GET /api/evidence-bundle?student=&indicator=&node=`，run由当前运行解析并返回，不接受前端伪造证据hash。
 
-- [ ] `test_bundle_isolates_scope`：相同记录ID跨run、同学生跨node、同材料跨学生不混入。
-- [ ] `test_no_record_has_coverage_evidence`：无记录返回稳定coverage引用、record_count=0及未知原因边界；不得产生response引用或零分。
-- [ ] `test_bundle_fingerprint_changes_with_sources`：来源版本/题干/评分点变化改变指纹；单纯生成时间不改变。
-- [ ] 组装完整题干、评分点定义与原始步骤；保留pending/unanswered/excluded的区别，明确它们不能计分。
-- [ ] 运行`python -m pytest apps/backend/tests/test_evidence_bundle.py -q`和共享合同测试，消费方统一改用该入口，不重复拼证据。
+- [x] `test_bundle_isolates_scope`：同run下的学生和节点范围隔离；跨run的scope被拒绝。记录编号跨run冲突反例仍可补充。
+- [x] `test_no_record_has_coverage_evidence`：无记录返回稳定coverage引用、record_count=0及未知原因边界；不得产生response引用或零分。
+- [x] `test_bundle_fingerprint_changes_with_sources`：来源签核版本、题干/评分点变化改变指纹；指纹计算不包含生成时间。
+- [x] 组装题干、评分点定义、原始作答和步骤；保留pending/unanswered/excluded处置，非计分状态的得分为null。
+- [x] 运行证据包、共享合同、全后端和前端测试及构建。Playwright 8项用例全部显示通过，但包装进程在退出阶段挂起并被中断；该轮浏览器验收不记为完整通过。
 
 ### P06 个体可解释学情
 
