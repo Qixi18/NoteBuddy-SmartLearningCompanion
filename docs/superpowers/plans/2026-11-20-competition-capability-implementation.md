@@ -253,9 +253,10 @@ P11当前状态：`engineering_pass/content_review_pending`。本机教师可完
 - [x] 新增`release_checks.json`、案例/班级报告JSON与HTML、输出schema、输入输出样例和版本manifest；保留旧成员，manifest声明schema_version与package_type。
 - [x] 实际解压校验ZIP结构、三人范围、两班聚合、报告状态、schema文件及所有成员的SHA-256；字段说明沿用并保留，新增输出字段由schema定义。
 - [x] 发布单测、API指纹回归与正式ZIP结构/校验和检查通过；机器检查与人工签核分栏，官方独立数据未验收时保留`not_checked`，状态为`ready_with_open_checks`而非全部通过。
-- [ ] 正式包浏览器E2E：本轮实际请求到达导出接口并返回200，但测试运行器在下载后的浏览器/压缩包断言阶段未正常收尾，需修复或复跑取得最终断言结果后才能验收。
+- [x] 正式包浏览器E2E：Playwright 已输出 `ok 1`，实际完成三案例确认、发布预检、下载及压缩包内三人范围/班级聚合/`not_checked`/全部成员SHA-256断言。
+- [ ] Playwright 在打印测试成功后未退出并留下本轮服务；已核验本轮PID命令行后停止服务并通过仓库清理器清理本轮隔离数据。自动运行器的成功后退出问题仍需排查。
 
-P13当前状态：`backend_engineering_pass/browser_e2e_pending/official_data_and_content_review_pending`。744/1304官方基线和赛事独立数据尚未绑定，不能宣称赛事指标验收完成。
+P13当前状态：`backend_and_browser_pass/runner_shutdown_issue/official_data_and_content_review_pending`。赛事提供的模拟CSV基线已由P14独立复算，但数学内容复核和独立教师签核尚待完成，不能宣称内容验收完成。
 
 ### P14 冻结评测与质量比较
 
