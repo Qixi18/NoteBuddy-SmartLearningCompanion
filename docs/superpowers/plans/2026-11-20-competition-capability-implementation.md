@@ -218,11 +218,13 @@ P10当前状态：`engineering_pass/real_model_pending`。请求上下文不含�
 
 **接口：** TeacherCaseRequest新增`evidence_refs`，保留`evidence_record_ids`；教学调整新增`origin_evidence_refs`及兼容缺省，coverage引用须由服务端重新计算验证。
 
-- [ ] 测试当前节点无作答的学生凭有效coverage、正式诊断方案、教师理由可确认“记录不足”案例；其他学生coverage、旧运行hash、伪造0记录被拒绝。
-- [ ] 保留已有response交集约束；仅对合法coverage分支允许无record_ids，不放开所有案例非空证据限制。
-- [ ] 支持覆盖证据起始的诊断活动记录；后续取得response证据时关联同一学生/指标，节点范围与可比性必须显式校验和说明。
-- [ ] 不因后续分数增加自动写干预有效；不把不同节点数据混入单节点草稿。
-- [ ] 运行`python -m pytest apps/backend/tests/test_coverage_cases.py apps/backend/tests/test_stage2_workflow.py -q`；新增“无记录→诊断方案→确认→导出”E2E。
+- [x] 测试当前节点无作答的学生凭当前 coverage、正式诊断方案和教师理由确认“记录不足”案例；其他学生范围、旧运行哈希、伪造记录均拒绝。
+- [x] 保留 response 证据交集约束；仅经服务端重新计算核验的 coverage 分支允许空 `evidence_record_ids`。
+- [x] 覆盖证据可启动诊断活动记录；后续 response 引用按同一学生/指标/节点重验并保留来源行，比较结论由教师明确填写。
+- [x] 后续分数变化不自动标记干预有效；节点和运行范围固定，不把跨节点记录混入单节点证据。
+- [x] 运行`python -m pytest apps/backend/tests/test_coverage_cases.py apps/backend/tests/test_stage2_workflow.py -q`；通过“无记录→诊断方案→确认→导出→后续作答”端到端测试。
+
+P11当前状态：`engineering_pass/content_review_pending`。本机教师可完成零作答案例与诊断活动记录；正式赛事案例叙述仍须由学科负责人核查。
 
 ### P12 三案例阅读报告与两班报告
 
@@ -232,11 +234,11 @@ P10当前状态：`engineering_pass/real_model_pending`。请求上下文不含�
 
 **接口：** `build_case_report(run, confirmed_case, reviews, sources) -> dict`、`build_class_report(run, node_id, insights) -> dict`；报告数据模型同时用于UI与正式导出。
 
-- [ ] 测试报告中的分数、材料和复核版本均来自存储快照；不存在确认案例时返回明确未完成，不自动把候选渲染成已确认。
-- [ ] 报告展示范围、事实、解释、活动、提示、调整及限制；教师阅读版保留证据入口，打印版含可读定位，不仅是不可用按钮。
-- [ ] 三案例并排展示需求与方案差异；两班报告列共性、差异与覆盖，避免只摆三张得分卡。
-- [ ] 浏览器检查打印分页、长公式、长作答、表格跨页、1024/1440宽度；PDF输出采用同一报告视图，不能另拼一套统计。
-- [ ] 运行报告单测与打印/案例E2E；让内容负责人逐页审阅，形成正式三案例及两班报告。
+- [x] 测试报告中的分数、材料和复核版本均来自存储快照；不存在确认案例时返回明确未完成，不自动把候选渲染成已确认。
+- [x] 报告展示范围、事实、解释、活动、提示、调整及限制；教师阅读版保留证据入口，打印版含可读定位，不仅是不可用按钮。
+- [x] 三案例并排展示需求与方案差异；两班报告列共性、差异与覆盖，避免只摆三张得分卡。
+- [x] 浏览器检查打印分页、长公式、长作答、表格跨页、1024/1440宽度；PDF输出采用同一报告视图，不能另拼一套统计。
+- [x] 运行报告单测、工作区回归及打印/案例E2E；P12当前状态：`engineering_pass/content_review_pending`。正式案例逐页审阅仍由内容负责人完成。
 
 ### P13 发布检查与正式成果包
 

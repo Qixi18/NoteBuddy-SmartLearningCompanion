@@ -550,3 +550,46 @@ summary { min-height: 28px; }
   .review-workspace, .case-evidence-grid { grid-template-columns: 1fr; }
   .review-context { position: static; }
 }
+/* Teacher-readable competition reports */
+.report-toolbar, .report-toolbar > div { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.report-toolbar p { max-width: 72ch; color: var(--muted); }
+.report-comparison { margin: 24px 0; }
+.report-comparison-grid, .class-coverage-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.report-comparison-grid article, .class-coverage-grid article { display: grid; gap: 7px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: #fbfcfe; }
+.report-comparison-grid article strong, .class-coverage-grid article strong { font-size: 20px; }
+.report-comparison-grid article small, .class-coverage-grid article small { color: var(--muted); line-height: 1.55; }
+.case-report-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.case-report-card { min-width: 0; padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: #fff; break-inside: avoid; }
+.case-report-card.incomplete { border-color: #e5bd74; background: #fffaf1; }
+.case-report-card > header, .class-comparison > header { display: flex; align-items: start; justify-content: space-between; gap: 10px; }
+.case-report-card h3, .class-report-content h3 { margin: 6px 0 16px; }
+.case-report-card h4, .class-report-content h4 { margin: 20px 0 8px; }
+.case-report-card p, .class-report-content p { line-height: 1.65; overflow-wrap: anywhere; }
+.case-report-card section, .report-review, .report-adjustment, .class-comparison, .class-issue { padding-top: 12px; border-top: 1px solid var(--line); break-inside: avoid; }
+.report-evidence { margin: 10px 0; padding: 12px; border: 1px solid var(--line); border-radius: 9px; background: #fafcff; break-inside: avoid; }
+.report-evidence summary { cursor: pointer; font-weight: 650; }
+.report-coverage, .report-limitation { padding: 10px 12px; border-left: 3px solid #d59b35; background: #fff8e9; }
+.report-incomplete { padding: 12px; border: 1px solid #e5bd74; border-radius: 9px; background: #fff8e9; }
+.report-limitations, .report-limitation-section ul { color: var(--muted); line-height: 1.6; }
+.class-report-content { margin-top: 20px; }
+.class-report-content header > span { color: var(--muted); }
+.class-comparison, .class-issue { margin-top: 14px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; }
+.class-comparison h5, .class-issue h5 { margin: 0; }
+.report-limitation-section { padding: 14px; background: #f5f8fc; border-radius: 10px; }
+@media (max-width: 1120px) { .case-report-grid { grid-template-columns: 1fr; } }
+@media (max-width: 720px) { .report-toolbar, .report-toolbar > div { align-items: stretch; flex-direction: column; } .report-comparison-grid, .class-coverage-grid { grid-template-columns: 1fr; } }
+@media print {
+  @page { size: A4 landscape; margin: 12mm; }
+  body { background: #fff !important; color: #152235 !important; font-size: 9pt; }
+  .sidebar, .topbar, .review-toolbar, .report-toolbar button, .export-panel, .case-evidence-actions, .global-message { display: none !important; }
+  main, .page-content, .cases-layout { display: block !important; width: 100% !important; max-width: none !important; margin: 0 !important; padding: 0 !important; }
+  .report-view { box-shadow: none !important; border: 0 !important; padding: 0 !important; margin: 0 0 8mm !important; break-after: page; }
+  .case-report-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6mm; }
+  .case-report-card { padding: 4mm; font-size: 8pt; }
+  .report-evidence, .class-comparison, .class-issue, .report-review, .report-adjustment { break-inside: avoid; }
+  .case-report-card h3 { font-size: 13pt; }
+  .case-report-card h4, .class-report-content h4 { font-size: 10pt; }
+  details > summary { list-style: none; }
+  details:not([open]) > :not(summary) { display: block !important; }
+  a { color: inherit; text-decoration: none; }
+}

@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 const repoRoot = process.cwd();
 const bundlePath = path.join(repoRoot, 'data', `playwright-${process.env.PLAYWRIGHT_RUN_ID}`, 'bundle');
 
-function sampleCsvFiles(targetBundle = bundlePath, includeExtraStudent = false, longEvidence = false): string[] {
+function sampleCsvFiles(targetBundle = bundlePath, includeExtraStudent = false, longEvidence = false, noRecordsStudent = ''): string[] {
   const python = spawnSync('python', ['-c', [
     'import csv, sys',
     'from pathlib import Path',
@@ -17,6 +17,7 @@ function sampleCsvFiles(targetBundle = bundlePath, includeExtraStudent = false, 
     'target = Path(sys.argv[1]); target.mkdir(parents=True, exist_ok=True)',
     'tables = sample_tables()',
     'if len(sys.argv) > 2 and sys.argv[2] == "extra": tables["模拟学生"].append({"学生编号": "D04", "模拟班级编号": "C3"})',
+    'if len(sys.argv) > 4 and sys.argv[4]: tables["作答记录"] = [row for row in tables["作答记录"] if row["学生编号"] != sys.argv[4]]',
     'if len(sys.argv) > 3 and sys.argv[3] == "long":',
     ' for row in tables["作答记录"]:',
     '  if row["记录编号"] == "R2": row["学生最终作答"] = "长文本证据" * 400; row["解答过程"] = "\\n".join([f"第 {step} 步：解释解题思路并核对计算结果。" for step in range(1, 81)])',
@@ -30,7 +31,7 @@ function sampleCsvFiles(targetBundle = bundlePath, includeExtraStudent = false, 
     ' fields = list(dict.fromkeys(required + [key for row in rows for key in row if not key.startswith("_")]))',
     ' with (target / f"{name}.csv").open("w", encoding="utf-8-sig", newline="") as stream:',
     '  writer = csv.DictWriter(stream, fieldnames=fields, extrasaction="ignore"); writer.writeheader(); writer.writerows(rows)',
-  ].join('\n'), targetBundle, includeExtraStudent ? 'extra' : '', longEvidence ? 'long' : ''], { cwd: repoRoot, encoding: 'utf8' });
+  ].join('\n'), targetBundle, includeExtraStudent ? 'extra' : '', longEvidence ? 'long' : '', noRecordsStudent], { cwd: repoRoot, encoding: 'utf8' });
   if (python.status !== 0) throw new Error(`Unable to generate sample CSV bundle: ${python.stderr}`);
   return readdirSync(targetBundle)
     .filter((name) => name.endsWith('.csv'))
@@ -250,6 +251,80 @@ test('loads the local workbench and imports the sample bundle', async ({ page })
   await page.getByRole('link', { name: '案例与导出', exact: true }).click();
   await expect(page.locator('.case-candidate').filter({ hasText: 'D01' }).first()).toBeVisible();
   expect(pageErrors).toEqual([]);
+});
+
+test('confirms a teacher-reviewed no-response coverage case', async ({ page }) => {
+  const noRecordBundle = path.join(path.dirname(bundlePath), 'no-response-bundle');
+  const files = sampleCsvFiles(noRecordBundle, false, false, 'D01');
+  expect(files).toHaveLength(6);
+  await page.goto('/#/knowledge/indicators');
+  const firstRunHeading = page.getByRole('heading', { name: '先导入一份学情数据', level: 1 });
+  const knowledgeHeading = page.getByRole('heading', { name: '学习要求与来源', level: 1 });
+  await expect(firstRunHeading.or(knowledgeHeading)).toBeVisible();
+  if (await page.locator('.first-run').count()) {
+    await page.locator('.first-run input[type="file"]').setInputFiles(noRecordBundle);
+    await page.getByRole('button', { name: '检查文件并导入' }).click();
+  } else {
+    await page.getByRole('button', { name: '导入数据' }).click();
+    const importDialog = page.getByRole('dialog', { name: '导入数据' });
+    await importDialog.getByLabel('选择 CSV 文件夹').setInputFiles(noRecordBundle);
+    await importDialog.getByRole('button', { name: '检查文件并导入' }).click();
+  }
+  await expect(page.getByRole('heading', { name: '全局概览' })).toBeVisible();
+
+  await page.getByRole('link', { name: '教学方案', exact: true }).click();
+  await page.getByLabel('学生').selectOption('D01');
+  await page.getByLabel('观察指标').selectOption('T01I1');
+  await page.getByLabel('测验节点').selectOption('N01');
+  await page.getByRole('button', { name: '生成规则草稿' }).click();
+  const reviewEditor = page.locator('.review-editor');
+  await expect(reviewEditor.getByText(/作答记录为 0 条/)).toBeVisible();
+  await reviewEditor.getByLabel('将此覆盖记录作为本次教师复核的证据引用').check();
+  await reviewEditor.locator('details.review-structured').locator('summary').click();
+  const plan = reviewEditor.locator('.review-structured');
+  await plan.getByLabel('保存旧版结构化方案').check();
+  await plan.getByLabel('学习活动').fill('安排短诊断并记录独立过程');
+  await plan.getByLabel('活动步骤（每行一步）').fill('说明任务\n学生独立作答\n教师记录步骤');
+  await plan.getByLabel('练习（每行一项）').fill('教师自备诊断题');
+  await plan.getByLabel('观察点（每行一项）').fill('记录作答步骤，不按缺记录推断零分');
+  await reviewEditor.getByLabel('复核状态').selectOption('edited');
+  await reviewEditor.getByLabel('复核人').fill('E2E 模拟教师');
+  await reviewEditor.getByLabel('复核理由').fill('核对任务安排；无作答记录的原因未知');
+  await reviewEditor.getByRole('button', { name: '保存复核' }).click();
+  await expect(page.locator('#message')).toContainText('复核已保存');
+
+  await page.getByRole('link', { name: '案例与导出', exact: true }).click();
+  const caseEditor = page.locator('.case-editor');
+  await caseEditor.getByLabel('案例学生').selectOption('D01');
+  await caseEditor.getByLabel('覆盖指标').selectOption('T01I1');
+  await caseEditor.getByLabel('覆盖节点').selectOption('N01');
+  await expect(caseEditor.getByText(/作答记录 0 条/)).toBeVisible();
+  await caseEditor.getByText('开始案例签核', { exact: true }).click();
+  await caseEditor.getByLabel('案例叙述').fill('当前节点没有学生作答记录，教师安排短诊断补充观察。');
+  await caseEditor.getByLabel('样本限制与不能推断的结论').fill('原因未知；不推断为缺席、零分或未掌握。');
+  await caseEditor.getByLabel('确认教师').fill('E2E 模拟教师');
+  await caseEditor.locator('summary').filter({ hasText: '关联教师复核版本' }).click();
+  await caseEditor.getByLabel(/T01I1 · 节点 N01 · 版本 1/).check();
+  await caseEditor.getByRole('button', { name: '确认正式案例' }).click();
+  await expect(caseEditor.getByRole('status')).toContainText('教师已确认');
+  const caseReport = page.locator('.competition-case-report');
+  await caseReport.getByLabel('报告案例 1').selectOption('D01');
+  await caseReport.getByLabel('报告案例 2').selectOption('D02');
+  await caseReport.getByLabel('报告案例 3').selectOption('D03');
+  await expect(caseReport.getByText(/尚未全部获得当前运行中的教师确认/)).toBeVisible();
+  await expect(caseReport.getByText('当前节点没有学生作答记录，教师安排短诊断补充观察。')).toBeVisible();
+  await expect(caseReport.getByText(/CSV 第/)).toHaveCount(0);
+  const classReport = page.locator('.competition-class-report');
+  await expect(classReport.getByRole('heading', { name: '班级共性、差异与覆盖' })).toBeVisible();
+  await expect(classReport.getByText(/共同题目得分率差异/)).toBeVisible();
+  for (const width of [1024, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  }
+  await page.emulateMedia({ media: 'print' });
+  expect(await page.locator('.sidebar').evaluate(element => getComputedStyle(element).display)).toBe('none');
+  expect(await caseReport.evaluate(element => getComputedStyle(element).breakAfter)).toBe('page');
+  await page.emulateMedia({ media: 'screen' });
 });
 
 test('all nine routes render on direct hash load, refresh, history, and unknown hashes', async ({ page }) => {

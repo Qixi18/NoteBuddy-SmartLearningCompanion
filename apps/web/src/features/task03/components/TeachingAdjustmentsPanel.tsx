@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { AnalysisRun, Review, ReviewMap, TeachingAdjustment, TeachingAdjustmentCreate, TeachingAdjustmentUpdate } from '../../../api/types';
+import type { AnalysisRun, EvidenceBundle, Review, ReviewMap, TeachingAdjustment, TeachingAdjustmentCreate, TeachingAdjustmentUpdate } from '../../../api/types';
 import { learningApi } from '../../../api/client';
 import { Panel } from '../../../components/Panel';
 
 export function TeachingAdjustmentsPanel({ run, reviews }: { run: AnalysisRun; reviews: ReviewMap }) {
   const [records, setRecords] = useState<TeachingAdjustment[]>([]);
+  const [followupBundle, setFollowupBundle] = useState<EvidenceBundle | null>(null);
   const [selected, setSelected] = useState('');
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
@@ -31,17 +32,27 @@ export function TeachingAdjustmentsPanel({ run, reviews }: { run: AnalysisRun; r
     if (current) setUpdate(old => ({ ...old, implementation: current.implementation ?? '', implementation_status: current.implementation_status ?? 'completed', outcome_observations: current.outcome_observations ?? '', followup_node_id: current.followup_node_id ?? run.nodes[0]?.['节点编号'] ?? '', followup_evidence_record_ids: current.followup_evidence_record_ids ?? [], comparability: current.comparability === 'pending' ? 'undetermined' : current.comparability, comparability_reason: current.comparability_reason ?? '', teacher_conclusion: current.teacher_conclusion ?? '', reviewer: current.reviewer ?? '', concluded_at: current.concluded_at ?? new Date().toISOString().slice(0, 10) }));
   }, [selected, current?.updated_at, run.run_id]);
 
+  useEffect(() => {
+    setFollowupBundle(null);
+    if (!current || !update.followup_node_id) return;
+    let alive = true;
+    learningApi.evidenceBundle(current.student_id, current.indicator_id, update.followup_node_id).then(value => { if (alive) setFollowupBundle(value); }).catch(() => { if (alive) setFollowupBundle(null); });
+    return () => { alive = false; };
+  }, [current?.adjustment_id, current?.student_id, current?.indicator_id, update.followup_node_id, run.run_id]);
+
   const saveNew = async () => {
     if (saving) return; setSaving(true); setMessage('');
     try {
-      const payload: TeachingAdjustmentCreate = { student_id: create.student_id, indicator_id: create.indicator_id, origin_run_id: run.run_id, origin_node_id: create.origin_node_id, review_version: create.review_version, planned_activity: create.planned_activity.trim(), planned_practice: create.planned_practice.split('\n').map(x => x.trim()).filter(Boolean), observation_points: create.observation_points.split('\n').map(x => x.trim()).filter(Boolean), teacher: create.teacher.trim(), planned_at: create.planned_at };
+      const originReview = matchingReviews.find(item => item.version === create.review_version)?.review;
+      const payload: TeachingAdjustmentCreate = { student_id: create.student_id, indicator_id: create.indicator_id, origin_run_id: run.run_id, origin_node_id: create.origin_node_id, review_version: create.review_version, origin_evidence_refs: originReview?.evidence_refs ?? [], planned_activity: create.planned_activity.trim(), planned_practice: create.planned_practice.split('\n').map(x => x.trim()).filter(Boolean), observation_points: create.observation_points.split('\n').map(x => x.trim()).filter(Boolean), teacher: create.teacher.trim(), planned_at: create.planned_at };
       const saved = await learningApi.createTeachingAdjustment(payload); setRecords(old => [...old, saved]); setSelected(saved.adjustment_id); setMessage('已保存教学计划与起始证据引用。');
     } catch (error) { setMessage(error instanceof Error ? error.message : String(error)); } finally { setSaving(false); }
   };
   const saveUpdate = async () => {
     if (!current || saving) return; setSaving(true); setMessage('');
     try {
-      const payload: TeachingAdjustmentUpdate = { ...update, followup_run_id: run.run_id, followup_evidence_record_ids: update.followup_evidence_record_ids, comparability_reason: update.comparability_reason.trim(), teacher_conclusion: update.teacher_conclusion.trim(), reviewer: update.reviewer.trim(), concluded_at: update.concluded_at };
+      const followup_evidence_refs = (followupBundle?.responses ?? []).filter(ref => update.followup_evidence_record_ids.includes(ref.record_id ?? '')).map(ref => ({ kind: 'response' as const, evidence_id: ref.evidence_id, record_id: ref.record_id, source_line: ref.source_line, scope: followupBundle!.scope }));
+      const payload: TeachingAdjustmentUpdate = { ...update, followup_run_id: run.run_id, followup_evidence_record_ids: update.followup_evidence_record_ids, followup_evidence_refs, comparability_reason: update.comparability_reason.trim(), teacher_conclusion: update.teacher_conclusion.trim(), reviewer: update.reviewer.trim(), concluded_at: update.concluded_at };
       const saved = await learningApi.updateTeachingAdjustment(current.adjustment_id, payload); setRecords(old => old.map(item => item.adjustment_id === saved.adjustment_id ? saved : item)); setMessage('已保存实施、后续证据和教师判断。系统没有推断干预效果。');
     } catch (error) { setMessage(error instanceof Error ? error.message : String(error)); } finally { setSaving(false); }
   };

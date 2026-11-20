@@ -109,7 +109,7 @@ export function useWorkbench() {
   const saveReview = async (payload: {
     status: ReviewStatus; diagnosis: string; recommendation: string;
     adjustment_condition: string; reason: string;
-    reviewer: string; structured_plan: StructuredPlan | null; teaching_plan_v2: import('../../api/types').TeachingPlanV2 | null;
+    reviewer: string; structured_plan: StructuredPlan | null; teaching_plan_v2: import('../../api/types').TeachingPlanV2 | null; evidence_refs?: import('../../api/types').EvidenceReference[];
   }) => {
     if (!draft) throw new Error('请先生成诊断草稿');
     if (draft.scope_required || (draft.node_id && draft.node_id !== node)) throw new Error('当前草稿范围不匹配，请重新选择单一测验节点并生成草稿。');

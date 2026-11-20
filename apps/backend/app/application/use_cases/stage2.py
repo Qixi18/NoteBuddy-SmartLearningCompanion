@@ -3,6 +3,9 @@
 import re
 
 from ...domain.subject.source_mapping import bind_resource_links, fingerprint_material
+from ...services.task02.evidence_reference_service import (
+    validate_evidence_references,
+)
 
 
 class Stage2Decisions:
@@ -196,6 +199,29 @@ class Stage2Decisions:
                 evidence_ids
             ).issubset(rows):
                 raise ValueError("案例证据不属于当前学生与运行")
+            evidence_refs = validate_evidence_references(
+                run, payload.get("evidence_refs", [])
+            )
+            coverage_refs = [
+                reference
+                for reference in evidence_refs
+                if isinstance(reference, dict) and reference.get("kind") == "coverage"
+            ]
+            if len(coverage_refs) > 1:
+                raise ValueError("案例只能引用一个当前范围覆盖记录")
+            if coverage_refs:
+                if evidence_ids:
+                    raise ValueError("覆盖证据与作答记录不能混作同一案例证据")
+                if len(coverage_refs) != len(evidence_refs):
+                    raise ValueError("覆盖证据案例不能混入作答引用")
+                evidence_refs = coverage_refs
+            response_ref_ids = {
+                reference["record_id"]
+                for reference in evidence_refs
+                if reference["kind"] == "response"
+            }
+            if response_ref_ids and response_ref_ids != set(evidence_ids):
+                raise ValueError("案例作答引用与记录编号不一致")
             history = uow.reviews.list(run["run_id"])
             source_history = uow.stage2.list_sources(run["run_id"])
             for ref in payload["review_refs"]:
@@ -213,7 +239,21 @@ class Stage2Decisions:
                     != ref["node_id"]
                 ):
                     raise ValueError("案例引用的复核版本或节点无效")
-                if not set(match["evidence_record_ids"]).intersection(evidence_ids):
+                if coverage_refs:
+                    expected_scope = coverage_refs[0]["scope"]
+                    review_refs_for_scope = match.get("evidence_refs", [])
+                    if (
+                        expected_scope
+                        != {
+                            "run_id": run["run_id"],
+                            "student_id": student_id,
+                            "indicator_id": ref["indicator_id"],
+                            "node_id": ref["node_id"],
+                        }
+                        or coverage_refs[0] not in review_refs_for_scope
+                    ):
+                        raise ValueError("案例复核与覆盖证据范围不匹配")
+                elif not set(match["evidence_record_ids"]).intersection(evidence_ids):
                     raise ValueError("案例复核与证据记录没有交集")
                 if payload["status"] == "confirmed" and match["status"] not in {
                     "accepted",
@@ -224,6 +264,18 @@ class Stage2Decisions:
                     plan = match.get("structured_plan")
                     sources = source_history.get(ref["indicator_id"], [])
                     latest_source = sources[-1] if sources else None
+                    if coverage_refs:
+                        if (
+                            not plan
+                            or plan.get("material_ids")
+                            or not plan.get("activity")
+                            or not plan.get("steps")
+                            or not plan.get("practice")
+                            or not plan.get("observation_points")
+                            or not match.get("reason", "").strip()
+                        ):
+                            raise ValueError("正式无记录案例需有教师理由和完整诊断方案")
+                        continue
                     if (
                         not plan
                         or not latest_source
@@ -239,9 +291,10 @@ class Stage2Decisions:
                     payload["reviewer"].strip(),
                     payload["narrative"].strip(),
                     payload["limitations"].strip(),
-                    evidence_ids,
+                    evidence_ids or coverage_refs,
                     payload["review_refs"],
                 )
             ):
                 raise ValueError("确认案例需填写核验人、叙述、限制、证据和复核版本")
+            payload["evidence_refs"] = evidence_refs
             return uow.stage2.append_case(run["run_id"], student_id, payload)

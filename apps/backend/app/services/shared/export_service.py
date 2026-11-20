@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from ...domain.assessment.evidence_bundle import AnalysisScope
 from ..task02.case_service import suggest_cases
 from ..task02.evidence_bundle_service import build_evidence_bundle
+from ..task02.evidence_reference_service import validate_evidence_references
 from ..task03.recommendation_service import draft
 from ..task03.teaching_plan_service import validate_teaching_plan
 
@@ -178,6 +179,31 @@ def package(
             continue
         case = history[-1]
         valid = True
+        try:
+            evidence_refs = validate_evidence_references(
+                run, case.get("evidence_refs", [])
+            )
+        except ValueError:
+            continue
+        coverage_refs = [
+            reference for reference in evidence_refs if reference["kind"] == "coverage"
+        ]
+        if not case.get("evidence_record_ids") and not coverage_refs:
+            continue
+        if coverage_refs:
+            if len(coverage_refs) != 1 or case.get("evidence_record_ids"):
+                continue
+            if len(coverage_refs) != len(evidence_refs):
+                continue
+        response_ref_ids = {
+            reference["record_id"]
+            for reference in evidence_refs
+            if reference["kind"] == "response"
+        }
+        if response_ref_ids and response_ref_ids != set(
+            case.get("evidence_record_ids", [])
+        ):
+            continue
         referenced_evidence = set()
         for ref in case["review_refs"]:
             review_history = reviews.get(f"{student_id}:{ref['indicator_id']}", [])
@@ -187,6 +213,30 @@ def package(
             )
             source_history = sources.get(ref["indicator_id"], [])
             latest_source = source_history[-1] if source_history else None
+            if coverage_refs:
+                expected_scope = {
+                    "run_id": run["run_id"],
+                    "student_id": student_id,
+                    "indicator_id": ref["indicator_id"],
+                    "node_id": ref["node_id"],
+                }
+                plan = match.get("structured_plan") if match else None
+                if (
+                    not match
+                    or match["status"] not in {"accepted", "edited"}
+                    or coverage_refs[0]["scope"] != expected_scope
+                    or coverage_refs[0] not in match.get("evidence_refs", [])
+                    or not plan
+                    or plan.get("material_ids")
+                    or not plan.get("activity")
+                    or not plan.get("steps")
+                    or not plan.get("practice")
+                    or not plan.get("observation_points")
+                    or not match.get("reason", "").strip()
+                ):
+                    valid = False
+                    break
+                continue
             v2_plan = match.get("teaching_plan_v2") if match else None
             v2_plan_valid = True
             if v2_plan:
@@ -222,9 +272,14 @@ def package(
                 valid = False
                 break
             referenced_evidence.update(match.get("evidence_record_ids", []))
-        if not set(case.get("evidence_record_ids", [])).issubset(
-            {row["记录编号"] for row in run.get("raw_responses", [])}
-        ) or not set(case.get("evidence_record_ids", [])).issubset(referenced_evidence):
+        if not coverage_refs and (
+            not set(case.get("evidence_record_ids", [])).issubset(
+                {row["记录编号"] for row in run.get("raw_responses", [])}
+            )
+            or not set(case.get("evidence_record_ids", [])).issubset(
+                referenced_evidence
+            )
+        ):
             valid = False
         if valid:
             confirmed_cases.append(case)

@@ -48,6 +48,7 @@ class TeachingAdjustmentRepository(SqlAlchemyRepository):
                 "followup_run_id": None,
                 "followup_node_id": None,
                 "followup_evidence_record_ids": [],
+                "followup_evidence_refs": [],
                 "comparability": "pending",
                 "teacher_conclusion": "",
                 "reviewer": "",
@@ -96,6 +97,7 @@ class TeachingAdjustmentRepository(SqlAlchemyRepository):
                     "followup_evidence_record_ids": record.get(
                         "followup_evidence_record_ids", []
                     ),
+                    "followup_evidence_refs": record.get("followup_evidence_refs", []),
                     "comparability": record.get("comparability", "pending"),
                     "comparability_reason": record.get("comparability_reason", ""),
                     "teacher_conclusion": record.get("teacher_conclusion", ""),

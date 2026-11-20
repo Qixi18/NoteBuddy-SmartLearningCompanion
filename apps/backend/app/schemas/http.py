@@ -119,6 +119,7 @@ class ReviewRequest(BaseModel):
     model: str | None = None
     prompt_version: str | None = None
     evidence_record_ids: list[str] = Field(default_factory=list)
+    evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
     original_draft: dict[str, Any] | None = None
     reviewer: str = "教师"
     structured_plan: "StructuredPlan | None" = None
@@ -197,6 +198,7 @@ class TeacherCaseRequest(BaseModel):
     narrative: str = Field(default="", max_length=10000)
     limitations: str = Field(default="", max_length=4000)
     evidence_record_ids: list[str] = Field(default_factory=list)
+    evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
     review_refs: list[CaseReviewRef] = Field(default_factory=list)
     reviewer: str = Field(default="", max_length=200)
 
@@ -208,6 +210,7 @@ class TeachingAdjustmentCreateRequest(BaseModel):
     origin_run_id: str = Field(min_length=1)
     origin_node_id: str = Field(min_length=1)
     review_version: int = Field(ge=1)
+    origin_evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
     planned_activity: str = Field(min_length=1, max_length=4000)
     planned_practice: list[str] = Field(min_length=1, max_length=20)
     observation_points: list[str] = Field(min_length=1, max_length=20)
@@ -223,6 +226,7 @@ class TeachingAdjustmentUpdateRequest(BaseModel):
     followup_run_id: str = Field(min_length=1)
     followup_node_id: str = Field(min_length=1)
     followup_evidence_record_ids: list[str] = Field(min_length=1)
+    followup_evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
     comparability: Literal["comparable", "not_comparable", "undetermined"]
     comparability_reason: str = Field(min_length=1, max_length=4000)
     teacher_conclusion: str = Field(min_length=1, max_length=8000)
@@ -354,6 +358,8 @@ class DraftResponse(BaseModel):
 
 
 class ReviewRecordResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     status: Literal["accepted", "edited", "rejected", "needs_observation"]
     node_id: str | None = None
     diagnosis: str
@@ -364,6 +370,7 @@ class ReviewRecordResponse(BaseModel):
     prompt_version: str | None
     original_draft: dict[str, Any] | None
     evidence_record_ids: list[str]
+    evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
     reason: str
     reviewer: str
     version: int

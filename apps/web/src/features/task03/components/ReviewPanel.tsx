@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { learningApi, isReviewStatus } from '../../../api/client';
-import type { AnalysisRun, Draft, Review, ReviewStatus, SourceVerification, StructuredPlan, TeachingPlanV2 } from '../../../api/types';
+import type { AnalysisRun, Draft, EvidenceReference, Review, ReviewStatus, SourceVerification, StructuredPlan, TeachingPlanV2 } from '../../../api/types';
 import { Panel } from '../../../components/Panel';
 import { TeachingPlanEditor } from './TeachingPlanEditor';
 import { dispositionLabel } from '../../task02/qualityLabels';
 
-type ReviewFields = { status: ReviewStatus; diagnosis: string; recommendation: string; adjustment_condition: string; reason: string; reviewer: string; structured_plan: StructuredPlan | null; teaching_plan_v2: TeachingPlanV2 | null };
+type ReviewFields = { status: ReviewStatus; diagnosis: string; recommendation: string; adjustment_condition: string; reason: string; reviewer: string; structured_plan: StructuredPlan | null; teaching_plan_v2: TeachingPlanV2 | null; evidence_refs?: EvidenceReference[] };
 const emptyFields: ReviewFields = { status: 'accepted', diagnosis: '', recommendation: '', adjustment_condition: '', reason: '', reviewer: '', structured_plan: null, teaching_plan_v2: null };
 const statusLabels: Record<ReviewStatus, string> = { accepted: '接受', edited: '已修改', needs_observation: '待观察', rejected: '驳回' };
 const selectionReasonLabels: Record<string, string> = {
@@ -90,6 +90,8 @@ export function ReviewPanel({ run, student, indicator, node, review, draft, onDr
   const [verification, setVerification] = useState<SourceVerification | null>(null);
   const [source, setSource] = useState('');
   const [history, setHistory] = useState<Review[]>([]);
+  const [coverageRef, setCoverageRef] = useState<EvidenceReference | null>(null);
+  const [includeCoverage, setIncludeCoverage] = useState(false);
   const [failure, setFailure] = useState('');
   const [drafting, setDrafting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -108,6 +110,24 @@ export function ReviewPanel({ run, student, indicator, node, review, draft, onDr
     learningApi.sourceVerifications().then(map => { if (alive) setVerification(map[indicator]?.at(-1) ?? null); }).catch(() => { if (alive) setVerification(null); });
     return () => { alive = false; };
   }, [run?.run_id, indicator]);
+
+  useEffect(() => {
+    setCoverageRef(null);
+    setIncludeCoverage(false);
+    if (!run || !node) return;
+    let alive = true;
+    learningApi.evidenceBundle(student, indicator, node).then(bundle => {
+      if (!alive || bundle.coverage.record_count !== 0) return;
+      const next: EvidenceReference = {
+        kind: 'coverage',
+        evidence_id: bundle.coverage.evidence_id,
+        scope: bundle.scope,
+      };
+      setCoverageRef(next);
+      setIncludeCoverage(review?.evidence_refs?.some(ref => ref.evidence_id === next.evidence_id) ?? false);
+    }).catch(() => { if (alive) setCoverageRef(null); });
+    return () => { alive = false; };
+  }, [run?.run_id, student, indicator, node, review?.version]);
 
   useEffect(() => {
     setFailure('');
@@ -139,7 +159,7 @@ export function ReviewPanel({ run, student, indicator, node, review, draft, onDr
   useEffect(() => {
     if (initialFields) { setFields(initialFields); return; }
     if (!review) { setFields(emptyFields); setSource(''); return; }
-    setFields({ status: review.status, diagnosis: review.diagnosis, recommendation: review.recommendation, adjustment_condition: review.adjustment_condition || '', reason: review.reason, reviewer: review.reviewer, structured_plan: review.teaching_plan_v2 ? null : review.structured_plan ?? null, teaching_plan_v2: review.teaching_plan_v2 ?? null });
+    setFields({ status: review.status, diagnosis: review.diagnosis, recommendation: review.recommendation, adjustment_condition: review.adjustment_condition || '', reason: review.reason, reviewer: review.reviewer, structured_plan: review.teaching_plan_v2 ? null : review.structured_plan ?? null, teaching_plan_v2: review.teaching_plan_v2 ?? null, evidence_refs: review.evidence_refs ?? [] });
     setSource(`已载入复核版本 ${review.version}；可继续修改后保存新版本。`);
   }, [initialFields, review, student, indicator]);
 
@@ -151,7 +171,11 @@ export function ReviewPanel({ run, student, indicator, node, review, draft, onDr
   const save = async () => {
     if (saving || !draft) return;
     setSaving(true); setFailure('');
-    try { await onSave(fields); } catch (reason) { setFailure(reason instanceof Error ? reason.message : String(reason)); }
+    const evidence_refs = [
+      ...(fields.evidence_refs ?? []).filter(ref => ref.kind !== 'coverage'),
+      ...(includeCoverage && coverageRef ? [coverageRef] : []),
+    ];
+    try { await onSave({ ...fields, evidence_refs }); } catch (reason) { setFailure(reason instanceof Error ? reason.message : String(reason)); }
     finally { setSaving(false); }
   };
   const activityDiffers = draft?.activity?.trim() && draft.activity.trim() !== draft.recommendation.trim();
@@ -165,6 +189,7 @@ export function ReviewPanel({ run, student, indicator, node, review, draft, onDr
     {draft && !draft.scope_required && <div className="review-workspace">
       <EvidenceContext run={run} student={student} indicator={indicator} node={node} draft={draft} />
       <section className="review-editor" aria-label="教师复核草稿">
+        {coverageRef && <section className="context-limit" aria-label="无记录覆盖证据"><strong>当前范围有 {coverageRef.scope.node_id} 节点覆盖证据，作答记录为 0 条。</strong><p>覆盖证据只能说明系统在该学生、指标和节点内没有作答记录；不代表缺席、未作答或零分。</p><label className="check-row"><input type="checkbox" checked={includeCoverage} onChange={event => setIncludeCoverage(event.target.checked)} />将此覆盖记录作为本次教师复核的证据引用</label></section>}
         <div className="draft-banner"><span>系统草稿</span><strong>{draft.source === 'rule' ? '规则生成' : '模型辅助生成'}</strong><small>未确认 · 请核对左侧证据和来源边界</small></div>
         <div className="draft-target"><span>教学对象与目标</span><p>{draft.objective || '草稿未提供目标。'}</p></div>
         <ResourceSelectionPanel draft={draft} />

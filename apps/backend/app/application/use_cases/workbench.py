@@ -8,6 +8,7 @@ from ...domain.assessment.evidence_bundle import AnalysisScope
 from ...services.cases import suggest_cases
 from ...services.exports import package
 from ...services.recommendations import deepseek_draft, draft
+from ...services.shared.report_service import build_case_reports, build_class_report
 from ...services.task01.material_catalog_service import build_material_catalog
 from ...services.task02.class_insight_service import build_class_insights
 from ...services.task02.evidence_bundle_service import build_evidence_bundle
@@ -300,6 +301,32 @@ class GetClassInsights:
         return build_class_insights(run, node_id, sources)
 
 
+class GetCompetitionReports:
+    def __init__(self, uow_factory, stage2: Stage2Decisions):
+        self.uow_factory = uow_factory
+        self.stage2 = stage2
+
+    def cases(self, student_ids: list[str]) -> dict:
+        with self.uow_factory(immediate=False) as uow:
+            run = uow.runs.current()
+            reviews = uow.reviews.list(run["run_id"])
+            cases = uow.stage2.list_cases(run["run_id"])
+            sources = uow.stage2.list_sources(run["run_id"])
+            adjustments = uow.teaching_adjustments.list()
+        sources = self.stage2.with_source_freshness(run, sources)
+        return build_case_reports(
+            run, student_ids, cases, reviews, sources, adjustments
+        )
+
+    def class_report(self, node_id: str) -> dict:
+        with self.uow_factory(immediate=False) as uow:
+            run = uow.runs.current()
+            sources = uow.stage2.list_sources(run["run_id"])
+        sources = self.stage2.with_source_freshness(run, sources)
+        insights = build_class_insights(run, node_id, sources)
+        return build_class_report(run, node_id, insights)
+
+
 class WorkbenchUseCases:
     """Composition object holding only the real workbench use cases."""
 
@@ -331,3 +358,4 @@ class WorkbenchUseCases:
         self.evidence_bundle = GetEvidenceBundle(uow_factory, self.stage2)
         self.student_insights = GetStudentInsights(self.evidence_bundle)
         self.class_insights = GetClassInsights(self.current_run, self.stage2)
+        self.competition_reports = GetCompetitionReports(uow_factory, self.stage2)

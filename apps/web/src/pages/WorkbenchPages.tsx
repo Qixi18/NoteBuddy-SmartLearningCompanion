@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { AnalysisRun, CaseSuggestion, Draft, Review, ReviewStatus, StructuredPlan, TeachingPlanV2 } from '../api/types';
+import type { AnalysisRun, CaseSuggestion, Draft, EvidenceReference, Review, ReviewStatus, StructuredPlan, TeachingPlanV2 } from '../api/types';
 import { Panel } from '../components/Panel';
 import { ImportPanel } from '../features/import/ImportPanel';
 import { ObjectivesPanel } from '../features/task01/components/ObjectivesPanel';
@@ -11,11 +11,13 @@ import { ReviewPanel } from '../features/task03/components/ReviewPanel';
 import { TeacherCaseEditor } from '../features/task03/components/TeacherCaseEditor';
 import { TeachingAdjustmentsPanel } from '../features/task03/components/TeachingAdjustmentsPanel';
 import { ExportPanel } from '../features/export/ExportPanel';
+import { CaseReport } from '../features/export/CaseReport';
+import { ClassReport } from '../features/export/ClassReport';
 import { routes, type RoutePath } from '../app/navigation';
 import { findingLabel, severityLabel } from '../features/task02/qualityLabels';
 import { NavIcon } from '../components/NavIcon';
 
-type ReviewFields = { status: ReviewStatus; diagnosis: string; recommendation: string; adjustment_condition: string; reason: string; reviewer: string; structured_plan: StructuredPlan | null; teaching_plan_v2: TeachingPlanV2 | null };
+type ReviewFields = { status: ReviewStatus; diagnosis: string; recommendation: string; adjustment_condition: string; reason: string; reviewer: string; structured_plan: StructuredPlan | null; teaching_plan_v2: TeachingPlanV2 | null; evidence_refs?: EvidenceReference[] };
 type PageProps = {
   path: RoutePath;
   run: AnalysisRun | null;
@@ -127,6 +129,7 @@ export function WorkbenchPage(props: PageProps) {
     reviewer: review.reviewer,
     structured_plan: review.teaching_plan_v2 ? null : review.structured_plan ?? null,
     teaching_plan_v2: review.teaching_plan_v2 ?? null,
+    evidence_refs: review.evidence_refs ?? [],
   } : undefined);
   switch (path) {
     case '/home': return <Overview run={run} onNavigate={onNavigate} />;
@@ -143,7 +146,7 @@ export function WorkbenchPage(props: PageProps) {
       <details className="review-save-note"><summary>复核保存与导出说明</summary><p>复核版本保存诊断、建议、调整条件、结构化方案与证据引用。完整方案只在材料来源签核仍有效时进入导出。</p></details>
     </>;
     case '/plan/adjustments': return <TeachingAdjustmentsPanel run={run} reviews={props.reviews} />;
-    case '/plan/cases': return <div className="cases-layout"><CaseEvidence run={run} suggestions={props.suggestions} reviews={props.reviews} draft={props.draft} onOpenReview={(studentId, indicatorId, nodeId) => { props.onStudent(studentId); props.onIndicator(indicatorId); props.onNode(nodeId); onNavigate('/plan/reviews'); }} /><TeacherCaseEditor run={run} reviews={props.reviews} /><ExportPanel students={run.students} suggestions={props.suggestions} onExport={props.onExport} /></div>;
+    case '/plan/cases': return <div className="cases-layout"><CaseEvidence run={run} suggestions={props.suggestions} reviews={props.reviews} draft={props.draft} onOpenReview={(studentId, indicatorId, nodeId) => { props.onStudent(studentId); props.onIndicator(indicatorId); props.onNode(nodeId); onNavigate('/plan/reviews'); }} /><TeacherCaseEditor run={run} reviews={props.reviews} /><CaseReport run={run} /><ClassReport run={run} /><ExportPanel students={run.students} suggestions={props.suggestions} onExport={props.onExport} /></div>;
     default: return <Overview run={run} onNavigate={onNavigate} />;
   }
 }

@@ -1,4 +1,4 @@
-import type { AnalysisRun, CaseSuggestion, ClassInsights, Draft, EvidenceBundle, ImportResult, MaterialCatalog, ReviewMap, ReviewPayload, ReviewStatus, SourceVerification, SourceVerificationPayload, StudentInsights, TeacherCase, TeacherCasePayload, TeachingAdjustment, TeachingAdjustmentCreate, TeachingAdjustmentUpdate } from './types';
+import type { AnalysisRun, CaseReport, CaseReports, CaseSuggestion, ClassInsights, CompetitionClassReport, Draft, EvidenceBundle, ImportResult, MaterialCatalog, ReviewMap, ReviewPayload, ReviewStatus, SourceVerification, SourceVerificationPayload, StudentInsights, TeacherCase, TeacherCasePayload, TeachingAdjustment, TeachingAdjustmentCreate, TeachingAdjustmentUpdate } from './types';
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init);
@@ -26,6 +26,8 @@ export const learningApi = {
   evidenceBundle: (student: string, indicator: string, node: string) => api<EvidenceBundle>(`/api/evidence-bundle?${new URLSearchParams({ student, indicator, node })}`),
   studentInsights: (student: string, indicator: string, node: string) => api<StudentInsights>(`/api/student-insights?${new URLSearchParams({ student, indicator, node })}`),
   classInsights: (node: string) => api<ClassInsights>(`/api/class-insights?${new URLSearchParams({ node })}`),
+  caseReports: (students: string[]) => api<CaseReports>(`/api/reports/cases?${students.map(student => `students=${encodeURIComponent(student)}`).join('&')}`),
+  classReport: (node: string) => api<CompetitionClassReport>(`/api/reports/class?${new URLSearchParams({ node })}`),
   saveSourceVerification: (payload: SourceVerificationPayload) => api<SourceVerification>('/api/source-verification', jsonRequest(payload)),
   teacherCases: () => api<Record<string, TeacherCase[]>>('/api/teacher-cases'),
   saveTeacherCase: (payload: TeacherCasePayload) => api<TeacherCase>('/api/teacher-case', jsonRequest(payload)),

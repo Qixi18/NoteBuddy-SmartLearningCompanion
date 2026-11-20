@@ -4,6 +4,9 @@ from ...domain.assessment.evidence_bundle import AnalysisScope
 from ...domain.common.enums import ReviewStatus
 from ...domain.teaching.models import RecommendationDraft, TeacherReview
 from ...services.task02.evidence_bundle_service import build_evidence_bundle
+from ...services.task02.evidence_reference_service import (
+    validate_evidence_references,
+)
 from ...services.task03.teaching_plan_service import validate_teaching_plan
 
 
@@ -100,6 +103,37 @@ class SaveReview:
                 or not set(cited).issubset(scoped_allowed)
             ):
                 raise ValueError("复核引用了范围外或无效记录")
+            evidence_refs = payload.get("evidence_refs", [])
+            evidence_refs = validate_evidence_references(run, evidence_refs)
+            coverage_refs = [
+                reference
+                for reference in evidence_refs
+                if isinstance(reference, dict) and reference.get("kind") == "coverage"
+            ]
+            if len(coverage_refs) > 1:
+                raise ValueError("复核只能引用一个当前范围覆盖记录")
+            if coverage_refs and (cited or review_node_id is None):
+                raise ValueError("覆盖证据复核必须限定单一节点且没有作答记录")
+            if coverage_refs and len(coverage_refs) != len(evidence_refs):
+                raise ValueError("覆盖证据复核不能混入作答引用")
+            if evidence_refs:
+                expected_scope = {
+                    "run_id": run_id,
+                    "student_id": student_id,
+                    "indicator_id": indicator_id,
+                    "node_id": review_node_id,
+                }
+                if review_node_id is None or any(
+                    reference["scope"] != expected_scope for reference in evidence_refs
+                ):
+                    raise ValueError("复核证据与当前复核范围不一致")
+                response_ref_ids = {
+                    reference["record_id"]
+                    for reference in evidence_refs
+                    if reference["kind"] == "response"
+                }
+                if response_ref_ids and response_ref_ids != set(cited):
+                    raise ValueError("作答证据引用与记录编号不一致")
             structured_plan = payload.get("structured_plan")
             teaching_plan_v2 = payload.get("teaching_plan_v2")
             source_versions: dict[str, int] = {}
@@ -169,10 +203,12 @@ class SaveReview:
                 material_ids = structured_plan.get("material_ids", [])
                 if (
                     not isinstance(material_ids, list)
-                    or not material_ids
+                    or (not material_ids and not coverage_refs)
                     or len(material_ids) != len(set(material_ids))
                 ):
-                    raise ValueError("结构化方案须选择不重复的已核验材料")
+                    raise ValueError("结构化方案须选择材料或使用有效覆盖证据")
+                if coverage_refs and material_ids:
+                    raise ValueError("无记录诊断方案不能引用未观察材料作为作答证据")
                 if any(
                     not isinstance(value, str) or not value.strip()
                     for value in material_ids
@@ -195,16 +231,30 @@ class SaveReview:
                         )
                     ):
                         raise ValueError("结构化方案缺少活动步骤、练习或观察点")
-                histories = uow.stage2.list_sources(run_id)
-                latest = histories.get(indicator_id, [])[-1:]
-                verification = latest[0] if latest else None
-                if (
-                    not verification
-                    or verification["status"] != "verified"
-                    or not set(material_ids).issubset(verification["material_ids"])
-                ):
-                    raise ValueError("所选教学材料尚未完成当前运行的指标来源签核")
-                source_versions[indicator_id] = verification["version"]
+                if not coverage_refs:
+                    histories = uow.stage2.list_sources(run_id)
+                    latest = histories.get(indicator_id, [])[-1:]
+                    verification = latest[0] if latest else None
+                    if (
+                        not verification
+                        or verification["status"] != "verified"
+                        or not set(material_ids).issubset(verification["material_ids"])
+                    ):
+                        raise ValueError("所选教学材料尚未完成当前运行的指标来源签核")
+                    source_versions[indicator_id] = verification["version"]
+            if (
+                coverage_refs
+                and status in {ReviewStatus.ACCEPTED, ReviewStatus.EDITED}
+                and (
+                    not str(payload.get("reason", "")).strip()
+                    or not structured_plan
+                    or not str(structured_plan.get("activity", "")).strip()
+                    or not structured_plan.get("steps")
+                    or not structured_plan.get("practice")
+                    or not structured_plan.get("observation_points")
+                )
+            ):
+                raise ValueError("无记录复核需填写教师理由和正式诊断方案")
             draft = RecommendationDraft(
                 student_id=student_id,
                 indicator_id=indicator_id,
@@ -249,6 +299,7 @@ class SaveReview:
                     "prompt_version": payload.get("prompt_version"),
                     "original_draft": original,
                     "evidence_record_ids": cited,
+                    "evidence_refs": evidence_refs,
                     "reason": str(payload.get("reason", "")),
                     "reviewer": str(payload.get("reviewer", "教师")),
                     "structured_plan": structured_plan,

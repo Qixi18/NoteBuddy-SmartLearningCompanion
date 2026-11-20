@@ -78,6 +78,35 @@ describe('ReviewPanel', () => {
     expect(screen.getByText(/原始来源行：3/)).toBeTruthy();
   });
 
+  it('lets a teacher attach server-computed zero-response coverage to a review', async () => {
+    const run = {
+      run_id: 'RUN-1', items: [], responses: [], raw_responses: [], observations: [], source_index: [],
+      objectives: [], nodes: [], quality: { record_dispositions: [], findings: [] },
+    } as unknown as AnalysisRun;
+    const bundle = {
+      scope: { run_id: 'RUN-1', student_id: 'D01', indicator_id: 'T01I1', node_id: 'N01' },
+      coverage: { evidence_id: 'coverage:current-hash', record_count: 0 },
+    };
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const body = url.includes('/api/evidence-bundle') ? bundle : {};
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+    }));
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    const draft = { ...draftFixture, node_id: 'N01', evidence_record_ids: [], observed_record_ids: [], evidence_source_lines: [] } as Draft;
+    render(<ReviewPanel run={run} student="D01" indicator="T01I1" node="N01" draft={draft} onDraft={vi.fn()} onSave={onSave} />);
+    const coverageCheckbox = await screen.findByLabelText(/将此覆盖记录作为本次教师复核的证据引用/);
+    fireEvent.click(coverageCheckbox);
+    fireEvent.click(screen.getByRole('button', { name: '保存复核' }));
+    await act(async () => {});
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+      evidence_refs: [{
+        kind: 'coverage', evidence_id: 'coverage:current-hash',
+        scope: bundle.scope,
+      }],
+    }));
+  });
+
   it('shows actionable steps and observation even when activity repeats the recommendation', () => {
     const draft = {
       ...draftFixture,
