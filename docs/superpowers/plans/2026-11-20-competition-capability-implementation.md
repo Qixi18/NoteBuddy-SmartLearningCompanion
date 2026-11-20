@@ -297,7 +297,10 @@ P15当前状态：`preparation_docs_complete/final_artifacts_and_human_acceptanc
 **修改：** 实测涉及的`useWorkbench.ts`、页面组件与服务查询；仅在确有性能问题时优化。**新增：** `tests/competition-journey.spec.ts`、`scripts/benchmark_competition.py`、`docs/development/performance-baseline.md`。
 
 - [ ] 在记录硬件的演示电脑运行1000行基线与5000行压力样本，分别测冷启动、导入、切页、证据展开、报告生成；记录5次中位数与最大值。
+- [x] 后端基准子集已在 Windows 11 / Python 3.13.3 完成：每规模5轮，测Alembic迁移、Store初始化、导入、健康/证据/案例报告/班级报告；详见`docs/development/performance-baseline.md`。这尚未覆盖整机冷启动和浏览器交互，不能替代上一条完整验收。
 - [ ] 必要时按范围惰性加载证据、减少重复派生、按明确缓存键缓存纯计算；缓存键必须含run与source版本，撤销签核不得读旧缓存。
+- [x] 本次后端实测未发现需要缓存或改写统计逻辑的证据，因此未添加缓存或改变统计口径。
+- [x] 浏览器自动化已有端到端流程：`tests/workbench.spec.ts`覆盖数据导入、教学复核/方案编辑、案例确认、正式预检与成果包校验；另有路由刷新和键盘辅助用例。保留该覆盖，避免复制成重复的`competition-journey.spec.ts`。本轮未重跑浏览器套件。
 - [ ] 三名首次使用者执行导入→查看证据→编辑方案→确认案例→导出；记录任务完成、困惑及阻塞，不凭截图宣布易用性通过。
 - [ ] 检查键盘、焦点、表单错误、长内容、打印和浏览器刷新；复用现有组件，仅按实际需要拆分过大的ReviewPanel/WorkbenchPages。
 - [ ] 运行专项E2E与相关回归；性能不达内部目标时报告瓶颈与实测范围，不擅自修改统计口径换取速度。
