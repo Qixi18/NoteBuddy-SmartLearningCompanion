@@ -280,12 +280,15 @@ P14当前状态：`official_baseline_recalculated/quality_comparison_and_blind_r
 
 **新增：** `docs/development/competition-release-checklist.md`、`docs/development/demo-runbook.md`、`docs/development/submission-storyboard.md`。正式PDF/MP4/PPTX和数据包保存到项目父目录的`参赛交付/<版本>/`，不把赛事原始内容加入Git。
 
+- [x] 起草正式材料放行清单、本地演示运行手册、18页设计方案结构及5分钟视频/10分钟答辩分镜；均依据赛题规则的20页/5分钟/10+5分钟硬限制。
 - [ ] 按目标规格的18页建议结构编写设计方案，覆盖需求、方案、三任务、验证、创新、边界、组件来源与数据使用。
 - [ ] 从同一release_id取截图、统计、案例及包，不引用旧演示数据；写清公开数据/自建测试/后续补充记录的来源区别。
 - [ ] 制作≤5分钟视频、10分钟讲解PPT与5分钟问答备稿；实际计时并逐项核对数字。
 - [ ] 在干净演示环境安装并用localhost启动，验证数据库、PDF来源、已确认案例、规则离线方案、正式包下载；准备录屏与成果文件回退。
 - [ ] 工程、数学内容、交付三角色分别记录验收结果；冻结代码SHA、schema头、输入SHA、规则/模板/模型版本和最终文件SHA。
 - [ ] 产出最终放行清单；本地提交与远程提交分开，未经用户明确指令不推送、不合并、不实际提交赛事系统。
+
+P15当前状态：`preparation_docs_complete/final_artifacts_and_human_acceptance_pending`。已完成的是可执行蓝图和运行说明；最终PDF、MP4、PPTX、正式内容签核、干净演示验收仍未完成。
 
 ### P16 性能、可用性与维护性收尾
 
