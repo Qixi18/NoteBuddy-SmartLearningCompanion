@@ -124,6 +124,17 @@ def build_evidence_bundle(
     source_versions = (
         {scope.indicator_id: latest_source.get("version", 0)} if latest_source else {}
     )
+    source_context = {
+        "status": latest_source.get("status", "pending")
+        if latest_source
+        else "pending",
+        "stale": bool(latest_source.get("stale")) if latest_source else False,
+        "rubric_mappings": latest_source.get("rubric_mappings", [])
+        if latest_source
+        and latest_source.get("status") == "verified"
+        and not latest_source.get("stale")
+        else [],
+    }
     coverage_basis = {
         "scope": scope.__dict__,
         "expected_material_ids": expected_material_ids,
@@ -161,6 +172,7 @@ def build_evidence_bundle(
         "rubric_definitions": rubric_definitions,
         "coverage": coverage,
         "source_versions": source_versions,
+        "source_context": source_context,
         "issues": issues,
     }
     return {

@@ -13,6 +13,7 @@ from app.schemas.http import (
     ReviewRequest,
     SourceVerificationRequest,
     SourceVerificationResponse,
+    StudentInsightsResponse,
     TeacherCaseRequest,
     TeacherCaseResponse,
 )
@@ -46,6 +47,9 @@ def test_shared_frontend_backend_contract_fixtures():
     evidence_bundle = json.loads(
         (root / "contracts/api/evidence-bundle.json").read_text(encoding="utf-8")
     )
+    student_insights = json.loads(
+        (root / "contracts/api/student-insights.json").read_text(encoding="utf-8")
+    )
     teacher_case = json.loads(
         (root / "contracts/api/teacher-case.json").read_text(encoding="utf-8")
     )
@@ -60,6 +64,10 @@ def test_shared_frontend_backend_contract_fixtures():
     assert (
         EvidenceBundleResponse.model_validate(evidence_bundle).model_dump()
         == evidence_bundle
+    )
+    assert (
+        StudentInsightsResponse.model_validate(student_insights).model_dump()
+        == student_insights
     )
     assert (
         SourceVerificationRequest.model_validate(source_verification).model_dump()

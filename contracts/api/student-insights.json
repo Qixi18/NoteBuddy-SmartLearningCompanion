@@ -1,0 +1,27 @@
+{
+  "scope": {
+    "run_id": "run-contract",
+    "student_id": "D01",
+    "indicator_id": "T01I1",
+    "node_id": "N01"
+  },
+  "bundle_fingerprint": "fixture-fingerprint",
+  "claims": [
+    {
+      "claim_id": "claim-no-records",
+      "kind": "fact",
+      "text": "当前学生、指标和测验节点范围内没有作答记录，暂时无法判断表现。",
+      "evidence_refs": [
+        {
+          "evidence_id": "coverage:fixture",
+          "record_id": null,
+          "source_line": null,
+          "material_id": "",
+          "description": "该范围的记录覆盖情况"
+        }
+      ],
+      "limitations": ["无记录不等于未掌握；需补充可观察证据后再判断。"],
+      "review_status": "not_reviewed"
+    }
+  ]
+}

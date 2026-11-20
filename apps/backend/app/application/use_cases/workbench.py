@@ -9,6 +9,7 @@ from ...services.exports import package
 from ...services.recommendations import deepseek_draft, draft
 from ...services.task01.material_catalog_service import build_material_catalog
 from ...services.task02.evidence_bundle_service import build_evidence_bundle
+from ...services.task02.insight_service import build_student_insights
 from ..ports.llm import LLMClient
 from .stage2 import Stage2Decisions
 from .teaching_adjustments import TeachingAdjustments
@@ -173,13 +174,15 @@ class ExportPackage:
 
 
 class GetEvidenceBundle:
-    def __init__(self, uow_factory):
+    def __init__(self, uow_factory, stage2: Stage2Decisions):
         self.uow_factory = uow_factory
+        self.stage2 = stage2
 
     def execute(self, student_id: str, indicator_id: str, node_id: str) -> dict:
         with self.uow_factory(immediate=False) as uow:
             run = uow.runs.current()
             sources = uow.stage2.list_sources(run["run_id"])
+        sources = self.stage2.with_source_freshness(run, sources)
         scope = AnalysisScope(
             run_id=run["run_id"],
             student_id=student_id,
@@ -187,6 +190,19 @@ class GetEvidenceBundle:
             node_id=node_id,
         )
         return build_evidence_bundle(run, scope, sources)
+
+
+class GetStudentInsights:
+    def __init__(self, evidence_bundle: GetEvidenceBundle):
+        self.evidence_bundle = evidence_bundle
+
+    def execute(self, student_id: str, indicator_id: str, node_id: str) -> dict:
+        bundle = self.evidence_bundle.execute(student_id, indicator_id, node_id)
+        return {
+            "scope": bundle["scope"],
+            "bundle_fingerprint": bundle["fingerprint"],
+            "claims": build_student_insights(bundle),
+        }
 
 
 class WorkbenchUseCases:
@@ -217,4 +233,5 @@ class WorkbenchUseCases:
             self.current_run, self.stage2, source_service
         )
         self.export_package = ExportPackage(uow_factory, self.current_run, self.stage2)
-        self.evidence_bundle = GetEvidenceBundle(uow_factory)
+        self.evidence_bundle = GetEvidenceBundle(uow_factory, self.stage2)
+        self.student_insights = GetStudentInsights(self.evidence_bundle)

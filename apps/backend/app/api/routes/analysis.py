@@ -9,6 +9,7 @@ from ...schemas.http import (
     CaseSuggestionResponse,
     DraftResponse,
     EvidenceBundleResponse,
+    StudentInsightsResponse,
 )
 from ..dependencies import get_use_cases
 
@@ -28,6 +29,20 @@ def evidence_bundle(
     node: str = Query(min_length=1),
 ) -> dict:
     return use_cases.evidence_bundle.execute(student, indicator, node)
+
+
+@router.get(
+    "/api/student-insights",
+    response_model=StudentInsightsResponse,
+    tags=["analysis"],
+)
+def student_insights(
+    use_cases: UseCases,
+    student: str = Query(min_length=1),
+    indicator: str = Query(min_length=1),
+    node: str = Query(min_length=1),
+) -> dict:
+    return use_cases.student_insights.execute(student, indicator, node)
 
 
 @router.get("/api/run", response_model=AnalysisRunResponse, tags=["analysis"])

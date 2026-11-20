@@ -133,8 +133,32 @@ export interface EvidenceBundle {
     evidence_id: string;
   };
   source_versions: Record<string, number>;
+  source_context: { status: string; stale: boolean; rubric_mappings: Array<Record<string, unknown>> };
   issues: Array<Record<string, unknown>>;
   fingerprint: string;
+}
+
+export interface InsightEvidenceRef {
+  evidence_id: string;
+  record_id: string | null;
+  source_line: number | null;
+  material_id: string;
+  description: string;
+}
+
+export interface InsightClaim {
+  claim_id: string;
+  kind: 'fact' | 'rule_observation' | 'hypothesis';
+  text: string;
+  evidence_refs: InsightEvidenceRef[];
+  limitations: string[];
+  review_status: 'not_reviewed' | 'teacher_reviewed';
+}
+
+export interface StudentInsights {
+  scope: EvidenceBundle['scope'];
+  bundle_fingerprint: string;
+  claims: InsightClaim[];
 }
 
 export interface RubricObservation {

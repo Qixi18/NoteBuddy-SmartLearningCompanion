@@ -16,6 +16,7 @@ export function App() {
   const workbench = useWorkbench();
   const [path, setPath] = useState<RoutePath>(() => normalizeHash(window.location.hash));
   const [importOpen, setImportOpen] = useState(false);
+  const [focusEvidence, setFocusEvidence] = useState<{ recordId: string; sourceLine: number } | null>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const initialRoute = useRef(true);
@@ -87,7 +88,7 @@ export function App() {
         {workbench.run && <div className="page-heading"><div><h1 ref={titleRef} tabIndex={-1}>{page.title}</h1><p>{page.description}</p></div><details className="run-details"><summary><span className="run-details-label">当前数据批次</span><strong>{new Date(workbench.run.created_at).toLocaleDateString('zh-CN')}</strong><span className="run-chevron" aria-hidden="true" /></summary><div className="run-details-popover"><span>运行编号</span><code>{workbench.run.run_id}</code><span>规则版本 {workbench.run.rule_version}</span></div></details></div>}
         {workbench.message && <p id="message" className={`global-message${workbench.error ? ' error' : ''}`} role={workbench.error ? 'alert' : 'status'} aria-live={workbench.error ? 'assertive' : 'polite'}>{workbench.message}</p>}
         {workbench.error && workbench.run && <div className="retry-row"><button className="secondary" onClick={() => void workbench.refresh()}>重试读取当前运行</button></div>}
-        {workbench.loading && !workbench.run ? <div className="loading-state" role="status">正在读取本机分析服务…</div> : workbench.error && !workbench.run ? <section className="empty-state connection-error"><h1>无法读取分析数据</h1><p role="alert">{workbench.message}</p><button className="secondary" onClick={() => void workbench.refresh()}>重试连接</button></section> : <WorkbenchPage key={workbench.run?.run_id ?? 'empty'} path={path} run={workbench.run} reviews={workbench.reviews} suggestions={workbench.suggestions} student={workbench.student} indicator={workbench.indicator} node={workbench.node} draft={workbench.draft} onStudent={workbench.setStudent} onIndicator={workbench.setIndicator} onNode={workbench.setNode} onDraft={workbench.makeDraft} onSave={workbench.saveReview} onExport={workbench.exportCases} onNavigate={navigate} onImported={imported} onMessage={workbench.announce} />}
+        {workbench.loading && !workbench.run ? <div className="loading-state" role="status">正在读取本机分析服务…</div> : workbench.error && !workbench.run ? <section className="empty-state connection-error"><h1>无法读取分析数据</h1><p role="alert">{workbench.message}</p><button className="secondary" onClick={() => void workbench.refresh()}>重试连接</button></section> : <WorkbenchPage key={workbench.run?.run_id ?? 'empty'} path={path} run={workbench.run} reviews={workbench.reviews} suggestions={workbench.suggestions} student={workbench.student} indicator={workbench.indicator} node={workbench.node} focusEvidence={focusEvidence} onEvidenceFocus={(recordId, sourceLine) => setFocusEvidence({ recordId, sourceLine })} draft={workbench.draft} onStudent={workbench.setStudent} onIndicator={workbench.setIndicator} onNode={workbench.setNode} onDraft={workbench.makeDraft} onSave={workbench.saveReview} onExport={workbench.exportCases} onNavigate={navigate} onImported={imported} onMessage={workbench.announce} />}
       </main>
     </div>
 

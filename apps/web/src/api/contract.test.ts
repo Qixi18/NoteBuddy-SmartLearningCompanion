@@ -9,6 +9,7 @@ import sourceVerificationFixture from '../../../../contracts/api/source-verifica
 import evidenceBundleFixture from '../../../../contracts/api/evidence-bundle.json';
 import teacherCaseFixture from '../../../../contracts/api/teacher-case.json';
 import materialCatalogFixture from '../../../../contracts/api/material-catalog.json';
+import studentInsightsFixture from '../../../../contracts/api/student-insights.json';
 import { api, jsonRequest, learningApi } from './client';
 import type { AnalysisRun, SourceVerificationPayload, TeacherCasePayload } from './types';
 
@@ -77,6 +78,15 @@ describe('shared API fixtures', () => {
     vi.stubGlobal('fetch', fetchMock);
     await expect(learningApi.materialCatalog()).resolves.toEqual(materialCatalogFixture);
     expect(fetchMock.mock.calls[0][0]).toBe('/api/material-catalog');
+  });
+
+  it('reads the scoped student insight contract', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(studentInsightsFixture), {
+      status: 200, headers: { 'content-type': 'application/json' },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(learningApi.studentInsights('D01', 'T01I1', 'N01')).resolves.toEqual(studentInsightsFixture);
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/student-insights?student=D01&indicator=T01I1&node=N01');
   });
 
   it('keeps coverage-only evidence bundles explicit and score-free', () => {

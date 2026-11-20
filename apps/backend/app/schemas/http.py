@@ -213,6 +213,7 @@ class EvidenceBundleResponse(BaseModel):
     rubric_definitions: list[dict[str, Any]]
     coverage: dict[str, Any]
     source_versions: dict[str, int]
+    source_context: dict[str, Any] = Field(default_factory=dict)
     issues: list[dict[str, Any]]
     fingerprint: str
 
@@ -330,6 +331,29 @@ class IndicatorMaterialCatalog(BaseModel):
 class MaterialCatalogResponse(BaseModel):
     run_id: str
     indicators: list[IndicatorMaterialCatalog]
+
+
+class EvidenceReferenceResponse(BaseModel):
+    evidence_id: str
+    record_id: str | None = None
+    source_line: int | None = None
+    material_id: str = ""
+    description: str = ""
+
+
+class InsightClaimResponse(BaseModel):
+    claim_id: str
+    kind: Literal["fact", "rule_observation", "hypothesis"]
+    text: str
+    evidence_refs: list[EvidenceReferenceResponse] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+    review_status: Literal["not_reviewed", "teacher_reviewed"] = "not_reviewed"
+
+
+class StudentInsightsResponse(BaseModel):
+    scope: dict[str, str]
+    bundle_fingerprint: str
+    claims: list[InsightClaimResponse]
 
 
 class TeacherCaseResponse(TeacherCaseRequest):

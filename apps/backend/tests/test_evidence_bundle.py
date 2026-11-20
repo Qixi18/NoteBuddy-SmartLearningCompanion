@@ -148,6 +148,35 @@ def test_no_record_has_stable_coverage_evidence_not_a_zero_score():
     assert first["coverage"]["evidence_id"] == second["coverage"]["evidence_id"]
     assert "score" not in first["coverage"]
     assert first["fingerprint"] == second["fingerprint"]
+    assert first["source_context"] == {
+        "status": "pending",
+        "stale": False,
+        "rubric_mappings": [],
+    }
+
+
+def test_stale_source_context_does_not_expose_verified_issue_mappings():
+    run = sample_run()
+    scope = AnalysisScope(
+        run_id="run-a", student_id="S1", indicator_id="I1", node_id="N1"
+    )
+    bundle = build_evidence_bundle(
+        run,
+        scope,
+        {
+            "I1": [
+                {
+                    "version": 4,
+                    "status": "verified",
+                    "stale": True,
+                    "rubric_mappings": [{"issue_id": "old-map", "status": "verified"}],
+                }
+            ]
+        },
+    )
+
+    assert bundle["source_context"]["stale"] is True
+    assert bundle["source_context"]["rubric_mappings"] == []
 
 
 def test_bundle_fingerprint_changes_with_source_versions_and_content():

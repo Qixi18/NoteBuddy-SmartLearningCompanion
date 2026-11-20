@@ -24,6 +24,7 @@ type PageProps = {
   student: string;
   indicator: string;
   node: string;
+  focusEvidence?: { recordId: string; sourceLine: number } | null;
   draft: import('../api/types').Draft | null;
   onStudent: (value: string) => void;
   onIndicator: (value: string) => void;
@@ -32,6 +33,7 @@ type PageProps = {
   onSave: (fields: ReviewFields) => Promise<void>;
   onExport: (ids: string[]) => void;
   onNavigate: (path: RoutePath) => void;
+  onEvidenceFocus?: (recordId: string, sourceLine: number) => void;
   onImported?: (id: string) => Promise<void>;
   onMessage?: (text: string, error?: boolean) => void;
 };
@@ -129,8 +131,8 @@ export function WorkbenchPage(props: PageProps) {
     case '/home': return <Overview run={run} onNavigate={onNavigate} />;
     case '/knowledge/indicators': return <KnowledgePage run={run} />;
     case '/insights/classes': return <ClassPanel run={run} node={props.node} onNode={props.onNode} onOpenStudent={studentId => { props.onStudent(studentId); onNavigate('/insights/students'); }} />;
-    case '/insights/students': return <StudentPanel run={run} student={props.student} indicator={props.indicator} node={props.node} onNode={props.onNode} onStudent={props.onStudent} onIndicator={props.onIndicator} onOpenEvidence={() => onNavigate('/insights/evidence')} />;
-    case '/insights/evidence': return <EvidencePanel run={run} student={props.student} indicator={props.indicator} node={props.node} onNode={props.onNode} />;
+    case '/insights/students': return <StudentPanel run={run} student={props.student} indicator={props.indicator} node={props.node} onNode={props.onNode} onStudent={props.onStudent} onIndicator={props.onIndicator} onOpenEvidence={(recordId, sourceLine) => { if (recordId && sourceLine) props.onEvidenceFocus?.(recordId, sourceLine); onNavigate('/insights/evidence'); }} />;
+    case '/insights/evidence': return <EvidencePanel run={run} student={props.student} indicator={props.indicator} node={props.node} onNode={props.onNode} focusEvidence={props.focusEvidence} />;
     case '/insights/quality': return <QualityPanel run={run} onOpenEvidence={scope => { props.onStudent(scope.studentId); props.onIndicator(scope.indicatorId); props.onNode(scope.nodeId); onNavigate('/insights/evidence'); }} />;
     case '/plan/reviews': return <>
       <section className="card review-range"><h2>教学范围与证据</h2><div className="scope-fields"><label>学生<select value={props.student} onChange={event => props.onStudent(event.target.value)}>{run.students.map(item => <option key={item['学生编号']} value={item['学生编号']}>{item['学生编号']} · {item['模拟班级编号']}</option>)}</select></label><label>观察指标<select value={props.indicator} onChange={event => props.onIndicator(event.target.value)}>{run.objectives.map(item => <option key={item['指标编号']} value={item['指标编号']}>{item['指标编号']} · {item['观察指标']}</option>)}</select></label><label>测验节点<select value={props.node} onChange={event => props.onNode(event.target.value)}><option value="">请选择测验节点</option>{run.nodes.map(item => <option key={item['节点编号']} value={item['节点编号']}>{item['节点编号']}</option>)}</select></label></div>

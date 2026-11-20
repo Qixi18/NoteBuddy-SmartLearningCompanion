@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { learningApi } from '../../../api/client';
 import type { AnalysisRun } from '../../../api/types';
 import { ClassPanel } from './ClassPanel';
 import { EvidencePanel } from './EvidencePanel';
@@ -8,6 +9,12 @@ import { QualityPanel } from './QualityPanel';
 import { StudentPanel } from './StudentPanel';
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+beforeEach(() => {
+  vi.spyOn(learningApi, 'studentInsights').mockResolvedValue({
+    scope: { run_id: 'run1', student_id: 'D01', indicator_id: 'I1', node_id: 'N01' },
+    bundle_fingerprint: 'bundle-1', claims: [],
+  });
+});
 
 const run = {
   run_id: 'run1', created_at: '', rule_version: '2',
@@ -89,6 +96,12 @@ describe('TASK02 result panels', () => {
     expect(screen.getByText('该修订未进入当前分析版本；逐点评分未知。')).toBeTruthy();
     expect(screen.getByText(/原始 CSV：作答记录.csv · 第 2 行/)).toBeTruthy();
     expect(screen.queryByText(/other student/)).toBeNull();
+  });
+
+  it('opens and focuses the exact referenced evidence row', () => {
+    render(<EvidencePanel run={run} student="D01" indicator="I1" focusEvidence={{ recordId: 'R2', sourceLine: 3 }} />);
+    const target = document.getElementById('evidence-R2-3') as HTMLDetailsElement;
+    expect(target.open).toBe(true);
   });
 
   it('does not mark a duplicate record ID from another source row as selected', () => {

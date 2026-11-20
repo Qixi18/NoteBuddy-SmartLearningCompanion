@@ -2,11 +2,19 @@ import type { AnalysisRun } from '../../../api/types';
 import { Panel } from '../../../components/Panel';
 import { dispositionLabel } from '../qualityLabels';
 import { useEffect, useState } from 'react';
-export function EvidencePanel({ run, student, indicator, node: activeNode, onNode }: { run: AnalysisRun; student: string; indicator: string; node?: string; onNode?: (id: string) => void }) {
+export function EvidencePanel({ run, student, indicator, node: activeNode, onNode, focusEvidence }: { run: AnalysisRun; student: string; indicator: string; node?: string; onNode?: (id: string) => void; focusEvidence?: { recordId: string; sourceLine: number } | null }) {
   const [localNode, setLocalNode] = useState(run.nodes[0]?.['节点编号'] ?? '');
   useEffect(() => { setLocalNode(run.nodes[0]?.['节点编号'] ?? ''); }, [run.run_id]);
   useEffect(() => { setLocalNode(run.nodes[0]?.['节点编号'] ?? ''); }, [student, indicator]);
   const node = activeNode ?? localNode;
+  useEffect(() => {
+    if (!focusEvidence) return;
+    const target = document.getElementById(`evidence-${encodeURIComponent(focusEvidence.recordId)}-${focusEvidence.sourceLine}`);
+    if (!target) return;
+    (target as HTMLDetailsElement).open = true;
+    target.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    target.querySelector<HTMLElement>('summary')?.focus();
+  }, [focusEvidence, node, student, indicator]);
   const chooseNode = (value: string) => { setLocalNode(value); onNode?.(value); };
   const ids = new Set(run.items.filter(item => item['指标编号'] === indicator).map(item => item['材料编号']));
   const records = (run.raw_responses ?? run.responses).filter(row => row['学生编号'] === student && row['节点编号'] === node && ids.has(row['材料编号']));
@@ -19,7 +27,7 @@ export function EvidencePanel({ run, student, indicator, node: activeNode, onNod
     const selected = run.responses.some(response => response['记录编号'] === row['记录编号'] && response._source_line === row._source_line);
     const finding = run.quality.findings.find(item => item.record_id === row['记录编号'] && item.source_line === row._source_line);
     const dispositionValue = disposition(row);
-    return <details className={`evidence-entry evidence-${dispositionValue}`} key={`${row['记录编号']}-${index}`}><summary><span className="evidence-main"><strong>{row['记录编号']} · {row['材料编号']} · {row['评分状态']} · {row['得分'] || '—'}/{row['满分'] || '—'} · 修订 {row['修订版本']} · {dispositionValue}</strong><span className={`status-badge status-${dispositionValue}`} aria-label={dispositionLabel(dispositionValue)}>{dispositionLabel(dispositionValue)}</span><span className="evidence-score">{row['得分'] || '—'}/{row['满分'] || '—'} 分</span></span></summary>
+    return <details id={`evidence-${encodeURIComponent(row['记录编号'])}-${row._source_line}`} className={`evidence-entry evidence-${dispositionValue}`} key={`${row['记录编号']}-${index}`}><summary><span className="evidence-main"><strong>{row['记录编号']} · {row['材料编号']} · {row['评分状态']} · {row['得分'] || '—'}/{row['满分'] || '—'} · 修订 {row['修订版本']} · {dispositionValue}</strong><span className={`status-badge status-${dispositionValue}`} aria-label={dispositionLabel(dispositionValue)}>{dispositionLabel(dispositionValue)}</span><span className="evidence-score">{row['得分'] || '—'}/{row['满分'] || '—'} 分</span></span></summary>
       <div><p><strong>题目：</strong>{item?.['题干或内容'] || '未提供题干'}</p><p><strong>最终作答：</strong>{row['学生最终作答'] || '未作答'}</p>{row['解答过程'] && <><strong>解答过程</strong><pre>{row['解答过程']}</pre></>}<p><strong>评分点要求：</strong>{item?.['评分点'] || '未提供'}</p><p><strong>评分点得分原文：</strong>{row['评分点得分'] || '未提供'}</p>
       <div className="row"><strong>结构化评分点状态：{rubricLabel[rubric?.state ?? 'unknown']}</strong>
         {rubric?.points.length ? <ul>{rubric.points.map(point => <li key={point.point_id}>{point.point_id}：{point.earned}/{point.maximum}</li>)}</ul> : <p>未提供逐点得分；未知不按 0 分处理。</p>}
