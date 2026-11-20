@@ -121,6 +121,14 @@ def build_evidence_bundle(
     )
     source_history = sources.get(scope.indicator_id, [])
     latest_source = source_history[-1] if source_history else None
+    objective = next(
+        (
+            row
+            for row in run.get("objectives", [])
+            if row.get("指标编号") == scope.indicator_id
+        ),
+        {},
+    )
     source_versions = (
         {scope.indicator_id: latest_source.get("version", 0)} if latest_source else {}
     )
@@ -129,6 +137,17 @@ def build_evidence_bundle(
         if latest_source
         else "pending",
         "stale": bool(latest_source.get("stale")) if latest_source else False,
+        "topic_id": objective.get("主题编号", ""),
+        "material_ids": latest_source.get("material_ids", [])
+        if latest_source
+        and latest_source.get("status") == "verified"
+        and not latest_source.get("stale")
+        else [],
+        "resource_links": latest_source.get("resource_links", [])
+        if latest_source
+        and latest_source.get("status") == "verified"
+        and not latest_source.get("stale")
+        else [],
         "rubric_mappings": latest_source.get("rubric_mappings", [])
         if latest_source
         and latest_source.get("status") == "verified"

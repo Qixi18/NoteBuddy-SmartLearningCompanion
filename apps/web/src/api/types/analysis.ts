@@ -133,7 +133,7 @@ export interface EvidenceBundle {
     evidence_id: string;
   };
   source_versions: Record<string, number>;
-  source_context: { status: string; stale: boolean; rubric_mappings: Array<Record<string, unknown>> };
+  source_context: { status: string; stale: boolean; topic_id?: string; material_ids?: string[]; resource_links?: Array<Record<string, unknown>>; rubric_mappings: Array<Record<string, unknown>> };
   issues: Array<Record<string, unknown>>;
   fingerprint: string;
 }

@@ -3,9 +3,11 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AnalysisRun, Draft, Review, SourceVerification } from '../../../api/types';
 import { isStructuredPlanCurrentlyVerified, ReviewPanel } from './ReviewPanel';
-import draftFixture from '../../../../../../contracts/api/draft.json';
+import draftFixtureJson from '../../../../../../contracts/api/draft.json';
 
 afterEach(cleanup);
+
+const draftFixture = draftFixtureJson as Draft;
 
 describe('ReviewPanel', () => {
   it('matches the current source signature using the same version and material rules as export', () => {
@@ -89,6 +91,41 @@ describe('ReviewPanel', () => {
     expect(screen.getByText('核对原始作答与评分点')).toBeTruthy();
     expect(screen.getByText('L01', { exact: false })).toBeTruthy();
     expect(screen.getByText(/观察点：记录学生能否独立说明步骤/)).toBeTruthy();
+  });
+
+  it('shows node-scoped practice separately from verified learning resources and explains exclusions', () => {
+    const draft = {
+      ...draftFixture,
+      resource_selection: {
+        status: 'ready', purpose: 'transfer', candidate_node_item_count: 2,
+        practice_items: [{ material_id: 'Q002', resource_type: '题目', title: '迁移题', purpose: '', reason_codes: ['unseen_for_transfer'], reason: 'unseen_for_transfer' }],
+        learning_resources: [{ material_id: 'LC01', resource_type: '学习卡', title: '', purpose: '迁移练习', reason_codes: ['purpose_match'], reason: 'purpose_match' }],
+        excluded: [{ material_id: 'Q003', reason_codes: ['outside_node_scope'], reason: '题目不在当前节点范围内。' }],
+        reason_codes: [],
+      },
+    } as Draft;
+    render(<ReviewPanel student="D01" indicator="T01I1" node="N01" draft={draft} onDraft={vi.fn()} onSave={vi.fn()} />);
+
+    expect(screen.getByRole('heading', { name: '范围内材料建议' })).toBeTruthy();
+    expect(screen.getByText(/迁移题/)).toBeTruthy();
+    expect(screen.getByText('LC01', { exact: false })).toBeTruthy();
+    expect(screen.getByText(/当前节点未作答，适合迁移观察/)).toBeTruthy();
+    fireEvent.click(screen.getByText(/查看未采用材料/));
+    expect(screen.getByText(/题目不在当前节点范围内/)).toBeTruthy();
+  });
+
+  it('explains when source verification blocks all material recommendations', () => {
+    const draft = {
+      ...draftFixture,
+      resource_selection: {
+        status: 'blocked', purpose: 'diagnostic', practice_items: [], learning_resources: [],
+        excluded: [], reason_codes: ['no_verified_candidate'],
+      },
+    } as Draft;
+    render(<ReviewPanel student="D01" indicator="T01I1" node="N01" draft={draft} onDraft={vi.fn()} onSave={vi.fn()} />);
+
+    expect(screen.getByText('暂不推荐')).toBeTruthy();
+    expect(screen.getByText(/当前没有符合范围且来源已核验的材料/)).toBeTruthy();
   });
 
   it('prevents duplicate review saves while one is pending', async () => {

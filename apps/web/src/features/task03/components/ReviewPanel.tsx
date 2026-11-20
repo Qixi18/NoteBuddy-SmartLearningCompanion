@@ -7,6 +7,30 @@ import { dispositionLabel } from '../../task02/qualityLabels';
 type ReviewFields = { status: ReviewStatus; diagnosis: string; recommendation: string; adjustment_condition: string; reason: string; reviewer: string; structured_plan: StructuredPlan | null };
 const emptyFields: ReviewFields = { status: 'accepted', diagnosis: '', recommendation: '', adjustment_condition: '', reason: '', reviewer: '', structured_plan: null };
 const statusLabels: Record<ReviewStatus, string> = { accepted: '接受', edited: '已修改', needs_observation: '待观察', rejected: '驳回' };
+const selectionReasonLabels: Record<string, string> = {
+  verified_indicator_match: '已核验并匹配当前指标',
+  target_issue_match: '对应当前观察到的问题',
+  purpose_match: '用途与当前教学目标相符',
+  unseen_for_transfer: '当前节点未作答，适合迁移观察',
+  observed_item_reflection_only: '当前节点已作答，仅建议复盘',
+  stable_id_tiebreak: '同优先级按材料编号稳定排序',
+  node_scope_required: '需要先选择单一测验节点',
+  no_verified_candidate: '当前没有符合范围且来源已核验的材料',
+};
+
+function ResourceSelectionPanel({ draft }: { draft: Draft }) {
+  const selection = draft.resource_selection;
+  if (!selection) return null;
+  const purposeLabel = selection.purpose === 'remediation' ? '补救巩固' : selection.purpose === 'transfer' ? '迁移观察' : '诊断核对';
+  const reasonText = (codes: string[]) => codes.map(code => selectionReasonLabels[code] ?? code).join('；');
+  return <section className="resource-selection" aria-label="范围内材料建议">
+    <div className="resource-selection-heading"><div><h3>范围内材料建议</h3><p>目标：{purposeLabel} · 按来源签核、节点范围和教学用途筛选</p></div><span className={`status-badge status-${selection.status}`}>{selection.status === 'ready' ? '有可用候选' : '暂不推荐'}</span></div>
+    {selection.status === 'blocked' && <p className="review-alert" role="status">{reasonText(selection.reason_codes) || '当前没有可安全推荐的材料。'} 请先完成来源核验或检查节点范围。</p>}
+    {selection.practice_items.length > 0 && <div><h4>练习题</h4><ul>{selection.practice_items.map(item => <li key={item.material_id}><strong>{item.material_id}</strong>{item.title && <> · {item.title}</>}<small>{reasonText(item.reason_codes)}</small></li>)}</ul></div>}
+    {selection.learning_resources.length > 0 && <div><h4>教材与学习卡</h4><ul>{selection.learning_resources.map(item => <li key={item.material_id}><strong>{item.material_id}</strong> · {item.resource_type}{item.purpose && <> · {item.purpose}</>}<small>{reasonText(item.reason_codes)}</small></li>)}</ul></div>}
+    {selection.excluded.length > 0 && <details><summary>查看未采用材料（{selection.excluded.length}）</summary><ul>{selection.excluded.map(item => <li key={`${item.material_id}:${item.reason}`}><strong>{item.material_id}</strong> · {item.reason}</li>)}</ul></details>}
+  </section>;
+}
 
 export function isStructuredPlanCurrentlyVerified(review: Review, indicator: string, verification: SourceVerification | null): boolean {
   const plan = review.structured_plan;
@@ -122,6 +146,7 @@ export function ReviewPanel({ run, student, indicator, node, review, draft, onDr
       <section className="review-editor" aria-label="教师复核草稿">
         <div className="draft-banner"><span>系统草稿</span><strong>{draft.source === 'rule' ? '规则生成' : '模型辅助生成'}</strong><small>未确认 · 请核对左侧证据和来源边界</small></div>
         <div className="draft-target"><span>教学对象与目标</span><p>{draft.objective || '草稿未提供目标。'}</p></div>
+        <ResourceSelectionPanel draft={draft} />
         {hasTeachingDetails && <details className="proposed-activity"><summary>查看教学安排建议</summary>{activityDiffers && <p>{draft.activity}</p>}{draft.steps?.length ? <ol>{draft.steps.map((step, index) => <li key={`${index}:${step}`}>{step}</li>)}</ol> : null}{draft.material_ids.length > 0 && <p>材料编号：{draft.material_ids.join('、')}</p>}{draft.observation_point && <p>观察点：{draft.observation_point}</p>}</details>}
 
         <section className="review-fields">

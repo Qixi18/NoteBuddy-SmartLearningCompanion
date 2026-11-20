@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AnalysisRun, CaseSuggestion, Review } from '../api/types';
-import draftFixture from '../../../../contracts/api/draft.json';
+import type { AnalysisRun, CaseSuggestion, Draft, Review } from '../api/types';
+import draftFixtureJson from '../../../../contracts/api/draft.json';
 import { WorkbenchPage } from './WorkbenchPages';
 
 afterEach(cleanup);
+
+const draftFixture = draftFixtureJson as Draft;
 
 function makeRun(): AnalysisRun {
   const record = { '记录编号': 'R1', '学生编号': 'D01', '材料编号': 'Q1', '节点编号': 'N1', '作答事件编号': 'E1', '修订版本': '1', '评分状态': '已评分', '得分': '1', '满分': '2', '学生最终作答': '作答文本', '解答过程': '过程', '评分点得分': 'P1=1', _source_line: 8 };

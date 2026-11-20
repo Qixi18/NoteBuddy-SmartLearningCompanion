@@ -1,5 +1,6 @@
 """Thin use cases for the existing HTTP and CLI workbench operations."""
 
+import re
 import tempfile
 from pathlib import Path
 
@@ -11,9 +12,66 @@ from ...services.task01.material_catalog_service import build_material_catalog
 from ...services.task02.class_insight_service import build_class_insights
 from ...services.task02.evidence_bundle_service import build_evidence_bundle
 from ...services.task02.insight_service import build_student_insights
+from ...services.task03.resource_selection_service import select_resources
 from ..ports.llm import LLMClient
 from .stage2 import Stage2Decisions
 from .teaching_adjustments import TeachingAdjustments
+
+
+def _attach_resource_selection(run: dict, result: dict, sources: dict) -> dict:
+    node_id = result.get("node_id")
+    if not node_id or result.get("scope_required"):
+        result["resource_selection"] = {
+            "status": "blocked",
+            "purpose": "diagnostic",
+            "practice_items": [],
+            "learning_resources": [],
+            "excluded": [],
+            "reason_codes": ["node_scope_required"],
+        }
+        return result
+    scope = AnalysisScope(
+        run_id=run["run_id"],
+        student_id=result["student_id"],
+        indicator_id=result["indicator_id"],
+        node_id=node_id,
+    )
+    bundle = build_evidence_bundle(run, scope, sources)
+    insights = build_student_insights(bundle)
+    node_items = {
+        item_id
+        for node in run.get("nodes", [])
+        for item_id in re.findall(r"[A-Z]+\d+", str(node.get("可用题目编号", "")))
+        if node.get("节点编号") == node_id
+    }
+    catalog = [
+        {
+            "material_id": item.get("材料编号", ""),
+            "resource_type": item.get("材料类型") or item.get("题目类型") or "题目",
+            "indicator_id": item.get("指标编号", ""),
+            "topic_id": item.get("主题编号", ""),
+            "title": item.get("题干或内容", ""),
+            "available_node_ids": [
+                node.get("节点编号")
+                for node in run.get("nodes", [])
+                if item.get("材料编号")
+                in re.findall(r"[A-Z]+\d+", str(node.get("可用题目编号", "")))
+            ],
+        }
+        for item in run.get("items", [])
+        if item.get("材料编号")
+    ]
+    rule_id = result.get("rule_id")
+    purpose = (
+        "remediation"
+        if rule_id in {"TR-05", "TR-06"}
+        else "transfer"
+        if rule_id == "TR-07"
+        else "diagnostic"
+    )
+    result["resource_selection"] = select_resources(bundle, insights, catalog, purpose)
+    result["resource_selection"]["candidate_node_item_count"] = len(node_items)
+    return result
 
 
 class CurrentRun:
@@ -83,13 +141,14 @@ class RuleDraft:
             sources = self.stage2.with_source_freshness(
                 run, uow.stage2.list_sources(run["run_id"])
             )
-        return draft(
+        result = draft(
             run,
             student_id,
             indicator_id,
             node_id,
             source_verifications=sources,
         )
+        return _attach_resource_selection(run, result, sources)
 
 
 class DeepSeekDraft:
@@ -113,7 +172,7 @@ class DeepSeekDraft:
             sources = self.stage2.with_source_freshness(
                 run, uow.stage2.list_sources(run["run_id"])
             )
-        return deepseek_draft(
+        result = deepseek_draft(
             run,
             student_id,
             indicator_id,
@@ -123,6 +182,7 @@ class DeepSeekDraft:
             node_id=node_id,
             source_verifications=sources,
         )
+        return _attach_resource_selection(run, result, sources)
 
 
 class ReadSourcePdf:

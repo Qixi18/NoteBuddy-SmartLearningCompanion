@@ -726,6 +726,16 @@ def test_resource_links_include_unscoped_textbook_and_card_with_server_metadata(
     )
     assert draft.status_code == 200
     assert set(draft.json()["material_ids"]) >= set(supporting_ids), draft.json()
+    selection = draft.json()["resource_selection"]
+    assert selection["status"] == "ready", selection
+    assert selection["learning_resources"]
+    assert {item["material_id"] for item in selection["learning_resources"]} <= set(
+        supporting_ids
+    )
+    assert all(
+        "verified_indicator_match" in item["reason_codes"]
+        for item in selection["learning_resources"]
+    )
     client.close()
 
 

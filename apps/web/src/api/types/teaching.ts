@@ -26,6 +26,26 @@ export interface Draft {
   activity?: string;
   source_locator?: string | null;
   evidence_source_lines?: number[];
+  resource_selection?: ResourceSelection | null;
+}
+
+export interface ResourceSelectionEntry {
+  material_id: string;
+  resource_type: string;
+  title: string;
+  purpose: string;
+  reason_codes: string[];
+  reason: string;
+}
+
+export interface ResourceSelection {
+  status: 'ready' | 'blocked';
+  purpose: 'remediation' | 'transfer' | 'diagnostic';
+  practice_items: ResourceSelectionEntry[];
+  learning_resources: ResourceSelectionEntry[];
+  excluded: Array<{ material_id: string; reason_codes: string[]; reason: string }>;
+  reason_codes: string[];
+  candidate_node_item_count?: number | null;
 }
 
 export interface CaseSuggestion {

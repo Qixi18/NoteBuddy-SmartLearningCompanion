@@ -226,6 +226,33 @@ class CaseSuggestionResponse(BaseModel):
     evidence_record_ids: list[str]
 
 
+class ResourceSelectionEntryResponse(BaseModel):
+    material_id: str
+    resource_type: str
+    title: str = ""
+    purpose: str = ""
+    reason_codes: list[str] = Field(default_factory=list)
+    reason: str = ""
+
+
+class ResourceSelectionExcludedResponse(BaseModel):
+    material_id: str
+    reason_codes: list[str] = Field(default_factory=list)
+    reason: str
+
+
+class ResourceSelectionResponse(BaseModel):
+    status: Literal["ready", "blocked"]
+    purpose: Literal["remediation", "transfer", "diagnostic"]
+    practice_items: list[ResourceSelectionEntryResponse] = Field(default_factory=list)
+    learning_resources: list[ResourceSelectionEntryResponse] = Field(
+        default_factory=list
+    )
+    excluded: list[ResourceSelectionExcludedResponse] = Field(default_factory=list)
+    reason_codes: list[str] = Field(default_factory=list)
+    candidate_node_item_count: int | None = None
+
+
 class DraftResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -256,6 +283,7 @@ class DraftResponse(BaseModel):
     activity: str | None = None
     source_locator: str | None = None
     evidence_source_lines: list[int] = Field(default_factory=list)
+    resource_selection: ResourceSelectionResponse | None = None
 
 
 class ReviewRecordResponse(BaseModel):

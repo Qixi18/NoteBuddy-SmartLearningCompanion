@@ -25,5 +25,28 @@
   "steps": ["核对原始作答与题目评分点", "教师选择已核验学习材料"],
   "activity": "教师核验指标对应材料后，再安排节点范围内的独立练习并记录过程。",
   "source_locator": null,
-  "evidence_source_lines": [3]
+  "evidence_source_lines": [3],
+  "resource_selection": {
+    "status": "ready",
+    "purpose": "remediation",
+    "practice_items": [{
+      "material_id": "Q002",
+      "resource_type": "题目",
+      "title": "节点范围内的巩固题",
+      "purpose": "",
+      "reason_codes": ["verified_indicator_match", "target_issue_match", "stable_id_tiebreak"],
+      "reason": "verified_indicator_match、target_issue_match、stable_id_tiebreak"
+    }],
+    "learning_resources": [{
+      "material_id": "TB01",
+      "resource_type": "教材",
+      "title": "同类项例题",
+      "purpose": "再次讲解合并同类项",
+      "reason_codes": ["verified_indicator_match", "purpose_match", "stable_id_tiebreak"],
+      "reason": "verified_indicator_match、purpose_match、stable_id_tiebreak"
+    }],
+    "excluded": [],
+    "reason_codes": [],
+    "candidate_node_item_count": 2
+  }
 }

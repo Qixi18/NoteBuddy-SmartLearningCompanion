@@ -169,11 +169,13 @@ P07当前状态：`engineering_pass/content_pending`。当前数字描述已观�
 
 **接口：** `select_resources(bundle: EvidenceBundle, insights: list[InsightClaim], catalog: list[dict], purpose: str) -> ResourceSelection`；purpose为remediation/transfer/diagnostic之一。
 
-- [ ] 测试不适用节点、未核验材料、主题冲突、未知材料被过滤且有reason_code；一个候选也没有时返回blocked而非取第一题。
-- [ ] 测试相同输入稳定输出；重复做过题可用于反思，但迁移观察优先不同题且有明确理由。
-- [ ] 明确排序为目标问题匹配→目的匹配→已核验先后关系→不同表征/未见题→稳定材料ID；规则不伪装成数学能力分数。
-- [ ] 题目与教材/学习卡分开选择；节点允许题目列表仅约束练习题，教材是否可用依据人工核验范围，不能把所有教材误判节点外。
-- [ ] 运行`python -m pytest apps/backend/tests/test_resource_selection.py apps/backend/tests/test_task03_recommendations.py -q`，检查三类需求有不同选择理由。
+- [x] 测试不适用节点、未核验材料、主题冲突、未知材料被过滤且有reason_code；一个候选也没有时返回blocked而非取第一题。
+- [x] 测试相同输入稳定输出；迁移观察优先未见题，已做题明确排除为“仅供反思”。
+- [x] 排序按目标问题、教学用途、迁移未见优先及稳定材料ID；理由明确是规则理由，不输出能力分数。
+- [x] 题目与教材/学习卡分开选择；题目按当前证据包节点，教材/学习卡按当前指标、节点和人工核验范围过滤。
+- [x] 三类目的产生区别化理由；全后端174通过/2跳过、全前端69通过/1跳过及生产构建通过。内容负责人逐项审核正式资源映射仍待完成。
+
+P08当前状态：`engineering_pass/content_pending`。只有来源签核当前有效且范围相符的项目才能进入推荐；选择结果是可解释候选，不代替教师选择。
 
 ### P09 结构化方案与渐进提示
 
