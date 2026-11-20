@@ -21,6 +21,7 @@ from ..config import Settings, settings
 from ..core.logging import configure_logging
 from ..repositories.store import Store
 from .routes import (
+    ai_analysis,
     analysis,
     exports,
     health,
@@ -238,6 +239,7 @@ def create_app(store: Store | None = None, config: Settings = settings) -> FastA
     application.include_router(readiness.router)
     application.include_router(imports.router)
     application.include_router(analysis.router)
+    application.include_router(ai_analysis.router)
     application.include_router(recommendations.router)
     application.include_router(reviews.router)
     application.include_router(stage2.router)

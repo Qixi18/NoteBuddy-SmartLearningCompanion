@@ -1,5 +1,6 @@
 from typing import Protocol
 
+from .ai_analysis_repository import AIAnalyses
 from .repositories import (
     AnalysisRuns,
     Responses,
@@ -12,6 +13,7 @@ from .repositories import (
 
 
 class UnitOfWork(Protocol):
+    ai_analyses: AIAnalyses
     runs: AnalysisRuns
     reviews: ReviewHistories
     stage2: Stage2Records

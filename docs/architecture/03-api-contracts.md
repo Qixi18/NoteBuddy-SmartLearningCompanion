@@ -10,6 +10,8 @@
 | GET | `/api/cases` | 无 | 三类不同学生的当前节点候选；理由列明有效证据、题目/班级覆盖与限制；少于三名学生时为空数组 |
 | GET | `/api/draft?student=…&indicator=…` | 必填学生、指标；可选 `node` | TR-01..TR-08 草稿；旧字段保留并增加规则、观察事实、推断边界、步骤、来源行；跨节点需选择，未知 node 返回安全业务错误 |
 | POST | `/api/deepseek` | `student_id`, `indicator_id`；可选 `node_id` | 结构和证据校验后的单 DeepSeek 草稿；范围/冲突闸门返回规则基线，不由模型覆盖 |
+| GET | `/api/ai-analysis` | 必填 `task=task01|task02|task03`；可选 `run_id`、`node_id`、成对的 `student_id`/`indicator_id` | 当前精确范围的模型、输入覆盖摘要、最新有效分析或过期标记；不调用模型 |
+| POST | `/api/ai-analysis` | `task`、`action=generate|refresh|retry_failed`、`request_id`、`transmission_confirmed=true`；可选运行/节点/学生/指标范围及重试 `analysis_id` | 经原文引用验证的持久化分析版本、结论和分块覆盖状态；只在确认后访问模型 |
 | GET | `/api/reviews` | 无 | 当前运行的 `student_id:indicator_id` → 版本数组映射 |
 | POST | `/api/review` | 学生、指标、状态及复核字段/证据 ID | 新增复核版本 |
 | GET/POST | `/api/source-verifications`、`/api/source-verification` | 当前运行的签核历史／单指标逐项签核 | 版本映射／新增签核版本 |

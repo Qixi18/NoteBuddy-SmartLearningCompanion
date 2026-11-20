@@ -17,6 +17,7 @@ from ...services.task02.insight_service import build_student_insights
 from ...services.task03.resource_selection_service import select_resources
 from ...services.task03.teaching_plan_service import build_teaching_plan
 from ..ports.llm import LLMClient
+from .ai_analysis import GenerateAIAnalysis
 from .stage2 import Stage2Decisions
 from .teaching_adjustments import TeachingAdjustments
 
@@ -496,6 +497,9 @@ class WorkbenchUseCases:
         self.rule_draft = RuleDraft(self.current_run, self.stage2)
         self.deepseek_draft = DeepSeekDraft(
             self.current_run, self.stage2, config, llm_client
+        )
+        self.ai_analysis = GenerateAIAnalysis(
+            uow_factory, source_service, config, llm_client
         )
         self.read_source_pdf = ReadSourcePdf(self.current_run, source_service)
         self.material_catalog = GetMaterialCatalog(

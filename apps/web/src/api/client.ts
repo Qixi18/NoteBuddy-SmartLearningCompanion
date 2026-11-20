@@ -1,4 +1,4 @@
-import type { AnalysisRun, CaseReports, CaseSuggestion, ClassInsights, CompetitionClassReport, Draft, EvidenceBundle, ImportResult, MaterialCatalog, ReleasePreflight, ReviewMap, ReviewPayload, ReviewStatus, SourceVerification, SourceVerificationPayload, StudentInsights, SubmissionExportPayload, TeacherCase, TeacherCasePayload, TeachingAdjustment, TeachingAdjustmentCreate, TeachingAdjustmentUpdate } from './types';
+import type { AIAnalysisPreview, AIAnalysisResult, AIAnalysisTask, AnalysisRun, CaseReports, CaseSuggestion, ClassInsights, CompetitionClassReport, Draft, EvidenceBundle, ImportResult, MaterialCatalog, ReleasePreflight, ReviewMap, ReviewPayload, ReviewStatus, SourceVerification, SourceVerificationPayload, StudentInsights, SubmissionExportPayload, TeacherCase, TeacherCasePayload, TeachingAdjustment, TeachingAdjustmentCreate, TeachingAdjustmentUpdate } from './types';
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init);
@@ -13,6 +13,8 @@ export const jsonRequest = (body: unknown): RequestInit => ({
 });
 
 export const learningApi = {
+  aiAnalysisPreview: (task: AIAnalysisTask, runId: string, node?: string, student?: string, indicator?: string) => api<AIAnalysisPreview>(`/api/ai-analysis?${new URLSearchParams({ task, run_id: runId, ...(node ? { node_id: node } : {}), ...(student ? { student_id: student } : {}), ...(indicator ? { indicator_id: indicator } : {}) })}`),
+  generateAIAnalysis: (payload: { task: AIAnalysisTask; run_id: string; node_id?: string; student_id?: string; indicator_id?: string; action: 'generate' | 'refresh' | 'retry_failed'; request_id: string; analysis_id?: string; transmission_confirmed: true }) => api<AIAnalysisResult>('/api/ai-analysis', jsonRequest(payload)),
   run: () => api<AnalysisRun>('/api/run'),
   reviews: () => api<ReviewMap>('/api/reviews'),
   cases: () => api<CaseSuggestion[]>('/api/cases'),

@@ -1,0 +1,19 @@
+"""Port for immutable AI analysis history."""
+
+from typing import Protocol
+
+
+class AIAnalyses(Protocol):
+    def get(self, analysis_id: str) -> dict | None: ...
+
+    def latest(self, run_id: str, task: str, scope_key: str) -> dict | None: ...
+
+    def get_by_request(
+        self, run_id: str, task: str, scope_key: str, request_id: str
+    ) -> dict | None: ...
+
+    def next_generation(self, run_id: str, task: str, scope_key: str) -> int: ...
+
+    def create(self, payload: dict) -> dict: ...
+
+    def update(self, analysis_id: str, status: str, payload: dict) -> dict: ...

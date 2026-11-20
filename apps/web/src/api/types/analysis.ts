@@ -102,6 +102,61 @@ export interface AnalysisRun {
   source_index: SourceIndexEntry[];
 }
 
+export type AIAnalysisTask = 'task01' | 'task02' | 'task03';
+export interface AIAnalysisFinding {
+  finding_id: string;
+  category: string;
+  claim: string;
+  interpretation: string;
+  support_level: 'supported' | 'limited' | 'conflicting' | 'unavailable';
+  limitations: string;
+  next_step: string;
+  evidence_refs: Array<{
+    kind: string;
+    record_id?: string | null;
+    student_id?: string | null;
+    indicator_id?: string | null;
+    node_id?: string | null;
+    material_id?: string | null;
+    name?: string | null;
+    page?: number | null;
+    source_line?: number | null;
+    excerpt: string;
+    alias?: string;
+  }>;
+}
+export interface AIAnalysisResult {
+  analysis_id: string;
+  run_id: string;
+  task: AIAnalysisTask;
+  scope_key: string;
+  scope: Record<string, unknown>;
+  source_fingerprint: string;
+  model: string;
+  prompt_version: string;
+  schema_version: string;
+  generation: number;
+  status: 'running' | 'complete' | 'partial' | 'insufficient_evidence' | 'failed';
+  findings: AIAnalysisFinding[];
+  coverage: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  stale: boolean;
+}
+export interface AIAnalysisPreview {
+  analysis: AIAnalysisResult | null;
+  stale: boolean;
+  run_id: string;
+  task: AIAnalysisTask;
+  scope: Record<string, unknown>;
+  scope_key: string;
+  source_fingerprint: string;
+  provider: string;
+  model: string;
+  model_configured: boolean;
+  input_summary: { packet_count: number; record_count: number; evidence_count: number; objective_count: number };
+}
+
 export interface EvidenceBundle {
   scope: { run_id: string; student_id: string; indicator_id: string; node_id: string };
   responses: Array<{

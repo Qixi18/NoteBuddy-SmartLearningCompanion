@@ -8,12 +8,33 @@ from ...domain.student.models import Student
 from ...domain.subject.models import AssessmentItem, LearningMaterial, LearningObjective
 from ...domain.teaching.models import TeacherReview
 from .models import (
+    AIAnalysisRow,
     ItemRow,
     ObjectiveRow,
     ResponseRow,
     ReviewRow,
     StudentRow,
 )
+
+
+def ai_analysis_from_row(row: AIAnalysisRow) -> dict:
+    """Restore the persisted application analysis payload."""
+    return {
+        **json.loads(row.payload_json),
+        "analysis_id": row.analysis_id,
+        "run_id": row.run_id,
+        "task": row.task,
+        "scope_key": row.scope_key,
+        "source_fingerprint": row.source_fingerprint,
+        "model": row.model,
+        "prompt_version": row.prompt_version,
+        "schema_version": row.schema_version,
+        "generation": row.generation,
+        "request_id": row.request_id,
+        "status": row.status,
+        "created_at": row.created_at,
+        "updated_at": row.updated_at,
+    }
 
 
 def student_from_row(row: StudentRow) -> Student:

@@ -7,7 +7,7 @@
 - 后端：Python 3.12+、FastAPI、Pydantic、SQLAlchemy 2.x、Alembic、Uvicorn；SQLite 本地存储。
 - 前端：React 19、TypeScript、Vite。
 - 架构：本地单用户模块化单体，默认只监听 `127.0.0.1`。
-- 当前能力：六类 CSV 导入、版本与质量检查、统计与观察、三类案例建议、规则/可选模型草稿、Web 逐项来源签核、结构化教学方案、教师案例确认、追加式复核历史、跨运行教学调整记录（含后续证据及教师可比性判断）、PDF 来源 allowlist、ZIP 导出。
+- 当前能力：六类 CSV 导入、版本与质量检查、统计与观察、三类案例建议、TASK 01–03 按需 AI 证据分析及引用、规则/可选模型草稿、Web 逐项来源签核、结构化教学方案、教师案例确认、追加式复核历史、跨运行教学调整记录（含后续证据及教师可比性判断）、PDF 来源 allowlist、ZIP 导出。
 - 统计由确定性程序计算。没有有效记录时不推断学生未掌握。系统没有完整 PDF 自动解析、账户、多用户或动态学习路径。
 
 ## 安装
@@ -97,7 +97,9 @@ python -m app.cli summary
 
 ## 可选模型服务
 
-模型 API Key 只配置在后端的 `.env` 或环境变量中；浏览器不会接触密钥。`MODEL_PROVIDER` 填 `deepseek` 或 `openai` 时可省略 `MODEL_API_URL`，程序会选择对应默认地址；其他提供商需填写完整的 HTTPS Chat Completions 接口地址。`MODEL_NAME` 填模型 ID。当前支持兼容 OpenAI Chat Completions 的接口及 JSON 对象响应；旧 `DEEPSEEK_API_KEY`、`DEEPSEEK_MODEL` 仍可用。调用模型会将所选学生的模拟作答步骤及评分点发给外部服务。模型输出是建议草稿，系统校验证据 ID，教师必须复核；自动化测试使用 Mock，不发起真实付费调用。修改 `.env` 后须重启后端。
+模型 API Key 只配置在后端的 `.env` 或环境变量中；浏览器不会接触密钥。`MODEL_PROVIDER` 填 `deepseek` 或 `openai` 时可省略 `MODEL_API_URL`，程序会选择对应默认地址；其他提供商需填写完整的 HTTPS Chat Completions 接口地址。`MODEL_NAME` 填模型 ID。当前支持兼容 OpenAI Chat Completions 的接口及 JSON 对象响应；旧 `DEEPSEEK_API_KEY`、`DEEPSEEK_MODEL` 仍可用。调用前页面显示任务范围、数据类别、记录数、供应商和模型，并要求显式确认；发送前会替换本机学生/记录/材料编号为临时别名。调用会发送当前任务需要的统计事实、数据处置摘要、作答文本，以及符合条件的已核验课程标准页文本。模型分析生成后直接展示，不需要教师批准或复核才能查看；旧的教学建议复核、来源签核和导出规则仍是独立流程。所有结论须通过本地结构与引用原文校验，引用可跳转到原始作答行或 allowlist PDF。自动化测试使用 Mock，不发起真实付费调用。修改 `.env` 后须重启后端。
+
+AI 分析由用户在学科知识、班级概览、学生分析或建议复核页主动触发，不随导入自动运行。结果按运行、任务和节点/学生范围保存；运行内容、来源签核或来源 PDF 指纹变化后，旧结果标记过期。分块失败会显示覆盖情况并支持重试失败分块。课程标准只提取已核验 locator 指向的可读 PDF 文本层；扫描 PDF 不做 OCR，不能读取的文档不会作为模型证据。结果中的支持程度、限制和证据引用需要结合原始数据理解，模拟数据也不等于真实教学效果。
 
 来源 PDF 按 `source_checks.json` 的 allowlist 查找。CLI 导入赛事材料包时可从原始材料目录读取；浏览器导入使用临时目录，如需查看 PDF，请通过 `SMART_LEARNING_SOURCE_FILES_DIR` 指向包含 allowlist 文件的本机目录。该目录与 `SMART_LEARNING_RESOURCES_DIR` 中的元数据目录分开配置。
 

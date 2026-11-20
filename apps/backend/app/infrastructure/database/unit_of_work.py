@@ -3,6 +3,7 @@
 from sqlalchemy.orm import Session
 
 from ...application.ports.unit_of_work import UnitOfWork
+from ...repositories.ai_analysis_repository import AIAnalysisRepository
 from ...repositories.analysis_run_repository import AnalysisRunRepository
 from ...repositories.response_repository import ResponseRepository
 from ...repositories.review_repository import ReviewRepository
@@ -34,6 +35,7 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
             self.runs = AnalysisRunRepository(
                 self.root, database=self.sessions, session=session
             )
+            self.ai_analyses = AIAnalysisRepository(self.sessions, session=session)
             self.reviews = ReviewRepository(
                 self.root, database=self.sessions, session=session
             )

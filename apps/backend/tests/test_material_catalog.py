@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pytest
 from app.services.task01.material_catalog_service import build_material_catalog
 from app.services.task01.source_service import SourceService
 from pypdf import PdfWriter
@@ -86,6 +87,24 @@ def test_catalog_reports_hash_page_bounds_and_scanned_page_review(tmp_path):
         row for row in invalid_locator["documents"] if row["name"] == curriculum.name
     )
     assert curriculum_entry["status"] == "page_out_of_range"
+
+
+def test_source_text_extraction_is_allowlisted_bounded_and_skips_scans(tmp_path):
+    source_dir = tmp_path / "sources"
+    source_dir.mkdir()
+    curriculum = source_dir / "课程标准_2022.pdf"
+    _blank_pdf(curriculum, pages=1)
+    sources = SourceService(tmp_path / "resources", source_files_dir=source_dir)
+    run = {"source_index": []}
+
+    assert sources.extract_pages(run, curriculum.name, [1, 2]) == []
+    with pytest.raises(ValueError, match="不在允许范围"):
+        sources.extract_pages(run, "outside.pdf", [1])
+    with pytest.raises(ValueError, match="1至20页"):
+        sources.extract_pages(run, curriculum.name, list(range(1, 22)))
+
+    curriculum.write_bytes(b"not a PDF")
+    assert sources.extract_pages(run, curriculum.name, [1]) == []
 
 
 def test_catalog_includes_unscoped_material_only_after_verified_mapping(tmp_path):

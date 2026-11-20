@@ -79,6 +79,26 @@ class SourceService:
             ],
         }
 
+    def extract_pages(
+        self, run: dict, name: str, page_numbers: list[int]
+    ) -> list[dict]:
+        """Extract text only from explicitly verified, allowlisted PDF pages."""
+        if not page_numbers or len(page_numbers) > 20:
+            raise ValueError("PDF文本提取页数必须为1至20页")
+        content = self.read_pdf(run, name)
+        try:
+            reader = PdfReader(BytesIO(content), strict=False)
+        except (OSError, ValueError, PdfReadError, PdfStreamError):
+            return []
+        pages = []
+        for number in sorted(set(page_numbers)):
+            if number < 1 or number > len(reader.pages):
+                continue
+            text = (reader.pages[number - 1].extract_text() or "").strip()
+            if text:
+                pages.append({"name": name, "page": number, "text": text[:12000]})
+        return pages
+
     def fingerprints(self, run: dict) -> dict:
         results = {}
         for name in sorted(self.allowed_names(run)):

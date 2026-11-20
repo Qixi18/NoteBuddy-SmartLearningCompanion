@@ -42,6 +42,64 @@ class DraftRequest(BaseModel):
     node_id: str | None = Field(default=None, min_length=1)
 
 
+class AIAnalysisRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    task: Literal["task01", "task02", "task03"]
+    action: Literal["generate", "refresh", "retry_failed"] = "generate"
+    run_id: str | None = Field(default=None, min_length=1, max_length=64)
+    node_id: str | None = Field(default=None, min_length=1, max_length=128)
+    student_id: str | None = Field(default=None, min_length=1, max_length=128)
+    indicator_id: str | None = Field(default=None, min_length=1, max_length=128)
+    analysis_id: str | None = Field(default=None, min_length=1, max_length=64)
+    request_id: str = Field(min_length=1, max_length=128)
+    transmission_confirmed: Literal[True]
+
+    @model_validator(mode="after")
+    def validate_scope(self):
+        if bool(self.student_id) != bool(self.indicator_id):
+            raise ValueError("student_id 与 indicator_id 必须同时提供")
+        if self.action == "retry_failed" and not self.analysis_id:
+            raise ValueError("retry_failed 必须指定上一条 analysis_id")
+        if self.action != "retry_failed" and self.analysis_id:
+            raise ValueError("仅 retry_failed 可以指定 analysis_id")
+        return self
+
+
+class AIAnalysisResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    analysis_id: str
+    run_id: str
+    task: Literal["task01", "task02", "task03"]
+    scope_key: str
+    scope: dict[str, Any]
+    source_fingerprint: str
+    model: str
+    prompt_version: str
+    schema_version: str
+    generation: int
+    status: Literal["running", "complete", "partial", "insufficient_evidence", "failed"]
+    findings: list[dict[str, Any]] = Field(default_factory=list)
+    coverage: dict[str, Any] = Field(default_factory=dict)
+    created_at: str
+    updated_at: str
+    stale: bool = False
+
+
+class AIAnalysisLookupResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    analysis: dict[str, Any] | None = None
+    stale: bool = False
+    run_id: str
+    task: Literal["task01", "task02", "task03"]
+    scope: dict[str, Any]
+    scope_key: str
+    source_fingerprint: str
+    provider: str
+    model: str
+    model_configured: bool
+    input_summary: dict[str, Any]
+
+
 class PlanScopePayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
     run_id: str = Field(min_length=1)

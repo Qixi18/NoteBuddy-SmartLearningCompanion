@@ -16,6 +16,8 @@ import { ClassReport } from '../features/export/ClassReport';
 import { routes, type RoutePath } from '../app/navigation';
 import { findingLabel, severityLabel } from '../features/task02/qualityLabels';
 import { NavIcon } from '../components/NavIcon';
+import { AIAnalysisPanel } from '../features/ai-analysis/AIAnalysisPanel';
+import type { AIAnalysisFinding } from '../api/types';
 
 type ReviewFields = { status: ReviewStatus; diagnosis: string; recommendation: string; adjustment_condition: string; reason: string; reviewer: string; structured_plan: StructuredPlan | null; teaching_plan_v2: TeachingPlanV2 | null; evidence_refs?: EvidenceReference[] };
 type PageProps = {
@@ -84,10 +86,11 @@ function Overview({ run, onNavigate }: { run: AnalysisRun; onNavigate: (path: Ro
   </>;
 }
 
-function KnowledgePage({ run }: { run: AnalysisRun }) {
+function KnowledgePage({ run, onEvidence }: { run: AnalysisRun; onEvidence: (ref: AIAnalysisFinding['evidence_refs'][number]) => void }) {
   return <>
     <p className="scope-summary">当前运行 {run.run_id} · {new Set(run.objectives.map(item => item['主题'] || item['主题编号'])).size} 个主题 · {run.objectives.length} 项指标。请选择指标核对关联与来源；待核验关系不作为已确认材料。</p>
     <ObjectivesPanel run={run} />
+    <AIAnalysisPanel task="task01" runId={run.run_id} onEvidence={onEvidence} />
   </>;
 }
 
@@ -116,6 +119,18 @@ export function WorkbenchPage(props: PageProps) {
   const [reviewEdits, setReviewEdits] = useState<Record<string, ReviewFields>>({});
   const { path, run, onNavigate } = props;
   if (!run) return <EmptyRun onImported={props.onImported} onMessage={props.onMessage} />;
+  const openAiEvidence = (ref: AIAnalysisFinding['evidence_refs'][number]) => {
+    if (ref.record_id && ref.source_line) {
+      if (ref.student_id) props.onStudent(ref.student_id);
+      if (ref.indicator_id) props.onIndicator(ref.indicator_id);
+      if (ref.node_id) props.onNode(ref.node_id);
+      props.onEvidenceFocus?.(ref.record_id, ref.source_line);
+      onNavigate('/insights/evidence');
+    } else if (ref.indicator_id) {
+      props.onIndicator(ref.indicator_id);
+      onNavigate('/knowledge/indicators');
+    }
+  };
   const reviewNodes = [...new Set(run.responses.filter(row => row['学生编号'] === props.student && run.items.some(item => item['材料编号'] === row['材料编号'] && item['指标编号'] === props.indicator)).map(row => row['节点编号']))];
   const reviewKey = `${props.student}:${props.indicator}`;
   const review = (props.reviews[reviewKey] ?? []).filter(item => (item.node_id ?? item.original_draft?.node_id ?? null) === (props.node || (reviewNodes.length === 1 ? reviewNodes[0] : null))).at(-1);
@@ -133,9 +148,9 @@ export function WorkbenchPage(props: PageProps) {
   } : undefined);
   switch (path) {
     case '/home': return <Overview run={run} onNavigate={onNavigate} />;
-    case '/knowledge/indicators': return <KnowledgePage run={run} />;
-    case '/insights/classes': return <ClassPanel run={run} node={props.node} onNode={props.onNode} onOpenStudent={studentId => { props.onStudent(studentId); onNavigate('/insights/students'); }} />;
-    case '/insights/students': return <StudentPanel run={run} student={props.student} indicator={props.indicator} node={props.node} onNode={props.onNode} onStudent={props.onStudent} onIndicator={props.onIndicator} onOpenEvidence={(recordId, sourceLine) => { if (recordId && sourceLine) props.onEvidenceFocus?.(recordId, sourceLine); onNavigate('/insights/evidence'); }} />;
+    case '/knowledge/indicators': return <KnowledgePage run={run} onEvidence={openAiEvidence} />;
+    case '/insights/classes': return <><ClassPanel run={run} node={props.node} onNode={props.onNode} onOpenStudent={studentId => { props.onStudent(studentId); onNavigate('/insights/students'); }} /><AIAnalysisPanel task="task02" runId={run.run_id} node={props.node || run.nodes[0]?.['节点编号']} onEvidence={openAiEvidence} /></>;
+    case '/insights/students': return <><StudentPanel run={run} student={props.student} indicator={props.indicator} node={props.node} onNode={props.onNode} onStudent={props.onStudent} onIndicator={props.onIndicator} onOpenEvidence={(recordId, sourceLine) => { if (recordId && sourceLine) props.onEvidenceFocus?.(recordId, sourceLine); onNavigate('/insights/evidence'); }} /><AIAnalysisPanel task="task03" runId={run.run_id} node={props.node || run.nodes[0]?.['节点编号']} student={props.student} indicator={props.indicator} onEvidence={openAiEvidence} /></>;
     case '/insights/evidence': return <EvidencePanel run={run} student={props.student} indicator={props.indicator} node={props.node} onNode={props.onNode} focusEvidence={props.focusEvidence} />;
     case '/insights/quality': return <QualityPanel run={run} onOpenEvidence={scope => { props.onStudent(scope.studentId); props.onIndicator(scope.indicatorId); props.onNode(scope.nodeId); onNavigate('/insights/evidence'); }} />;
     case '/plan/reviews': return <>
@@ -143,6 +158,7 @@ export function WorkbenchPage(props: PageProps) {
         {props.node && (() => { const observation = run.observations.find(item => item.student_id === props.student && item.indicator_id === props.indicator && item.node_id === props.node); return <div className="review-range-stats"><span>选中事件 <strong>{observation?.selected_count ?? 0}</strong></span><span>有效评分 <strong>{observation?.scored_count ?? 0}</strong></span><span className="is-pending">待评分 <strong>{observation?.pending_count ?? 0}</strong></span><span>未作答 <strong>{observation?.unanswered_count ?? 0}</strong></span><span className="is-excluded">排除 <strong>{observation?.excluded_count ?? 0}</strong></span>{!observation && <p className="muted">当前范围无观察记录，不能据此判断未掌握。</p>}</div>; })()}{props.node && <button className="secondary review-evidence-link" onClick={() => onNavigate('/insights/evidence')}>查看此范围作答证据</button>}
       </section>
       <ReviewPanel run={run} student={props.student} indicator={props.indicator} node={props.node} review={review} draft={props.draft} onDraft={props.onDraft} onSave={props.onSave} initialFields={initialReviewFields} onFieldsChange={fields => setReviewEdits(old => ({ ...old, [reviewScope]: fields }))} />
+      <AIAnalysisPanel task="task03" runId={run.run_id} node={props.node || run.nodes[0]?.['节点编号']} student={props.student} indicator={props.indicator} onEvidence={openAiEvidence} />
       <details className="review-save-note"><summary>复核保存与导出说明</summary><p>复核版本保存诊断、建议、调整条件、结构化方案与证据引用。完整方案只在材料来源签核仍有效时进入导出。</p></details>
     </>;
     case '/plan/adjustments': return <TeachingAdjustmentsPanel run={run} reviews={props.reviews} />;

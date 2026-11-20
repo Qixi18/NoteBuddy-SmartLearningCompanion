@@ -1,6 +1,13 @@
 from __future__ import annotations
 
-from sqlalchemy import Boolean, ForeignKeyConstraint, Integer, String, Text
+from sqlalchemy import (
+    Boolean,
+    ForeignKeyConstraint,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import Base
@@ -144,6 +151,37 @@ class ReviewRow(Base):
     payload_json: Mapped[str] = mapped_column(Text, nullable=False)
     __table_args__ = (
         ForeignKeyConstraint(["run_id"], ["analysis_runs.run_id"], ondelete="CASCADE"),
+    )
+
+
+class AIAnalysisRow(Base):
+    __tablename__ = "ai_analyses"
+    analysis_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    run_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    task: Mapped[str] = mapped_column(String(16), nullable=False)
+    scope_key: Mapped[str] = mapped_column(String(512), nullable=False)
+    source_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    model: Mapped[str] = mapped_column(String(256), nullable=False)
+    prompt_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    schema_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    generation: Mapped[int] = mapped_column(Integer, nullable=False)
+    request_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[str] = mapped_column(String(64), nullable=False)
+    updated_at: Mapped[str] = mapped_column(String(64), nullable=False)
+    __table_args__ = (
+        ForeignKeyConstraint(["run_id"], ["analysis_runs.run_id"], ondelete="CASCADE"),
+        UniqueConstraint(
+            "run_id", "task", "scope_key", "request_id", name="uq_ai_analysis_request"
+        ),
+        UniqueConstraint(
+            "run_id",
+            "task",
+            "scope_key",
+            "generation",
+            name="uq_ai_analysis_generation",
+        ),
     )
 
 

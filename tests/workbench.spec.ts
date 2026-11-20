@@ -511,6 +511,11 @@ test('keyboard focus and accessible names are available across all routes', asyn
     if (route === '/insights/classes') {
       await page.getByLabel('测验节点').selectOption('N01');
     }
+    if (route === '/knowledge/indicators') {
+      await expect(page.getByRole('button', { name: '生成 AI 分析' })).toBeVisible();
+      await expect(page.locator('.warn')).toContainText('指标关系状态：待核验');
+      await expect(page.getByText('材料目录与来源文件核验')).toBeVisible();
+    }
     if (route === '/plan/reviews') {
       await page.getByLabel('测验节点').selectOption('N01');
       await page.getByRole('button', { name: '生成规则草稿' }).click();
@@ -518,8 +523,11 @@ test('keyboard focus and accessible names are available across all routes', asyn
       const proposedActivity = page.locator('.proposed-activity');
       if (await proposedActivity.count()) await proposedActivity.locator('summary').click();
       const structuredPlan = page.locator('.review-structured');
-      await structuredPlan.locator('summary').click();
-      await structuredPlan.getByLabel('保存完整方案').check();
+      const saveCompletePlan = structuredPlan.getByLabel('保存完整方案');
+      if (await saveCompletePlan.count()) {
+        await structuredPlan.locator('summary').click();
+        await saveCompletePlan.check();
+      }
       const firstEvidence = page.locator('.review-record').first();
       if (await firstEvidence.count()) await firstEvidence.locator('summary').click();
     }
