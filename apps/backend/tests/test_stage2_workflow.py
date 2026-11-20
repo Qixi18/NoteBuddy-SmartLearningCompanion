@@ -864,3 +864,204 @@ def test_verified_source_becomes_stale_when_allowlisted_pdf_changes(tmp_path):
     assert renewed.json()["version"] == latest["version"] + 1
     assert renewed.json()["stale"] is False
     client.close()
+
+
+def _package_with_unselected_student():
+    from app.services.analysis import analyze
+    from app.services.exports import package
+    from test_core import sample_tables
+
+    tables = sample_tables()
+    tables["模拟学生"].append({"学生编号": "D04", "模拟班级编号": "C1"})
+    for row in list(tables["作答记录"]):
+        outsider = dict(row)
+        outsider["记录编号"] = f"D04-{row['记录编号']}"
+        outsider["学生编号"] = "D04"
+        outsider["作答事件编号"] = f"D04-{row['作答事件编号']}"
+        outsider["_source_line"] += 10
+        tables["作答记录"].append(outsider)
+    run = analyze(tables, {})
+    reviews = {
+        "D01:T01I1": [
+            {
+                "student_id": "D01",
+                "indicator_id": "T01I1",
+                "node_id": "N01",
+                "version": 1,
+                "status": "accepted",
+                "evidence_record_ids": ["R2"],
+                "reason": "所选学生的复核",
+            }
+        ],
+        "D02:T01I1": [
+            {
+                "student_id": "D02",
+                "indicator_id": "T01I1",
+                "node_id": "N01",
+                "version": 1,
+                "status": "pending",
+                "evidence_record_ids": [],
+                "reason": "仍待复核",
+            }
+        ],
+        "D04:T01I1": [
+            {
+                "student_id": "D04",
+                "indicator_id": "T01I1",
+                "node_id": "N01",
+                "version": 1,
+                "status": "accepted",
+                "evidence_record_ids": ["D04-R2"],
+                "reason": "未选择学生的已接受建议",
+            },
+            {
+                "student_id": "D04",
+                "indicator_id": "T01I1",
+                "version": 2,
+                "status": "edited",
+                "evidence_record_ids": ["D04-R2"],
+                "reason": "未选择学生的其他节点待处理建议",
+            },
+        ],
+    }
+    cases = {
+        "D01": [
+            {
+                "student_id": "D01",
+                "status": "draft",
+                "history": [{"evidence_record_ids": ["R2"]}],
+            }
+        ],
+        "D04": [
+            {
+                "student_id": "D04",
+                "status": "draft",
+                "history": [{"evidence_record_ids": ["D04-R2"]}],
+            }
+        ],
+    }
+    adjustments = [
+        {
+            "student_id": "D01",
+            "adjustment_id": "ADJ-D01",
+            "origin_evidence_record_ids": ["R2"],
+            "history": [{"followup_evidence_record_ids": ["R2"]}],
+        },
+        {
+            "student_id": "D04",
+            "adjustment_id": "ADJ-D04",
+            "origin_evidence_record_ids": ["D04-R2"],
+            "history": [{"followup_evidence_record_ids": ["D04-R2"]}],
+        },
+    ]
+    return package(
+        run,
+        reviews,
+        ["D01", "D02", "D03"],
+        cases=cases,
+        teaching_adjustments=adjustments,
+    )
+
+
+def test_export_filters_selected_students_recommendations_and_adjustments():
+    with zipfile.ZipFile(io.BytesIO(_package_with_unselected_student())) as archive:
+        manifest = json.loads(archive.read("manifest.json"))
+        accepted = json.loads(archive.read("recommendations.json"))
+        pending = json.loads(archive.read("pending_review.json"))
+        student_cases = json.loads(archive.read("student_cases.json"))
+        adjustments = json.loads(archive.read("teaching_adjustments.json"))
+        cases = json.loads(archive.read("teacher_cases_history.json"))
+
+    assert manifest["reviewed_recommendations"] == len(accepted) == 1
+    assert manifest["pending_recommendations"] == len(pending) == 2
+    assert {row["student_id"] for row in accepted + pending} <= {"D01", "D02", "D03"}
+    assert {row["student_id"] for row in student_cases} == {"D01", "D02", "D03"}
+    assert [row["adjustment_id"] for row in adjustments] == ["ADJ-D01"]
+    assert set(cases) == {"D01", "D02", "D03"}
+
+
+def test_export_student_references_are_closed_and_class_rows_are_aggregates():
+    with zipfile.ZipFile(io.BytesIO(_package_with_unselected_student())) as archive:
+        members = {name: archive.read(name) for name in archive.namelist()}
+        raw_rows = json.loads(members["raw_responses.json"])
+        observations = json.loads(members["observations.json"])
+        class_metrics = json.loads(members["class_summary.json"])
+        all_metrics = json.loads(members["all_metrics.json"])
+
+    assert {row["学生编号"] for row in raw_rows} <= {"D01", "D02", "D03"}
+    assert {row["student_id"] for row in observations} <= {"D01", "D02", "D03"}
+    assert any(row["key"] == "C1" and row["count"] >= 2 for row in class_metrics)
+    for metric in class_metrics + [
+        row for row in all_metrics if row["kind"].startswith("class")
+    ]:
+        assert "record_ids" not in metric
+        assert "event_ids" not in metric
+
+    allowed_records = {row["记录编号"] for row in raw_rows}
+    allowed_events = {row["作答事件编号"] for row in raw_rows}
+    record_fields = {
+        "record_id",
+        "record_ids",
+        "evidence_record_ids",
+        "origin_evidence_record_ids",
+        "followup_evidence_record_ids",
+    }
+    event_fields = {"event_id", "event_ids"}
+    found_records: set[str] = set()
+    found_events: set[str] = set()
+
+    def visit(value):
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if key in record_fields:
+                    found_records.update(item if isinstance(item, list) else [item])
+                if key in event_fields:
+                    found_events.update(item if isinstance(item, list) else [item])
+                visit(item)
+        elif isinstance(value, list):
+            for item in value:
+                visit(item)
+
+    for name, payload in members.items():
+        assert b"D04" not in payload, f"unselected student leaked in {name}"
+        if name.endswith(".json"):
+            visit(json.loads(payload))
+    assert found_records <= allowed_records
+    assert found_events <= allowed_events
+
+
+def test_package_scope_validator_rejects_nested_outsider_refs_and_class_details():
+    from app.services.shared.export_service import validate_package_scope
+
+    selected = {"记录编号": "R1", "学生编号": "D01", "作答事件编号": "E1"}
+    outsider = {"记录编号": "D04-R1", "学生编号": "D04", "作答事件编号": "D04-E1"}
+    violations = validate_package_scope(
+        {
+            "raw_responses.json": [selected],
+            "_scope_raw_responses": [selected, outsider],
+            "teacher_review_history.json": {
+                "D01:T01I1": [
+                    {
+                        "student_id": "D01",
+                        "evidence_record_ids": ["D04-R1"],
+                        "event_ids": ["D04-E1"],
+                    }
+                ]
+            },
+            "class_summary.json": [
+                {
+                    "kind": "class",
+                    "key": "C1",
+                    "record_ids": ["R1"],
+                    "event_ids": ["E1"],
+                }
+            ],
+        },
+        {"D01"},
+    )
+
+    assert {item["code"] for item in violations} == {
+        "unselected_record_reference",
+        "unselected_event_reference",
+        "class_metric_contains_individual_references",
+    }

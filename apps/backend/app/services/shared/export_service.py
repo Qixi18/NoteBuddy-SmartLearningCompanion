@@ -20,6 +20,155 @@ from ..task03.recommendation_service import draft
 from ..task03.teaching_plan_service import validate_teaching_plan
 
 
+def validate_package_scope(files: dict, case_ids: set[str]) -> list[dict]:
+    """Find current-run student or evidence identifiers outside the selected case scope."""
+    raw_rows = files.get("raw_responses.json", [])
+    scope_rows = files.get("_scope_raw_responses", raw_rows)
+    record_owners = {
+        row.get("记录编号"): row.get("学生编号")
+        for row in scope_rows
+        if row.get("记录编号") and row.get("学生编号")
+    }
+    event_owners: dict[str, set[str]] = {}
+    for row in scope_rows:
+        event_id, student_id = row.get("作答事件编号"), row.get("学生编号")
+        if event_id and student_id:
+            event_owners.setdefault(event_id, set()).add(student_id)
+
+    violations = []
+    record_fields = {
+        "record_id",
+        "record_ids",
+        "evidence_record_ids",
+        "origin_evidence_record_ids",
+        "followup_evidence_record_ids",
+        "excluded_record_ids",
+        "quarantined_record_ids",
+    }
+    event_fields = {"event_id", "event_ids"}
+
+    def values(value):
+        return value if isinstance(value, list) else [value]
+
+    def visit(member: str, value, path: str) -> None:
+        if isinstance(value, dict):
+            if (
+                member
+                in {
+                    "class_summary.json",
+                    "all_metrics.json",
+                    "node_scoped_metrics.json",
+                }
+                and value.get("kind", "").startswith("class")
+                and any(
+                    field in value
+                    for field in ("record_id", "record_ids", "event_id", "event_ids")
+                )
+            ):
+                violations.append(
+                    {
+                        "code": "class_metric_contains_individual_references",
+                        "member": member,
+                        "path": path,
+                    }
+                )
+            for key, item in value.items():
+                child_path = f"{path}.{key}" if path else key
+                if key == "student_id" and item is not None and item not in case_ids:
+                    violations.append(
+                        {
+                            "code": "unselected_student",
+                            "member": member,
+                            "path": child_path,
+                            "student_id": item,
+                        }
+                    )
+                if (
+                    member == "teacher_cases_history.json"
+                    and not path
+                    and key not in case_ids
+                ):
+                    violations.append(
+                        {
+                            "code": "unselected_student_history",
+                            "member": member,
+                            "path": child_path,
+                            "student_id": key,
+                        }
+                    )
+                if member == "teacher_review_history.json" and not path:
+                    student_id = key.partition(":")[0]
+                    if student_id not in case_ids:
+                        violations.append(
+                            {
+                                "code": "unselected_student_history",
+                                "member": member,
+                                "path": child_path,
+                                "student_id": student_id,
+                            }
+                        )
+                if key in record_fields:
+                    for record_id in values(item):
+                        owner = record_owners.get(record_id)
+                        if owner and owner not in case_ids:
+                            violations.append(
+                                {
+                                    "code": "unselected_record_reference",
+                                    "member": member,
+                                    "path": child_path,
+                                    "record_id": record_id,
+                                }
+                            )
+                        elif (
+                            record_id
+                            and owner is None
+                            and member != "teaching_adjustments.json"
+                        ):
+                            violations.append(
+                                {
+                                    "code": "unresolved_record_reference",
+                                    "member": member,
+                                    "path": child_path,
+                                    "record_id": record_id,
+                                }
+                            )
+                if key in event_fields:
+                    for event_id in values(item):
+                        owners = event_owners.get(event_id, set())
+                        if owners - case_ids:
+                            violations.append(
+                                {
+                                    "code": "unselected_event_reference",
+                                    "member": member,
+                                    "path": child_path,
+                                    "event_id": event_id,
+                                }
+                            )
+                        elif (
+                            event_id
+                            and not owners
+                            and member != "teaching_adjustments.json"
+                        ):
+                            violations.append(
+                                {
+                                    "code": "unresolved_event_reference",
+                                    "member": member,
+                                    "path": child_path,
+                                    "event_id": event_id,
+                                }
+                            )
+                visit(member, item, child_path)
+        elif isinstance(value, list):
+            for index, item in enumerate(value):
+                visit(member, item, f"{path}[{index}]")
+
+    for member, value in files.items():
+        if member.startswith("_"):
+            continue
+        visit(member, value, "")
+    return violations
+
+
 def package(
     run: dict,
     reviews: dict,
@@ -327,11 +476,19 @@ def package(
             )
         )
     ]
+    scoped_metric = [
+        {
+            key: value
+            for key, value in entry.items()
+            if not (
+                entry.get("kind", "").startswith("class")
+                and key in {"record_id", "record_ids", "event_id", "event_ids"}
+            )
+        }
+        for entry in scoped_metric
+    ]
     scoped_observations = [
-        entry
-        for entry in run["observations"]
-        if entry.get("student_id") in case_ids
-        or entry.get("class_id") in selected_class_ids
+        entry for entry in run["observations"] if entry.get("student_id") in case_ids
     ]
     scoped_rubric_observations = [
         entry
@@ -452,7 +609,11 @@ def package(
         "teacher_cases_history.json": {
             student_id: cases.get(student_id, []) for student_id in case_ids
         },
-        "teaching_adjustments.json": teaching_adjustments,
+        "teaching_adjustments.json": [
+            adjustment
+            for adjustment in teaching_adjustments
+            if adjustment.get("student_id") in case_ids
+        ],
         "confirmed_cases.json": confirmed_cases,
         "node_scoped_metrics.json": node_scoped_metrics,
         "node_observations.json": node_observations,
@@ -464,6 +625,11 @@ def package(
             if key.partition(":")[0] in case_ids
         },
     }
+    scope_violations = validate_package_scope(
+        files | {"_scope_raw_responses": run.get("raw_responses", [])}, set(case_ids)
+    )
+    if scope_violations:
+        raise ValueError(f"案例包超出所选范围：{scope_violations}")
     if submission:
         files.update(
             {
@@ -543,7 +709,7 @@ def package(
         )
         writer.writeheader()
         for row in scoped_metric:
-            writer.writerow({**row, "record_ids": "|".join(row["record_ids"])})
+            writer.writerow({**row, "record_ids": "|".join(row.get("record_ids", []))})
         archive.writestr("metrics.csv", "\ufeff" + metric_csv.getvalue())
         relations_csv = io.StringIO(newline="")
         relation_fields = [
@@ -584,7 +750,7 @@ def package(
         archive.writestr(
             "字段与口径说明.md",
             "# 字段与统计口径\n\n"
-            "本包为三名所选学生的案例包；学生级统计、观测、作答和证据索引仅含所选学生。班级统计是所选学生所属班级的整班聚合，可能包含其他同学的聚合贡献。\n"
+            "本包为三名所选学生的案例包；学生级统计、观测、作答、复核、案例历史、教学调整和证据索引仅含所选学生。班级统计是所选学生所属班级的整班聚合，可能包含其他同学的聚合贡献，但不导出其个人记录或事件编号。\n"
             "`manifest.json` 的 `case_ids` 记录所选学生；不包含完整运行审计数据。\n"
             "`run_id` 由导入文件哈希生成；`record_ids` 为实际进入得分统计的修订记录。\n"
             "`score/maximum` 是有效已评分记录的得分率；待评分、未作答及异常记录不进入分母。\n"

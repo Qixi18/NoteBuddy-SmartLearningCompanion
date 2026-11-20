@@ -63,12 +63,12 @@
 
 **接口：** 保持`package(run, reviews, case_ids, *, sources, cases, teaching_adjustments) -> bytes`；新增内部`validate_package_scope(files: dict, case_ids: set[str]) -> list[dict]`，检查所有学生级条目及嵌套引用，班级聚合按明确例外处理。
 
-- [ ] 增加`test_export_filters_pending_and_accepted_recommendations`：D01–D04，选择D01–D03，D04有待复核和已复核建议；所有建议及manifest计数仅来自选择集合。
-- [ ] 增加`test_export_nested_refs_are_closed`：检查建议、案例、历史、调整中的证据引用均可在包内对应范围解析；班级聚合可包含全班贡献但不夹带未选学生record_ids/event_ids明细。
-- [ ] 运行上述用例确认旧实现失败；注意现有class指标对象也携带record_ids，必须核查并采用明确聚合投影，不删除成员名。
-- [ ] 先统一筛选，再计算accepted/pending与manifest；对调整记录限定所选学生，过滤其历史嵌套对象；建立所有成员范围清单，防止只修一个JSON。
-- [ ] 运行`python -m pytest apps/backend/tests/test_stage2_workflow.py -q`和导出E2E；成功条件为未选学生ID及其明细引用不进入学生级文件，既有成员均保留。
-- [ ] 更新字段口径说明和导出兼容说明，形成独立本地提交。
+- [x] 增加 D01–D04 选择范围测试；所选建议及 manifest 计数排除 D04 的已接受和待处理复核。
+- [x] 增加嵌套引用与聚合测试：复核/案例/历史/调整引用不得指向当前运行的未选学生记录，班级聚合不得携带逐人record_ids/event_ids。新增`validate_package_scope(files, case_ids)`作为打包门禁。
+- [x] 先在旧实现运行新用例，确认未选调整及班级逐人观察触发失败；再对班级指标采用去明细投影，保留聚合分数、分母和计数。
+- [x] 对齐过滤与 manifest 计数；案例/复核历史、教学调整及嵌套学生引用均限定所选学生；校验覆盖所有JSON成员的学生范围和当前运行证据引用。
+- [x] `apps/backend/tests/test_stage2_workflow.py` 14 passed；全后端及评测契约 224 passed、2 skipped。浏览器测试用例打印通过并实际检查正式包，但 Playwright wrapper 未退出且清理报`EBUSY`；本轮服务与UUID数据已核实清理。完整runner退出状态仍由P13跟踪。
+- [x] 更新包内字段口径与`docs/development/competition-submission-package.md`范围兼容说明；待独立本地提交。
 
 ### P02 环境自检与数据库准备
 
