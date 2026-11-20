@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useWorkbench } from './hooks/useWorkbench';
 import { useAnalysisScope } from './hooks/useAnalysisScope';
 import { ImportPanel } from '../features/import/ImportPanel';
@@ -22,13 +22,17 @@ export function App() {
   const dirtyRef = useRef(false);
   const lastCommittedHash = useRef(window.location.hash || '#/home');
   const previousRunId = useRef<string | null>(null);
+  const expectedImportedRunId = useRef<string | null>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const initialRoute = useRef(true);
   const page = routeFor(path);
-  const caseIds = resolveCaseStudentIds(navigation, workbench.run?.run_id ?? null, workbench.run?.students.map(student => student['学生编号']) ?? []);
+  const caseIds = useMemo(() => resolveCaseStudentIds(navigation, workbench.run?.run_id ?? null, workbench.run?.students.map(student => student['学生编号']) ?? []),
+    [navigation.caseStudentIds, navigation.runId, workbench.run?.run_id, workbench.run?.students]);
   const reportNodeId = workbench.run && navigation.runId === workbench.run.run_id && workbench.run.nodes.some(item => item['节点编号'] === navigation.reportNodeId)
     ? navigation.reportNodeId ?? '' : '';
+  const staleReleaseScope = Boolean(workbench.run && navigation.runId && navigation.runId !== workbench.run.run_id
+    && (navigation.caseStudentIds?.some(Boolean) || navigation.reportNodeId));
 
   const { scope } = useAnalysisScope(workbench.run, navigation, {
     student: workbench.setStudent,
@@ -85,6 +89,11 @@ export function App() {
     const previous = previousRunId.current;
     previousRunId.current = nextRunId;
     if (!previous || previous === nextRunId) return;
+    if (expectedImportedRunId.current === nextRunId) {
+      expectedImportedRunId.current = null;
+      return;
+    }
+    expectedImportedRunId.current = null;
     const next: NavigationState = { path: '/home', runId: nextRunId };
     const hash = serializeNavigation(next);
     window.history.replaceState(null, '', hash);
@@ -122,15 +131,20 @@ export function App() {
     const next: NavigationState = typeof target === 'string' ? {
       ...parsed,
       runId: scope.runId || undefined,
-      caseStudentIds: navigation.caseStudentIds,
-      reportNodeId: navigation.reportNodeId,
+      returnToCheck: parsed.returnToCheck ?? navigation.returnToCheck,
+      releaseCheckId: parsed.releaseCheckId ?? navigation.releaseCheckId,
+      caseStudentIds: parsed.caseStudentIds ?? (navigation.runId === scope.runId ? navigation.caseStudentIds : undefined),
+      reportNodeId: parsed.reportNodeId ?? (navigation.runId === scope.runId ? navigation.reportNodeId : undefined),
       nodeId: parsed.nodeId ?? (scope.nodeId || undefined),
       indicatorId: parsed.indicatorId ?? (scope.indicatorId || undefined),
       classId: parsed.classId ?? (scope.classId || undefined),
       studentId: parsed.studentId ?? (scope.studentId || undefined),
       recordId: parsed.path === '/performance' && parsed.view === 'evidence' ? navigation.recordId : undefined,
       sourceLine: parsed.path === '/performance' && parsed.view === 'evidence' ? navigation.sourceLine : undefined,
-    } : { ...parsed, caseStudentIds: parsed.caseStudentIds ?? navigation.caseStudentIds, reportNodeId: parsed.reportNodeId ?? navigation.reportNodeId };
+    } : { ...parsed, caseStudentIds: parsed.caseStudentIds ?? (navigation.runId === scope.runId ? navigation.caseStudentIds : undefined),
+      reportNodeId: Object.prototype.hasOwnProperty.call(parsed, 'reportNodeId') ? parsed.reportNodeId : navigation.runId === scope.runId ? navigation.reportNodeId : undefined,
+      returnToCheck: parsed.path === '/home' ? undefined : parsed.returnToCheck ?? navigation.returnToCheck,
+      releaseCheckId: parsed.path === '/home' ? undefined : parsed.releaseCheckId ?? navigation.releaseCheckId };
     setNavOpen(false);
     const nextHash = serializeNavigation(next);
     if (window.location.hash !== nextHash && !confirmLeave()) return;
@@ -173,6 +187,7 @@ export function App() {
   const selectReportNode = (nodeId: string) => navigate({ path, view: navigation.view, runId: workbench.run?.run_id, nodeId: scope.nodeId || undefined, indicatorId: scope.indicatorId || undefined, classId: scope.classId || undefined, studentId: scope.studentId || undefined, caseStudentIds: caseIds, reportNodeId: nodeId || undefined });
   const resetStaleScope = () => navigate({ path, view: navigation.view, runId: workbench.run?.run_id });
   const imported = async (id: string) => {
+    expectedImportedRunId.current = id;
     const refreshed = await workbench.refresh();
     setImportOpen(false);
     setFocusEvidence(null);
@@ -210,7 +225,9 @@ export function App() {
         <div className="breadcrumb">智慧学伴 <span aria-hidden="true">/</span> {page.section}{page.title !== page.section && <> <span aria-hidden="true">/</span> {page.title}</>}</div><div className="topbar-actions">{workbench.run && <span className="local-processing"><span aria-hidden="true" />本地数据</span>}{workbench.run && <button className="topbar-import" onClick={() => { if (!confirmLeave()) return; setNavOpen(false); setImportOpen(true); }}>导入数据</button>}</div></header>
       <main className="page-content" inert={navOpen}>
         {workbench.run && <div className="page-heading"><div><h1 ref={titleRef} tabIndex={-1}>{page.title}</h1><p>{page.description}</p></div><details className="run-details"><summary><span className="run-details-label">当前数据批次</span><strong>{new Date(workbench.run.created_at).toLocaleDateString('zh-CN')}</strong><span className="run-chevron" aria-hidden="true" /></summary><div className="run-details-popover"><span>运行编号</span><code>{workbench.run.run_id}</code><span>规则版本 {workbench.run.rule_version}</span></div></details></div>}
-        {workbench.run && path !== '/home' && <ScopeBar run={workbench.run} scope={scope} />}
+        {workbench.run && path !== '/home' && <ScopeBar run={workbench.run} scope={scope} path={path} onNavigate={navigate} />}
+        {navigation.returnToCheck && <div className="repair-return-banner" role="status"><span>正在处理交付检查：{({ confirmed_cases: '案例确认', evidence_references: '案例证据签核', teacher_reviews: '建议复核', source_signoffs: '来源核验', case_report: '案例报告', class_report: '班级报告' } as Record<string, string>)[navigation.releaseCheckId ?? ''] ?? '待处理项目'}</span><button className="secondary" onClick={() => navigate({ path: '/cases', view: 'check', runId: workbench.run?.run_id, caseStudentIds: navigation.caseStudentIds, reportNodeId: navigation.reportNodeId, returnToCheck: false })}>返回交付检查</button></div>}
+        {staleReleaseScope && path === '/cases' && <div className="scope-expired-notice" role="status"><span>交付候选与报告节点来自其他数据批次，已清除；请在当前批次重新选择。</span><button className="text-action" onClick={() => navigate({ path: '/cases', view: 'prepare', runId: workbench.run?.run_id, caseStudentIds: ['', '', ''], reportNodeId: undefined })}>重新选择案例</button></div>}
         {workbench.message && <p id="message" className={`global-message${workbench.error ? ' error' : ''}`} role={workbench.error ? 'alert' : 'status'} aria-live={workbench.error ? 'assertive' : 'polite'}>{workbench.message}</p>}
         {scope.notice && <p className="scope-expired-notice" role="status">{scope.notice} <button className="text-action" onClick={resetStaleScope}>重新选择范围</button></p>}
         {workbench.error && workbench.run && <div className="retry-row"><button className="secondary" onClick={() => void workbench.refresh()}>重试读取当前运行</button></div>}

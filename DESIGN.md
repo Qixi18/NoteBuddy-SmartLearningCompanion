@@ -97,6 +97,7 @@ Use the platform system sans stack for dependable Chinese rendering. Main page t
 - Fixed left navigation at 232px; sticky top bar at 68px; content width capped at 1520px with 24–42px side padding.
 - Start page identifies the current run, data boundaries, import action, and next useful task. Statistics remain secondary to the user's work.
 - Learning evidence uses clear master-detail layouts and compact filters. Tables or aligned rows should replace repeated long prose when the data is comparable.
+- Student analysis keeps the evidence-backed score, pending work, and unanswered work visible, moves row-processing detail behind disclosure, and offers a direct next action into recommendations with the same student/indicator/node scope. If no scored evidence exists, the action is framed as an observation path.
 - Review uses a scope bar, evidence context, a distinct editable proposal, and an always-findable save action. Never show the same diagnosis and recommendation as both read-only copy and editable fields at the same time.
 - Teaching adjustments link a teacher-reviewed plan to later evidence for the same student, indicator, and node; show implementation, observations, and teacher comparability judgment without claiming score changes prove effectiveness.
 - Case export keeps candidate evidence, teacher confirmation, selected students, and package contents in a clear sequence.

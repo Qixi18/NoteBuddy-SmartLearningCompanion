@@ -209,4 +209,27 @@ describe('ObjectivesPanel source checks', () => {
     expect(screen.getByText(/已核验用途：复习概念 · 教材第 68 页/)).toBeTruthy();
     expect(screen.getByRole('link', { name: '打开第 62 页' }).getAttribute('href')).toContain('#page=62');
   });
+
+  it('keeps long linked question lists compact until the teacher asks to view all', () => {
+    const run = {
+      run_id: 'run-1',
+      objectives: [{ '指标编号': 'T01I1', '观察指标': '理解代数式', '主题编号': 'T01' }],
+      items: Array.from({ length: 41 }, (_, index) => ({
+        '指标编号': 'T01I1', '材料编号': `Q${String(index + 1).padStart(3, '0')}`, '题干或内容': `题目内容 ${index + 1}`,
+      })),
+      source_index: [],
+    } as unknown as AnalysisRun;
+
+    render(<ObjectivesPanel run={run} />);
+
+    const detail = screen.getByRole('heading', { name: '关联题目 · 41 道' }).closest('section');
+    expect(detail).not.toBeNull();
+    expect(within(detail as HTMLElement).getByText('题目内容 1')).toBeTruthy();
+    expect(within(detail as HTMLElement).getByText('题目内容 5')).toBeTruthy();
+    expect(within(detail as HTMLElement).queryByText('题目内容 6')).toBeNull();
+
+    fireEvent.click(within(detail as HTMLElement).getByRole('button', { name: '查看全部关联题目（41）' }));
+    expect(within(detail as HTMLElement).getByText('题目内容 41')).toBeTruthy();
+    expect(within(detail as HTMLElement).getByRole('button', { name: '收起关联题目' })).toBeTruthy();
+  });
 });

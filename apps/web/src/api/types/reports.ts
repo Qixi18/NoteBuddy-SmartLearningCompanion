@@ -30,6 +30,9 @@ export interface CaseReportReview {
   teaching_plan_v2: TeachingPlanV2 | null;
   source_verification_versions?: Record<string, number>;
   source_status: string;
+  source_validity: 'current' | 'changed' | 'unverified' | 'unknown';
+  current_source_status: string;
+  current_source_version: number | null;
 }
 
 export interface CaseReport {

@@ -185,7 +185,7 @@ export function ReviewPanel({ run, student, indicator, node, review, draft, mode
     : review?.structured_plan ? isStructuredPlanCurrentlyVerified(review, indicator, verification) : true;
   const reviewIsCurrent = Boolean(review && ['accepted', 'edited'].includes(review.status) && reviewPlanValid);
 
-  return <div onInputCapture={() => onDirtyChange?.(true)} onChangeCapture={() => onDirtyChange?.(true)}><Panel title="生成与复核" className="review-panel">
+  return <div onChange={() => onDirtyChange?.(true)}><Panel title="生成与复核" className="review-panel">
     <div className="review-tool-intro"><p>选择规则或模型生成待复核草稿。系统提供依据，教师确认后才形成复核结论。</p><span className="draft-status">{review ? `已有复核版本 ${review.version}` : draft ? '待教师复核' : '尚未生成草稿'}</span></div>
     {review && <section className={`review-version-status review-version-${review.status}`} aria-label="已保存建议状态">
       <h3>{review.status === 'rejected' ? '此版本已驳回' : review.status === 'needs_observation' ? '此版本需要补充观察' : reviewIsCurrent ? '已复核建议' : '历史复核版本'}</h3>

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen, within } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import type { AnalysisRun } from '../api/types';
 import { ScopeBar } from './ScopeBar';
 
@@ -11,7 +11,8 @@ const run = {
 
 describe('ScopeBar', () => {
   it('summarizes only the selected analysis scope and makes missing choices explicit', () => {
-    render(<ScopeBar run={run} scope={{
+    const onNavigate = vi.fn();
+    render(<ScopeBar run={run} path="/performance" onNavigate={onNavigate} scope={{
       runId: 'run-1', classId: 'DC02', studentId: '', indicatorId: 'M01', nodeId: '', recordId: '', stale: false,
     }} />);
 
@@ -20,5 +21,9 @@ describe('ScopeBar', () => {
     expect(screen.getByText('尚未选择测验节点')).not.toBeNull();
     expect(screen.getByText('DC02')).not.toBeNull();
     expect(screen.getByText('尚未选择学生')).not.toBeNull();
+    const chain = screen.getByRole('navigation', { name: '要求、表现与建议证据链' });
+    expect(within(chain).getByRole('link', { name: '已有表现' }).getAttribute('aria-current')).toBe('page');
+    fireEvent.click(within(chain).getByRole('link', { name: '学习建议' }));
+    expect(onNavigate).toHaveBeenCalledWith('/recommendations');
   });
 });

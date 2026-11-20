@@ -38,6 +38,7 @@ export function ObjectivesPanel({ run, indicatorId, onIndicatorChange, onSaved, 
   const [sourceHistoryLoaded, setSourceHistoryLoaded] = useState(false);
   const [sourceHistoryFailed, setSourceHistoryFailed] = useState(false);
   const [catalogFailed, setCatalogFailed] = useState(false);
+  const [expandedItemsFor, setExpandedItemsFor] = useState('');
   const refreshId = useRef(0);
   const refreshSourceData = useCallback(async () => {
     const requestId = ++refreshId.current;
@@ -86,6 +87,7 @@ export function ObjectivesPanel({ run, indicatorId, onIndicatorChange, onSaved, 
       ? '正在读取签核记录'
       : verificationLabel(currentVerification, latestSignoff?.stale);
   const items = run.items.filter(item => item['指标编号'] === objective['指标编号']);
+  const showAllItems = expandedItemsFor === objective['指标编号'];
   const topicCheck = source?.source_check;
   const indicatorCheck = source?.indicator_check;
   const catalogEntry = catalog.find(item => item.indicator_id === objective['指标编号']);
@@ -96,7 +98,10 @@ export function ObjectivesPanel({ run, indicatorId, onIndicatorChange, onSaved, 
       {run.objectives.filter(item => (item['主题'] || item['主题编号']) === topic).map(item => { const signoff = sourceHistory[item['指标编号']]?.at(-1); return <button type="button" className={`knowledge-option${objective['指标编号'] === item['指标编号'] ? ' selected' : ''}`} aria-current={objective['指标编号'] === item['指标编号'] ? 'true' : undefined} key={item['指标编号']} onClick={() => selectIndicator(item['指标编号'])}><strong>{item['指标编号']}</strong><span>{item['观察指标']}</span><small>关联题目 {run.items.filter(question => question['指标编号'] === item['指标编号']).length} 道 · {sourceHistoryLoaded && !sourceHistoryFailed ? verificationLabel(signoff?.status ?? run.source_index.find(entry => entry.indicator_id === item['指标编号'])?.verification, signoff?.stale) : sourceHistoryFailed ? '签核记录暂不可用' : '正在读取签核记录'}</small></button>; })}</section>)}
     </Panel>
     <Panel title="指标详情"><h3>{objective['指标编号']} · {objective['观察指标']}</h3><p>主题：{objective['主题'] || objective['主题编号']}</p><p>主题目标：{objective['主题目标'] || '未提供'}</p>
-      <section className="source-detail"><h3>关联题目 · {items.length} 道</h3>{items.length ? items.map(item => <div className="row" key={item['材料编号']}><strong>{item['材料编号']}</strong><p>{item['题干或内容'] || '未提供题干'}</p><small>指标与题目关系：{verificationText}</small></div>) : <p>当前快照没有关联题目；不能据此判断知识覆盖。</p>}</section>
+      <section className="source-detail"><h3>关联题目 · {items.length} 道</h3>{items.length ? <>
+        {(showAllItems ? items : items.slice(0, 5)).map(item => <div className="row" key={item['材料编号']}><strong>{item['材料编号']}</strong><p>{item['题干或内容'] || '未提供题干'}</p><small>指标与题目关系：{verificationText}</small></div>)}
+        {items.length > 5 && <button type="button" className="text-action" aria-expanded={showAllItems} onClick={() => setExpandedItemsFor(showAllItems ? '' : objective['指标编号'])}>{showAllItems ? '收起关联题目' : `查看全部关联题目（${items.length}）`}</button>}
+      </> : <p>当前快照没有关联题目；不能据此判断知识覆盖。</p>}</section>
       <section className="source-detail"><h3>课程标准</h3><p>导入定位：{objective['课标文件页／正文页'] || '待核验'}；指标级定位：{indicatorCheck?.curriculum_locator || '待核对'}</p><p>主题课标核验：{topicCheck?.curriculum_check || '待核对'}。{page && <a href={`${learningApi.sourceUrl('课程标准_2022.pdf')}#page=${page}`} target="_blank" rel="noopener noreferrer">打开原页（文件第 {page} 页）</a>}</p></section>
       <section className="source-detail"><h3>教材来源</h3><p>导入定位：{objective['教材正文页'] || '待核验'}；指标级定位：{indicatorCheck?.textbook_locator || '待核对'}</p><p>主题教材核验：{topicCheck?.textbook_check || '待核对'}</p>{topicCheck?.textbook_slices?.length ? <p>原页：{topicCheck.textbook_slices.map(name => <a key={name} href={learningApi.sourceUrl(name)} target="_blank" rel="noopener noreferrer">{name} </a>)}</p> : <p>当前运行没有教材原页链接。</p>}</section>
       {catalogFailed && <p className="warn" role="alert">材料目录暂不可用；来源签核历史已单独读取。<button type="button" className="text-action" onClick={() => void refreshSourceData()}>重试加载材料目录</button></p>}

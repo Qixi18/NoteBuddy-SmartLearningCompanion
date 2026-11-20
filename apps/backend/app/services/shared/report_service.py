@@ -110,15 +110,27 @@ def build_case_report(
         )
         if review:
             indicator_id = ref.get("indicator_id", "")
+            source_history = sources.get(indicator_id, [])
+            source_version = review.get("source_verification_versions", {}).get(
+                indicator_id
+            )
             source = next(
                 (
                     item
-                    for item in sources.get(indicator_id, [])
-                    if item.get("version")
-                    == review.get("source_verification_versions", {}).get(indicator_id)
+                    for item in source_history
+                    if item.get("version") == source_version
                 ),
                 None,
             )
+            current_source = source_history[-1] if source_history else None
+            if source is None or current_source is None:
+                source_validity = "unknown"
+            elif current_source.get("stale") or current_source.get("version") != source_version:
+                source_validity = "changed"
+            elif current_source.get("status") != "verified":
+                source_validity = "unverified"
+            else:
+                source_validity = "current"
             report_reviews.append(
                 {
                     "indicator_id": indicator_id,
@@ -137,6 +149,13 @@ def build_case_report(
                     "source_status": source.get("status", "unknown")
                     if source
                     else "unknown",
+                    "source_validity": source_validity,
+                    "current_source_status": current_source.get("status", "unknown")
+                    if current_source
+                    else "unknown",
+                    "current_source_version": current_source.get("version")
+                    if current_source
+                    else None,
                 }
             )
     adjustments = [

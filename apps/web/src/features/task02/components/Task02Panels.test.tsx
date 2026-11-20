@@ -115,19 +115,43 @@ describe('TASK02 result panels', () => {
   });
 
   it('lets the learner view select a node and labels unknown status explicitly', () => {
-    render(<StudentPanel run={run} student="D01" indicator="I1" onStudent={() => {}} onIndicator={() => {}} />);
+    render(<StudentPanel run={run} student="D01" indicator="I1" onStudent={() => {}} onIndicator={() => {}} onCreateRecommendation={() => {}} />);
     expect(screen.getByText(/有效记录 1 条/)).toBeTruthy();
     fireEvent.change(screen.getByLabelText('测验节点'), { target: { value: 'N02' } });
     expect(screen.getByText(/暂无有效已评分记录/)).toBeTruthy();
   });
 
-  it('resets selected node when student or run changes', () => {
-    const { rerender } = render(<StudentPanel run={run} student="D01" indicator="I1" onStudent={() => {}} onIndicator={() => {}} />);
+  it('keeps key scoring states visible and puts technical dispositions behind disclosure', () => {
+    render(<StudentPanel run={run} student="D01" indicator="I1" node="N01" onStudent={() => {}} onIndicator={() => {}} onCreateRecommendation={() => {}} />);
+    expect(screen.getByLabelText('当前节点评分状态').textContent).toContain('有效评分 1');
+    expect(screen.getByLabelText('当前节点评分状态').textContent).toContain('待评分 0');
+    expect(screen.getByLabelText('当前节点评分状态').textContent).toContain('未作答 0');
+    expect(screen.getByText('选中事件 1').closest('details')?.open).toBe(false);
+    fireEvent.click(screen.getByText('查看记录处理详情'));
+    expect(screen.getByText('选中事件 1').closest('details')?.open).toBe(true);
+    expect(screen.getByLabelText('记录处理详情').textContent).toContain('选中事件 1');
+  });
+
+  it('offers a direct recommendation path and an observation path without scored evidence', () => {
+    const onCreateRecommendation = vi.fn();
+    const onNode = vi.fn();
+    const { rerender } = render(<StudentPanel run={run} student="D01" indicator="I1" node="N01" onNode={onNode} onStudent={() => {}} onIndicator={() => {}} onCreateRecommendation={onCreateRecommendation} />);
+    fireEvent.click(screen.getByRole('button', { name: /形成学习建议/ }));
+    expect(onCreateRecommendation).toHaveBeenCalledTimes(1);
+
     fireEvent.change(screen.getByLabelText('测验节点'), { target: { value: 'N02' } });
-    rerender(<StudentPanel run={run} student="D02" indicator="I1" onStudent={() => {}} onIndicator={() => {}} />);
+    rerender(<StudentPanel run={run} student="D01" indicator="I1" node="N02" onNode={onNode} onStudent={() => {}} onIndicator={() => {}} onCreateRecommendation={onCreateRecommendation} />);
+    expect(screen.getByRole('button', { name: /补充观察并形成建议/ })).toBeTruthy();
+    expect(screen.getByText(/不把缺失记录当作学习结论/)).toBeTruthy();
+  });
+
+  it('resets selected node when student or run changes', () => {
+    const { rerender } = render(<StudentPanel run={run} student="D01" indicator="I1" onStudent={() => {}} onIndicator={() => {}} onCreateRecommendation={() => {}} />);
+    fireEvent.change(screen.getByLabelText('测验节点'), { target: { value: 'N02' } });
+    rerender(<StudentPanel run={run} student="D02" indicator="I1" onStudent={() => {}} onIndicator={() => {}} onCreateRecommendation={() => {}} />);
     expect((screen.getByLabelText('测验节点') as HTMLSelectElement).value).toBe('N01');
     fireEvent.change(screen.getByLabelText('测验节点'), { target: { value: 'N02' } });
-    rerender(<StudentPanel run={{ ...run, run_id: 'run2' }} student="D02" indicator="I1" onStudent={() => {}} onIndicator={() => {}} />);
+    rerender(<StudentPanel run={{ ...run, run_id: 'run2' }} student="D02" indicator="I1" onStudent={() => {}} onIndicator={() => {}} onCreateRecommendation={() => {}} />);
     expect((screen.getByLabelText('测验节点') as HTMLSelectElement).value).toBe('N01');
   });
 

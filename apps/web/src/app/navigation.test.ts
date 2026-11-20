@@ -46,6 +46,13 @@ describe('navigation', () => {
     expect(serializeNavigation(state)).toBe('#/cases?runId=run-1&nodeId=N-analysis&reportNodeId=N-report');
   });
 
+  it('preserves a release repair destination and the blocked check identity', () => {
+    const state = parseNavigationHash('#/requirements?returnToCheck=1&checkId=source_signoffs&runId=run-4&caseId=S1&reportNodeId=N2');
+    expect(state).toMatchObject({ path: '/requirements', returnToCheck: true, releaseCheckId: 'source_signoffs', runId: 'run-4' });
+    expect(serializeNavigation(state)).toBe('#/requirements?runId=run-4&reportNodeId=N2&returnToCheck=1&checkId=source_signoffs&caseId=S1');
+    expect(parseNavigationHash('#/requirements?returnToCheck=1')).toMatchObject({ path: '/requirements' });
+  });
+
   it('restores only distinct case students belonging to the current run', () => {
     const selected = parseNavigationHash('#/cases?runId=run-1&caseId=S1&caseId=S1&caseId=unknown');
     expect(resolveCaseStudentIds(selected, 'run-1', ['S1', 'S2'])).toEqual(['S1', '', '']);

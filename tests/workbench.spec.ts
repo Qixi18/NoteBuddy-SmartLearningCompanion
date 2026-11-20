@@ -65,7 +65,7 @@ test('loads the local workbench and imports the sample bundle', async ({ page })
   await expect(page.locator('.first-run .card form [role="status"]')).toContainText('6 个文件');
   await page.getByRole('button', { name: '检查文件并导入' }).click();
 
-  await expect(page.getByRole('heading', { name: '全局概览' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '开始', exact: true })).toBeVisible();
   await expect(page.locator('#message')).toContainText('数据已导入，当前运行已更新。');
   await expect(page.getByText('还没有可查看的分析运行')).toHaveCount(0);
   const studentCount = page.locator('.stat-grid .stat-block').filter({ hasText: '学生' }).locator('strong');
@@ -74,8 +74,8 @@ test('loads the local workbench and imports the sample bundle', async ({ page })
   await expect(classCount).toHaveText('2');
   await expect(page.getByText('请求失败 (500)')).toHaveCount(0);
 
-  await page.getByRole('link', { name: '学科知识' }).click();
-  await expect(page.getByRole('heading', { name: '学习要求与来源' })).toBeVisible();
+  await page.getByRole('navigation', { name: '主要流程' }).getByRole('link', { name: '学习要求' }).click();
+  await expect(page.getByRole('heading', { name: '学习要求' })).toBeVisible();
   await expect(page.getByText('请求失败 (500)')).toHaveCount(0);
   const sourceSignoff = page.locator('[aria-label="指标来源签核"] details').first();
   await sourceSignoff.locator('summary').click();
@@ -88,18 +88,25 @@ test('loads the local workbench and imports the sample bundle', async ({ page })
   await page.getByRole('button', { name: '确认本指标来源' }).click();
   await expect(page.locator('[aria-label="指标来源签核"]').getByRole('status')).toContainText('人工核验通过');
 
-  await page.getByRole('link', { name: '学情洞察' }).click();
-  await expect(page.getByRole('heading', { name: '班级概览' })).toBeVisible();
+  await page.getByRole('navigation', { name: '主要流程' }).getByRole('link', { name: '已有表现' }).click();
+  await expect(page.getByRole('heading', { name: '班级比较' })).toBeVisible();
   await page.getByLabel('测验节点').selectOption('N01');
   await expect(page.getByText('C1 · 节点 N01')).toBeVisible();
 
-  await page.getByRole('link', { name: '学生分析' }).click();
+  await page.getByRole('navigation', { name: '已有表现视图' }).getByRole('button', { name: '学生分析' }).click();
   await page.getByLabel('学生').selectOption('D01');
   await page.getByLabel('观察指标').selectOption('T01I1');
   await page.getByLabel('测验节点').selectOption('N01');
   await expect(page.locator('.student-result-title')).toContainText('D01 · T01I1 · 节点 N01');
+  await page.getByRole('button', { name: '形成学习建议' }).click();
+  await expect(page.getByRole('heading', { name: '学习建议', exact: true })).toBeVisible();
+  await expect(page.locator('.scope-fields').getByLabel('学生')).toHaveValue('D01');
+  await expect(page.locator('.scope-fields').getByLabel('观察指标')).toHaveValue('T01I1');
+  await expect(page.locator('.scope-fields').getByLabel('测验节点')).toHaveValue('N01');
+  await page.goBack();
+  await expect(page.getByRole('heading', { name: '学生分析' })).toBeVisible();
   await page.getByRole('button', { name: '查看此范围作答证据' }).click();
-  await expect(page.getByRole('heading', { name: '作答证据', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '作答证据与评分点', exact: true })).toBeVisible();
   await expect(page.locator('.scope-summary')).toContainText('D01 · T01I1 · 节点 N01');
   await expect(page.locator('.evidence-list')).toContainText('R2');
   await page.setViewportSize({ width: 1024, height: 900 });
@@ -108,20 +115,25 @@ test('loads the local workbench and imports the sample bundle', async ({ page })
   await expect(longEvidence.locator('p').filter({ hasText: '最终作答：' })).toContainText('长文本证据');
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1024);
   expect(await longEvidence.locator('pre').evaluate(element => element.scrollHeight)).toBeGreaterThan(240);
-  await page.getByRole('link', { name: '学情洞察', exact: true }).click();
-  await page.getByRole('link', { name: '数据质量', exact: true }).click();
+  await page.getByRole('navigation', { name: '主要流程' }).getByRole('link', { name: '已有表现', exact: true }).click();
+  await page.getByRole('navigation', { name: '已有表现视图' }).getByRole('button', { name: '数据质量与处置' }).click();
   const actionableFindings = page.locator('[aria-labelledby="quality-action-title"] .quality-finding');
   await expect(actionableFindings).toHaveCount(41);
   await expect(actionableFindings.first().getByRole('button', { name: '查看作答' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1024);
-  await page.getByRole('link', { name: '教学方案', exact: true }).click();
+  await page.route('**/api/readiness', async route => {
+    const response = await route.fetch();
+    const data = await response.json();
+    await route.fulfill({ response, json: { ...data, model: { ...data.model, configured: false } } });
+  });
+  await page.getByRole('navigation', { name: '主要流程' }).getByRole('link', { name: '学习建议', exact: true }).click();
   await expect(page.locator('.scope-fields select').nth(0)).toHaveValue('D01');
   await expect(page.locator('.scope-fields select').nth(1)).toHaveValue('T01I1');
   await expect(page.locator('.scope-fields select').nth(2)).toHaveValue('N01');
 
   await page.setViewportSize({ width: 1024, height: 900 });
-  await page.getByRole('link', { name: '教学方案' }).click();
-  await expect(page.getByRole('heading', { name: '建议复核', exact: true })).toBeVisible();
+  await page.getByRole('navigation', { name: '主要流程' }).getByRole('link', { name: '学习建议' }).click();
+  await expect(page.getByRole('heading', { name: '学习建议', exact: true })).toBeVisible();
   await page.getByLabel('测验节点').selectOption('N01');
   const scopeControls = page.locator('.scope-fields select');
   await expect(scopeControls).toHaveCount(3);
@@ -135,8 +147,10 @@ test('loads the local workbench and imports the sample bundle', async ({ page })
     const data = await response.json();
     await route.fulfill({ response, json: { ...data, model: { ...data.model, configured: true } } });
   });
-  await page.getByRole('link', { name: '教学调整', exact: true }).click();
-  await page.getByRole('link', { name: '建议复核', exact: true }).click();
+  await page.reload();
+  await expect(page.getByRole('button', { name: '使用模型生成草稿' })).toBeEnabled();
+  await page.getByRole('navigation', { name: '学习建议视图' }).getByRole('button', { name: '观察与调整' }).click();
+  await page.getByRole('navigation', { name: '学习建议视图' }).getByRole('button', { name: '建议阅读与复核' }).click();
   await page.route('**/api/deepseek', route => route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ error: '模型服务调用失败', code: 'MODEL_SERVICE_ERROR' }) }));
   await page.getByRole('button', { name: '使用模型生成草稿' }).click();
   await expect(page.locator('#message')).toContainText('模型服务调用失败');
@@ -162,19 +176,17 @@ test('loads the local workbench and imports the sample bundle', async ({ page })
   await page.unroute('**/api/review');
   await page.getByRole('button', { name: '保存复核' }).click();
   await expect(page.locator('#message')).toContainText('复核已保存');
-  await page.getByRole('link', { name: '案例与导出', exact: true }).click();
+  await page.getByRole('link', { name: '案例与交付', exact: true }).click();
   const candidate = page.locator('.case-candidate').filter({ hasText: 'D01' }).first();
   await candidate.locator('summary').click();
-  await candidate.getByRole('button', { name: '查看候选证据' }).click();
   await expect(page.getByText('D01 的可追溯记录')).toBeVisible();
   const candidateEvidenceRow = page.locator('.case-detail details.row').first();
   await candidateEvidenceRow.locator('summary').click();
   await candidateEvidenceRow.getByRole('button', { name: '在建议复核中查看此证据' }).click();
-  await expect(page.getByRole('heading', { name: '建议复核', exact: true })).toBeVisible();
-  await page.getByRole('link', { name: '案例与导出', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '学习建议', exact: true })).toBeVisible();
+  await page.getByRole('link', { name: '案例与交付', exact: true }).click();
   const selectedCandidate = page.locator('.case-candidate').filter({ hasText: 'D01' }).first();
   await selectedCandidate.locator('summary').click();
-  await selectedCandidate.getByRole('button', { name: '查看候选证据' }).click();
   const caseEditor = page.locator('.case-editor');
   await caseEditor.getByText('开始案例签核', { exact: true }).click();
   await page.getByLabel('案例叙述').fill('E2E 测试记录当前节点的原始作答表现');
@@ -185,10 +197,12 @@ test('loads the local workbench and imports the sample bundle', async ({ page })
   await caseEditor.locator('summary').filter({ hasText: '关联教师复核版本' }).click();
   await caseEditor.getByLabel(/T01I1 · 节点 N01 · 版本 1/).check();
   await page.getByRole('button', { name: '确认正式案例' }).click();
-  await expect(caseEditor.getByRole('status')).toContainText('教师已确认');
+  await expect(caseEditor.getByRole('status').filter({ hasText: '已保存案例版本' })).toContainText('教师已确认');
+  await page.getByRole('button', { name: '阅读报告' }).click();
   await page.getByLabel('报告案例 1').selectOption('D01');
   await page.getByLabel('报告案例 2').selectOption('D02');
   await page.getByLabel('报告案例 3').selectOption('D03');
+  await page.getByRole('button', { name: '交付检查' }).click();
   const [download] = await Promise.all([
     page.waitForEvent('download'),
     page.getByRole('button', { name: '下载草稿成果包' }).click(),
@@ -218,13 +232,14 @@ test('loads the local workbench and imports the sample bundle', async ({ page })
   ].join('\n'), archivePath!], { cwd: repoRoot, env: pythonEnvironment, encoding: 'utf8' });
   expect(archiveCheck.status, archiveCheck.stderr).toBe(0);
   await expect(page.locator('#message')).toContainText('成果包下载已开始');
-  await page.getByRole('link', { name: '教学调整', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '教学调整', exact: true })).toBeVisible();
+  await page.getByRole('navigation', { name: '主要流程' }).getByRole('link', { name: '学习建议', exact: true }).click();
+  await page.getByRole('navigation', { name: '学习建议视图' }).getByRole('button', { name: '观察与调整' }).click();
+  await expect(page.getByRole('heading', { name: '创建教学调整记录', exact: true })).toBeVisible();
+  await page.getByLabel('教师复核版本').selectOption({ index: 1 });
   await page.getByLabel('计划活动').fill('根据复核建议完成节点内练习');
   await page.getByLabel('练习（每行一项）').fill('Q001 变式');
   await page.getByLabel('观察点（每行一项）').fill('记录独立作答步骤');
   await page.getByLabel('计划教师').fill('测试教师');
-  await page.getByLabel('教师复核版本').selectOption({ index: 1 });
   await page.getByRole('button', { name: '保存计划' }).click();
   await expect(page.getByText('已保存教学计划与起始证据引用。')).toBeVisible();
   await expect(page.locator('main')).toContainText('起始运行');
@@ -236,11 +251,11 @@ test('loads the local workbench and imports the sample bundle', async ({ page })
   await expect(page.locator('.import-dialog [role="status"]')).toContainText('6 个文件');
   await page.locator('.import-dialog').getByRole('button', { name: '检查文件并导入' }).click();
   await expect(page.locator('#message')).toContainText('数据已导入，当前运行已更新。');
-  await expect(page.getByRole('heading', { name: '全局概览' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '开始', exact: true })).toBeVisible();
   await expect(studentCount).toHaveText('4');
   await expect(classCount).toHaveText('3');
-  await page.getByRole('link', { name: '教学方案' }).click();
-  await page.getByRole('link', { name: '教学调整' }).click();
+  await page.getByRole('navigation', { name: '主要流程' }).getByRole('link', { name: '学习建议' }).click();
+  await page.getByRole('navigation', { name: '学习建议视图' }).getByRole('button', { name: '观察与调整' }).click();
   await expect(page.getByLabel('选择记录')).toHaveValue(/.+/);
   await page.getByLabel('实际实施').fill('完成节点内变式练习');
   await page.getByLabel('后续观察').fill('记录了学生独立作答步骤');
@@ -266,10 +281,64 @@ test('loads the local workbench and imports the sample bundle', async ({ page })
   await page.locator('.import-dialog').getByRole('button', { name: '检查文件并导入' }).click();
   await expect(page.locator('#message')).toContainText('但当前视图未能刷新');
   await expect(page.locator('#message')).toContainText('案例候选读取失败');
-  await page.getByRole('link', { name: '教学方案', exact: true }).click();
-  await page.getByRole('link', { name: '案例与导出', exact: true }).click();
+  await page.getByRole('navigation', { name: '主要流程' }).getByRole('link', { name: '学习建议', exact: true }).click();
+  await page.getByRole('link', { name: '案例与交付', exact: true }).click();
   await expect(page.locator('.case-candidate').filter({ hasText: 'D01' }).first()).toBeVisible();
   expect(pageErrors).toEqual([]);
+});
+
+test('teachers can keep linked questions compact and reveal all evidence on demand', async ({ page }) => {
+  await page.goto('/');
+  const files = sampleCsvFiles(bundlePath, false, true);
+  expect(files).toHaveLength(6);
+  if (await page.locator('.first-run').count()) {
+    await page.getByRole('main').getByLabel('选择 CSV 文件夹').setInputFiles(bundlePath);
+    await page.getByRole('button', { name: '检查文件并导入' }).click();
+  } else {
+    await page.getByRole('button', { name: '导入数据' }).click();
+    const importDialog = page.getByRole('dialog', { name: '导入数据' });
+    await importDialog.getByLabel('选择 CSV 文件夹').setInputFiles(bundlePath);
+    await importDialog.getByRole('button', { name: '检查文件并导入' }).click();
+  }
+  await expect(page.getByRole('heading', { name: '开始', level: 1 })).toBeVisible();
+
+  await page.getByRole('navigation', { name: '主要流程' }).getByRole('link', { name: '学习要求', exact: true }).click();
+  const questions = page.getByRole('heading', { name: '关联题目 · 41 道' }).locator('..');
+  await expect(questions.getByText('综合练习 2：比较两个代数式并说明理由。')).toBeVisible();
+  await expect(questions.getByText('综合练习 6：比较两个代数式并说明理由。')).toHaveCount(0);
+  await questions.getByRole('button', { name: '查看全部关联题目（41）' }).click();
+  await expect(questions.getByText('综合练习 41：比较两个代数式并说明理由。')).toBeVisible();
+  await questions.getByRole('button', { name: '收起关联题目' }).click();
+  await expect(questions.getByText('综合练习 41：比较两个代数式并说明理由。')).toHaveCount(0);
+
+  await page.getByRole('navigation', { name: '主要流程' }).getByRole('link', { name: '已有表现', exact: true }).click();
+  await page.getByLabel('测验节点').selectOption('N01');
+  const performanceViews = page.getByRole('navigation', { name: '已有表现视图' });
+  await performanceViews.getByRole('button', { name: '数据质量与处置' }).click();
+  await expect(page.getByRole('heading', { name: '数据质量与处置' })).toBeVisible();
+  await performanceViews.getByRole('button', { name: '班级比较' }).click();
+
+  await page.getByRole('navigation', { name: '主要流程' }).getByRole('link', { name: '学习建议', exact: true }).click();
+  await page.getByLabel('学生').selectOption('D01');
+  await page.getByLabel('测验节点').selectOption('N01');
+  await page.getByRole('button', { name: '加入案例准备' }).click();
+  await expect(page.getByRole('heading', { name: '案例与交付', level: 1 })).toBeVisible();
+  const caseEditor = page.locator('.case-editor');
+  await expect(caseEditor.getByLabel('案例学生')).toHaveValue('D01');
+  await caseEditor.getByText('开始案例签核', { exact: true }).click();
+  await caseEditor.locator('summary').filter({ hasText: '选择原始作答证据' }).click();
+  const evidenceFilter = caseEditor.getByRole('searchbox', { name: '筛选原始作答证据' });
+  await expect(evidenceFilter).toBeVisible();
+  await evidenceFilter.fill('Q041');
+  await expect(evidenceFilter).toHaveValue('Q041');
+  await expect(caseEditor.getByText('正在显示 1 / 43 条；筛选不会取消已勾选的证据。')).toBeVisible();
+  await expect(caseEditor.getByText(/R44 · 节点 N01 · Q041 · 作答记录.csv/)).toBeVisible();
+  await expect(caseEditor.getByText(/R4 · 节点 N01 · Q001 · 作答记录.csv/)).toHaveCount(0);
+
+  await page.getByRole('button', { name: '交付检查' }).click();
+  await page.getByRole('button', { name: '选择报告学生' }).click();
+  await expect(page.getByLabel('报告案例 1')).toBeVisible();
+  await expect(page.getByLabel('班级报告节点')).toBeVisible();
 });
 
 test('confirms a teacher-reviewed no-response coverage case', async ({ page }) => {
@@ -278,7 +347,7 @@ test('confirms a teacher-reviewed no-response coverage case', async ({ page }) =
   expect(files).toHaveLength(6);
   await page.goto('/#/knowledge/indicators');
   const firstRunHeading = page.getByRole('heading', { name: '先导入一份学情数据', level: 1 });
-  const knowledgeHeading = page.getByRole('heading', { name: '学习要求与来源', level: 1 });
+  const knowledgeHeading = page.getByRole('heading', { name: '学习要求', level: 1 });
   await expect(firstRunHeading.or(knowledgeHeading)).toBeVisible();
   if (await page.locator('.first-run').count()) {
     await page.locator('.first-run input[type="file"]').setInputFiles(noRecordBundle);
@@ -289,9 +358,18 @@ test('confirms a teacher-reviewed no-response coverage case', async ({ page }) =
     await importDialog.getByLabel('选择 CSV 文件夹').setInputFiles(noRecordBundle);
     await importDialog.getByRole('button', { name: '检查文件并导入' }).click();
   }
-  await expect(page.getByRole('heading', { name: '全局概览' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '开始', exact: true })).toBeVisible();
 
-  await page.getByRole('link', { name: '教学方案', exact: true }).click();
+  await page.getByRole('navigation', { name: '主要流程' }).getByRole('link', { name: '已有表现', exact: true }).click();
+  await page.getByRole('navigation', { name: '已有表现视图' }).getByRole('button', { name: '学生分析' }).click();
+  await page.getByLabel('学生').selectOption('D01');
+  await page.getByLabel('观察指标').selectOption('T01I1');
+  await page.getByLabel('测验节点').selectOption('N01');
+  await expect(page.getByText(/暂无有效已评分记录；这不代表学生未掌握/)).toBeVisible();
+  await page.getByRole('button', { name: '补充观察并形成建议' }).click();
+  await expect(page.getByRole('heading', { name: '学习建议', exact: true })).toBeVisible();
+  await expect(page.locator('.review-range').getByLabel('学生')).toHaveValue('D01');
+  await expect(page.locator('.review-range').getByLabel('测验节点')).toHaveValue('N01');
   await page.getByLabel('学生').selectOption('D01');
   await page.getByLabel('观察指标').selectOption('T01I1');
   await page.getByLabel('测验节点').selectOption('N01');
@@ -312,7 +390,7 @@ test('confirms a teacher-reviewed no-response coverage case', async ({ page }) =
   await reviewEditor.getByRole('button', { name: '保存复核' }).click();
   await expect(page.locator('#message')).toContainText('复核已保存');
 
-  await page.getByRole('link', { name: '案例与导出', exact: true }).click();
+  await page.getByRole('link', { name: '案例与交付', exact: true }).click();
   const caseEditor = page.locator('.case-editor');
   await caseEditor.getByLabel('案例学生').selectOption('D01');
   await caseEditor.getByLabel('覆盖指标').selectOption('T01I1');
@@ -325,7 +403,8 @@ test('confirms a teacher-reviewed no-response coverage case', async ({ page }) =
   await caseEditor.locator('summary').filter({ hasText: '关联教师复核版本' }).click();
   await caseEditor.getByLabel(/T01I1 · 节点 N01 · 版本 1/).check();
   await caseEditor.getByRole('button', { name: '确认正式案例' }).click();
-  await expect(caseEditor.getByRole('status')).toContainText('教师已确认');
+  await expect(caseEditor.getByRole('status').filter({ hasText: '已保存案例版本' })).toContainText('教师已确认');
+  await page.getByRole('button', { name: '阅读报告' }).click();
   const caseReport = page.locator('.competition-case-report');
   await caseReport.getByLabel('报告案例 1').selectOption('D01');
   await caseReport.getByLabel('报告案例 2').selectOption('D02');
@@ -337,7 +416,7 @@ test('confirms a teacher-reviewed no-response coverage case', async ({ page }) =
   await expect(classReport.getByRole('heading', { name: '班级共性、差异与覆盖' })).toBeVisible();
   await expect(classReport.getByText(/共同题目得分率差异/)).toBeVisible();
   for (const studentId of ['D02', 'D03']) {
-    await page.getByRole('link', { name: '建议复核', exact: true }).click();
+    await page.getByRole('navigation', { name: '主要流程' }).getByRole('link', { name: '学习建议', exact: true }).click();
     await page.locator('.review-range').getByLabel('学生').selectOption(studentId);
     await page.getByRole('button', { name: '生成规则草稿' }).click();
     const review = page.locator('.review-editor');
@@ -356,7 +435,7 @@ test('confirms a teacher-reviewed no-response coverage case', async ({ page }) =
     await review.getByRole('button', { name: '保存复核' }).click();
     await expect(page.locator('#message')).toContainText('复核已保存');
 
-    await page.getByRole('link', { name: '案例与导出', exact: true }).click();
+    await page.getByRole('link', { name: '案例与交付', exact: true }).click();
     const editor = page.locator('.case-editor');
     await editor.getByLabel('案例学生').selectOption(studentId);
     await editor.getByLabel('覆盖指标').selectOption('T01I1');
@@ -369,13 +448,19 @@ test('confirms a teacher-reviewed no-response coverage case', async ({ page }) =
     await editor.locator('summary').filter({ hasText: '关联教师复核版本' }).click();
     await editor.getByLabel(/T01I1 · 节点 N01 · 版本 1/).check();
     await editor.getByRole('button', { name: '确认正式案例' }).click();
-    await expect(editor.getByRole('status')).toContainText('教师已确认');
+    await expect(editor.getByRole('status').filter({ hasText: '已保存案例版本' })).toContainText('教师已确认');
+    await page.getByRole('button', { name: '阅读报告' }).click();
+    await expect(page.locator('.competition-case-report')).toBeVisible();
   }
   await caseReport.getByLabel('报告案例 1').selectOption('D01');
   await caseReport.getByLabel('报告案例 2').selectOption('D02');
   await caseReport.getByLabel('报告案例 3').selectOption('D03');
   await expect(caseReport.getByText(/尚未全部获得当前运行中的教师确认/)).toHaveCount(0);
   await expect(caseReport.getByText(/需求差异/).first()).toBeVisible();
+  await expect(caseReport.locator('.case-report-card:visible')).toHaveCount(1);
+  await caseReport.getByRole('button', { name: '查看全部案例正文' }).click();
+  await expect(caseReport.locator('.case-report-card:visible')).toHaveCount(3);
+  await caseReport.getByRole('button', { name: '仅阅读所选案例' }).click();
   for (const width of [1024, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
@@ -386,12 +471,14 @@ test('confirms a teacher-reviewed no-response coverage case', async ({ page }) =
     await expect(page.locator('body')).toHaveAttribute('data-print-report', id);
     await page.emulateMedia({ media: 'print' });
     await expect(selected).toBeVisible();
+    if (id === 'case-report') await expect(selected.locator('.case-report-card:visible')).toHaveCount(3);
     await expect(other).toBeHidden();
     await expect(page.locator('.sidebar')).toBeHidden();
     await expect(page.locator('.case-editor')).toBeHidden();
     await page.emulateMedia({ media: 'screen' });
     await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
   }
+  await page.getByRole('button', { name: '交付检查' }).click();
   const exportPanel = page.locator('.export-panel');
   await expect(exportPanel.locator('.release-scope')).toContainText('D01、D02、D03');
   const preflight = exportPanel.getByLabel('正式提交发布预检');
@@ -429,79 +516,79 @@ test('confirms a teacher-reviewed no-response coverage case', async ({ page }) =
   expect(submissionCheck.status, submissionCheck.stderr).toBe(0);
 });
 
-test('all nine routes render on direct hash load, refresh, history, and unknown hashes', async ({ page }) => {
+test('five primary pages and legacy aliases render on direct hash load, refresh, and history', async ({ page }) => {
   const routes = [
-    ['/home', '全局概览'],
-    ['/knowledge/indicators', '学习要求与来源'],
-    ['/insights/classes', '班级概览'],
-    ['/insights/students', '学生分析'],
-    ['/insights/evidence', '作答证据'],
-    ['/insights/quality', '数据质量'],
-    ['/plan/reviews', '建议复核'],
-    ['/plan/adjustments', '教学调整'],
-    ['/plan/cases', '案例与导出'],
+    ['/home', '开始'], ['/requirements', '学习要求'], ['/performance', '已有表现'],
+    ['/recommendations', '学习建议'], ['/cases', '案例与交付'],
+    ['/performance?view=student', '已有表现'], ['/performance?view=evidence', '已有表现'],
+    ['/performance?view=quality', '已有表现'], ['/recommendations?view=observe', '学习建议'],
+    ['/cases?view=report', '案例与交付'], ['/cases?view=check', '案例与交付'],
+    ['/knowledge/indicators', '学习要求'], ['/insights/classes', '已有表现'],
+    ['/insights/students', '已有表现'], ['/insights/evidence', '已有表现'],
+    ['/insights/quality', '已有表现'], ['/plan/reviews', '学习建议'],
+    ['/plan/adjustments', '学习建议'], ['/plan/cases', '案例与交付'],
   ] as const;
-  const files = sampleCsvFiles();
-  expect(files).toHaveLength(6);
-  await page.goto('/#/knowledge/indicators');
+  expect(sampleCsvFiles()).toHaveLength(6);
+  await page.goto('/#/home');
   const emptyState = page.getByRole('heading', { name: '先导入一份学情数据', level: 1 });
-  const knowledge = page.getByRole('heading', { name: '学习要求与来源', level: 1 });
-  await expect(emptyState.or(knowledge)).toBeVisible();
+  await expect(emptyState.or(page.getByRole('heading', { name: '开始', level: 1 }))).toBeVisible();
   if (await emptyState.isVisible()) {
     await page.getByRole('main').getByLabel('选择 CSV 文件夹').setInputFiles(bundlePath);
-    await expect(page.locator('.first-run .card form [role="status"]')).toContainText('6 个文件');
     await page.getByRole('button', { name: '检查文件并导入' }).click();
     await expect(page.locator('#message')).toContainText('数据已导入，当前运行已更新。');
   }
-  await page.goto('/#/home');
-  await page.reload();
-  await expect(page.getByRole('heading', { name: '全局概览', level: 1 })).toBeVisible();
-
-  for (const [path, title] of routes) {
-    await page.goto(`/#${path}`);
+  for (const [hash, title] of routes) {
+    const canonical = hash.startsWith('/knowledge/') ? '学习要求'
+      : hash.startsWith('/insights/') ? '已有表现'
+        : hash.startsWith('/plan/reviews') || hash.startsWith('/plan/adjustments') ? '学习建议'
+          : hash.startsWith('/plan/cases') ? '案例与交付' : title;
+    await page.goto(`/#${hash}`);
     await expect(page.getByRole('heading', { name: title, level: 1 })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: '主要流程' }).getByRole('link', { name: canonical, exact: true })).toHaveAttribute('aria-current', 'page');
     await page.reload();
     await expect(page.getByRole('heading', { name: title, level: 1 })).toBeVisible();
-    if (path === '/home') {
-      await expect(page.getByRole('link', { name: '全局概览' })).toHaveAttribute('aria-current', 'page');
-    } else {
-      await expect(page.getByRole('link', { name: title, exact: true })).toHaveAttribute('aria-current', 'page');
-      const section = path.startsWith('/knowledge/') ? '学科知识' : path.startsWith('/insights/') ? '学情洞察' : '教学方案';
-      await expect(page.getByRole('link', { name: section, exact: true })).toHaveClass(/active/);
-    }
   }
-
+  const activeRunId = await page.locator('.run-details-popover code').textContent();
+  await page.goto(`/#/requirements?returnToCheck=1&checkId=source_signoffs&runId=${activeRunId}&caseId=D01&caseId=D02&caseId=D03&reportNodeId=N01`);
+  await expect(page.locator('.repair-return-banner')).toContainText('来源核验');
+  await page.getByRole('button', { name: '返回交付检查' }).click();
+  await expect(page).toHaveURL(/#\/cases\?view=check&runId=[^&]+&reportNodeId=N01&caseId=D01&caseId=D02&caseId=D03$/);
+  await expect(page.locator('.repair-return-banner')).toHaveCount(0);
+  await page.goto('/#/cases?view=check&runId=previous-run&reportNodeId=OLD&caseId=D01&caseId=D02&caseId=D03');
+  await expect(page.getByRole('status').filter({ hasText: '交付候选与报告节点来自其他数据批次' })).toBeVisible();
+  await page.getByRole('button', { name: '重新选择案例' }).click();
+  await expect(page.getByRole('status').filter({ hasText: '交付候选与报告节点来自其他数据批次' })).toHaveCount(0);
+  await expect(page).toHaveURL(/#\/cases\?runId=[^&]+$/);
   await page.goto('/#/home');
-  await page.getByRole('link', { name: '学科知识' }).click();
-  await expect(page.getByRole('heading', { name: '学习要求与来源', level: 1 })).toBeVisible();
+  await page.getByRole('navigation', { name: '主要流程' }).getByRole('link', { name: '学习要求', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '学习要求', level: 1 })).toBeVisible();
   await page.goBack();
-  await expect(page.getByRole('heading', { name: '全局概览', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '开始', level: 1 })).toBeVisible();
   await page.goForward();
-  await expect(page.getByRole('heading', { name: '学习要求与来源', level: 1 })).toBeVisible();
-
+  await expect(page.getByRole('heading', { name: '学习要求', level: 1 })).toBeVisible();
   await page.goto('/#/made-up-route');
   await expect(page).toHaveURL(/#\/home$/);
-  await expect(page.getByRole('heading', { name: '全局概览', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '开始', level: 1 })).toBeVisible();
 });
 
 test('keyboard focus and accessible names are available across all routes', async ({ page }) => {
   let gradientTextSamples = 0;
   const routes = [
-    ['/home', '全局概览'],
-    ['/knowledge/indicators', '学习要求与来源'],
-    ['/insights/classes', '班级概览'],
-    ['/insights/students', '学生分析'],
-    ['/insights/evidence', '作答证据'],
-    ['/insights/quality', '数据质量'],
-    ['/plan/reviews', '建议复核'],
-    ['/plan/adjustments', '教学调整'],
-    ['/plan/cases', '案例与导出'],
+    ['/home', '开始'],
+    ['/knowledge/indicators', '学习要求'],
+    ['/insights/classes', '已有表现'],
+    ['/insights/students', '已有表现'],
+    ['/insights/evidence', '已有表现'],
+    ['/insights/quality', '已有表现'],
+    ['/plan/reviews', '学习建议'],
+    ['/recommendations?view=observe', '学习建议'],
+    ['/plan/cases', '案例与交付'],
   ] as const;
 
   expect(sampleCsvFiles(bundlePath)).toHaveLength(6);
   await page.goto('/#/home');
   const emptyState = page.getByRole('heading', { name: '先导入一份学情数据', level: 1 });
-  await expect(emptyState.or(page.getByRole('heading', { name: '全局概览', level: 1 }))).toBeVisible();
+  await expect(emptyState.or(page.getByRole('heading', { name: '开始', level: 1 }))).toBeVisible();
   if (await emptyState.isVisible()) {
     await page.getByRole('main').getByLabel('选择 CSV 文件夹').setInputFiles(bundlePath);
     await page.getByRole('button', { name: '检查文件并导入' }).click();
@@ -509,7 +596,7 @@ test('keyboard focus and accessible names are available across all routes', asyn
   }
 
   for (const [route, title] of routes) {
-    if (route === '/plan/adjustments') {
+    if (route === '/recommendations?view=observe') {
       await page.route('**/api/teaching-adjustments', request => request.fulfill({
         contentType: 'application/json',
         body: JSON.stringify([{
@@ -528,11 +615,13 @@ test('keyboard focus and accessible names are available across all routes', asyn
       await page.getByLabel('测验节点').selectOption('N01');
     }
     if (route === '/knowledge/indicators') {
+      await page.locator('.ai-analysis-disclosure').locator('summary').click();
       await expect(page.getByRole('button', { name: '生成 AI 分析' })).toBeVisible();
       await expect(page.locator('.warn')).toContainText('指标关系状态：待核验');
       await expect(page.getByText('材料目录与来源文件核验')).toBeVisible();
     }
     if (route === '/plan/reviews') {
+      await page.getByLabel('学生').selectOption('D01');
       await page.getByLabel('测验节点').selectOption('N01');
       await page.getByRole('button', { name: '生成规则草稿' }).click();
       await expect(page.getByRole('heading', { name: '教师复核内容' })).toBeVisible();
@@ -545,7 +634,7 @@ test('keyboard focus and accessible names are available across all routes', asyn
       const firstEvidence = page.locator('.review-record').first();
       if (await firstEvidence.count()) await firstEvidence.locator('summary').click();
     }
-    if (route === '/plan/adjustments') {
+    if (route === '/recommendations?view=observe') {
       await expect(page.getByLabel('选择记录')).toHaveValue('keyboard-audit-adjustment');
       await page.locator('details').filter({ hasText: '选择后续证据' }).locator('summary').click();
       await page.locator('details').filter({ hasText: '实施与复核历史' }).locator('summary').click();
@@ -704,7 +793,7 @@ test('keyboard focus and accessible names are available across all routes', asyn
 test('keyboard users can open and close import, and get an announced validation error', async ({ page }) => {
   await page.goto('/#/home');
   const emptyState = page.getByRole('heading', { name: '先导入一份学情数据', level: 1 });
-  const overview = page.getByRole('heading', { name: '全局概览', level: 1 });
+  const overview = page.getByRole('heading', { name: '开始', level: 1 });
   await expect(emptyState.or(overview)).toBeVisible();
   if (await emptyState.isVisible()) {
     expect(sampleCsvFiles()).toHaveLength(6);
@@ -788,7 +877,7 @@ test('export failure is announced without navigating away or claiming success', 
   }));
   await page.goto('/#/home');
   const emptyState = page.getByRole('heading', { name: '先导入一份学情数据', level: 1 });
-  const overview = page.getByRole('heading', { name: '全局概览', level: 1 });
+  const overview = page.getByRole('heading', { name: '开始', level: 1 });
   await expect(emptyState.or(overview)).toBeVisible();
   if (await emptyState.isVisible()) {
     expect(sampleCsvFiles()).toHaveLength(6);
@@ -796,19 +885,20 @@ test('export failure is announced without navigating away or claiming success', 
     await page.getByRole('button', { name: '检查文件并导入' }).click();
     await expect(page.locator('#message')).toContainText('数据已导入，当前运行已更新。');
   }
-  await page.goto('/#/plan/cases');
+  await page.goto('/#/cases?view=report');
   await page.getByLabel('报告案例 1').selectOption('D01');
   await page.getByLabel('报告案例 2').selectOption('D02');
   await page.getByLabel('报告案例 3').selectOption('D03');
+  await page.getByRole('button', { name: '交付检查' }).click();
   await page.getByRole('button', { name: '下载草稿成果包' }).click();
   await expect(page.getByRole('alert')).toContainText('模拟导出服务错误');
-  await expect(page).toHaveURL(/#\/plan\/cases$/);
+  await expect(page).toHaveURL(/#\/cases\?view=check/);
 });
 
 test('slow review requests reject stale drafts and keep generation and save single-flight', async ({ page }) => {
   await page.goto('/#/home');
   const emptyState = page.getByRole('heading', { name: '先导入一份学情数据', level: 1 });
-  const overview = page.getByRole('heading', { name: '全局概览', level: 1 });
+  const overview = page.getByRole('heading', { name: '开始', level: 1 });
   await expect(emptyState.or(overview)).toBeVisible();
   if (await emptyState.isVisible()) {
     expect(sampleCsvFiles()).toHaveLength(6);
@@ -826,7 +916,8 @@ test('slow review requests reject stale drafts and keep generation and save sing
     await route.fulfill({ response });
     finishedDraftRequests += 1;
   });
-  await page.goto('/#/plan/reviews');
+  await page.goto('/#/recommendations');
+  await page.getByLabel('学生').selectOption('D01');
   await page.getByLabel('测验节点').selectOption('N01');
   const firstDraftRequest = page.waitForRequest(request => new URL(request.url()).pathname === '/api/draft');
   await page.getByRole('button', { name: '生成规则草稿' }).click();
@@ -870,7 +961,7 @@ test('key pages fit on desktop and mobile, with keyboard access to navigation', 
   page.on('pageerror', error => pageErrors.push(error.message));
   await page.goto('/#/home');
   const emptyState = page.getByRole('heading', { name: '先导入一份学情数据', level: 1 });
-  const overview = page.getByRole('heading', { name: '全局概览', level: 1 });
+  const overview = page.getByRole('heading', { name: '开始', level: 1 });
   await expect(emptyState.or(overview)).toBeVisible();
   if (await emptyState.isVisible()) {
     expect(sampleCsvFiles()).toHaveLength(6);
@@ -881,21 +972,23 @@ test('key pages fit on desktop and mobile, with keyboard access to navigation', 
   }
 
   const pages = [
-    ['/home', '全局概览'],
-    ['/knowledge/indicators', '学习要求与来源'],
-    ['/insights/classes', '班级概览'],
-    ['/plan/reviews', '建议复核'],
-    ['/plan/cases', '案例与导出'],
+    ['/home', '开始'],
+    ['/requirements', '学习要求'],
+    ['/performance', '已有表现'],
+    ['/recommendations', '学习建议'],
+    ['/cases', '案例与交付'],
   ] as const;
   for (const width of [390, 768, 1024, 1280, 1440, 1920]) {
     await page.setViewportSize({ width, height: 900 });
     for (const [route, title] of pages) {
       await page.goto(`/#${route}`);
       await expect(page.getByRole('heading', { name: title, level: 1 })).toBeVisible();
-      if (route === '/insights/classes' || route === '/plan/reviews') {
+      if (route === '/performance') {
         await page.getByLabel('测验节点').selectOption('N01');
       }
-      if (route === '/plan/reviews') {
+      if (route === '/recommendations') {
+        await page.getByLabel('学生').selectOption('D01');
+        await page.getByLabel('测验节点').selectOption('N01');
         await page.getByRole('button', { name: '生成规则草稿' }).click();
         await expect(page.getByRole('heading', { name: '教师复核内容' })).toBeVisible();
       }
@@ -914,13 +1007,13 @@ test('key pages fit on desktop and mobile, with keyboard access to navigation', 
   await mobileMenu.focus();
   await mobileMenu.press('Enter');
   await expect(mobileMenu).toHaveAttribute('aria-expanded', 'true');
-  await expect(nav.getByRole('link', { name: '案例与导出', exact: true })).toBeFocused();
+  await expect(nav.getByRole('link', { name: '案例与交付', exact: true })).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(nav).toBeHidden();
   await expect(mobileMenu).toBeFocused();
   await mobileMenu.press('Enter');
-  await nav.getByRole('link', { name: '数据质量', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '数据质量', level: 1 })).toBeFocused();
+  await nav.getByRole('link', { name: '已有表现', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '已有表现', level: 1 })).toBeFocused();
   await expect(nav).toBeHidden();
 
   const screenshotScan = spawnSync(pythonExecutable, ['scan-artifacts.py', testInfo.outputDir], { cwd: repoRoot, env: pythonEnvironment, encoding: 'utf8' });

@@ -83,8 +83,8 @@ export function ExportPanel({ students, runId, ids, node, onNavigate, onExport }
       <div><dt>数据批次</dt><dd><code>{runId}</code></dd></div>
     </dl>
     <div className="report-links">
-      <button className="text-action" onClick={() => document.getElementById('case-report')?.focus()}>选择报告学生</button>
-      <button className="text-action" onClick={() => document.getElementById('class-report')?.focus()}>选择班级报告节点</button>
+      <button className="text-action" onClick={() => onNavigate('/cases?view=report')}>选择报告学生</button>
+      <button className="text-action" onClick={() => onNavigate('/cases?view=report')}>选择班级报告节点</button>
     </div>
     <p className="muted">草稿包收录所选三人的个人记录及其班级汇总，不包含完整运行审计数据。正式包还需完成服务端预检和内容签核。</p>
     <details className="export-preview"><summary>查看成果包内容与字段口径</summary>
@@ -118,7 +118,7 @@ export function ExportPanel({ students, runId, ids, node, onNavigate, onExport }
           return <li className={`release-check status-${check.status}`} key={check.id}>
             <strong>{check.status === 'passed' ? '通过' : check.status === 'blocked' ? '阻断' : '待检查'} · {check.label}</strong>
             <p>{check.detail}</p>
-            {check.status === 'blocked' && action && <button className="text-action" onClick={() => onNavigate(action.route)}>{action.label} <span aria-hidden="true">↗</span></button>}
+            {check.status === 'blocked' && action && <button className="text-action" onClick={() => onNavigate(`${action.route}${action.route.includes('?') ? '&' : '?'}returnToCheck=1&checkId=${encodeURIComponent(check.id)}`)}>{action.label} <span aria-hidden="true">↗</span></button>}
           </li>;
         })}</ul>
       </>}

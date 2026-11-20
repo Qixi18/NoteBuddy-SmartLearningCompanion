@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AnalysisRun, CaseSuggestion, Draft, Review } from '../api/types';
 import draftFixtureJson from '../../../../contracts/api/draft.json';
@@ -50,10 +50,49 @@ describe('WorkbenchPage empty state', () => {
     expect(screen.queryByText(/方案 PDF/)).toBeNull();
   });
 
+  it('recommends the next teacher action from the active analysis state', () => {
+    const onNavigate = vi.fn();
+    const { rerender } = render(<WorkbenchPage {...defaults} student="" node="" onNavigate={onNavigate} />);
+    fireEvent.click(screen.getByRole('button', { name: '查看学习要求' }));
+    expect(onNavigate).toHaveBeenCalledWith('/requirements');
+
+    onNavigate.mockClear();
+    rerender(<WorkbenchPage {...defaults} draft={{ ...draftFixture, student_id: 'D01', indicator_id: 'I1', node_id: 'N1' }} onNavigate={onNavigate} />);
+    expect(screen.getByRole('heading', { name: '继续复核建议草稿' })).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '继续教师复核' }));
+    expect(onNavigate).toHaveBeenCalledWith('/recommendations');
+  });
+
   it('does not invent a student target on the recommendation page', () => {
     render(<WorkbenchPage {...defaults} path="/recommendations" student="" />);
     expect(screen.getByText('请选择一名学生，再查看或生成对应范围的学习建议。')).not.toBeNull();
     expect(screen.queryByRole('button', { name: '生成规则草稿' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '观察与调整' }));
+    expect(defaults.onNavigate).toHaveBeenCalledWith('/recommendations?view=observe');
+  });
+
+  it('adds the current student to the first open case candidate slot and opens preparation', () => {
+    const onNavigate = vi.fn();
+    render(<WorkbenchPage {...defaults} path="/recommendations" caseIds={['', '', '']} onNavigate={onNavigate} />);
+    fireEvent.click(screen.getByRole('button', { name: '加入案例准备' }));
+    expect(parseNavigationHash(`#${onNavigate.mock.calls[0][0]}`)).toMatchObject({
+      path: '/cases', view: 'prepare', studentId: 'D01', caseStudentIds: ['D01', '', ''],
+    });
+  });
+
+  it('requires the teacher to choose which full case candidate slot to replace', () => {
+    const run = makeRun();
+    run.students.push({ '学生编号': 'D04', '模拟班级编号': 'C2' });
+    const onNavigate = vi.fn();
+    render(<WorkbenchPage {...defaults} run={run} path="/recommendations" student="D04" caseIds={['D01', 'D02', 'D03']} onNavigate={onNavigate} />);
+    fireEvent.click(screen.getByRole('button', { name: '加入案例准备' }));
+    expect(screen.getByText(/已有三名不同候选/)).not.toBeNull();
+    expect(onNavigate).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByRole('combobox', { name: '选择要替换的报告候选' }), { target: { value: '1' } });
+    fireEvent.click(screen.getByRole('button', { name: '替换所选候选并加入' }));
+    expect(parseNavigationHash(`#${onNavigate.mock.calls[0][0]}`)).toMatchObject({
+      path: '/cases', view: 'prepare', studentId: 'D04', caseStudentIds: ['D01', 'D04', 'D03'],
+    });
   });
 
   it('shows source availability and explains when model drafting is unavailable', async () => {
@@ -82,6 +121,15 @@ describe('WorkbenchPage empty state', () => {
     fireEvent.click(screen.getByText('查看本班学生（1）'));
     fireEvent.click(screen.getByRole('button', { name: 'D01' }));
     expect(parseNavigationHash(`#${defaults.onNavigate.mock.calls.at(-1)?.[0]}`)).toMatchObject({ path: '/performance', view: 'student', studentId: 'D01' });
+  });
+
+  it('keeps class, student, and quality views available from the performance page', () => {
+    const onNavigate = vi.fn();
+    render(<WorkbenchPage {...defaults} path="/performance" onNavigate={onNavigate} />);
+    const viewNav = screen.getByRole('navigation', { name: '已有表现视图' });
+    expect(within(viewNav).getByRole('button', { name: '班级比较' }).getAttribute('aria-current')).toBe('page');
+    fireEvent.click(within(viewNav).getByRole('button', { name: '数据质量与处置' }));
+    expect(onNavigate).toHaveBeenCalledWith('/performance?view=quality');
   });
 
   it('drills from a student and node scope into matching evidence', () => {

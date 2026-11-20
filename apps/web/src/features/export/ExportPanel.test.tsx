@@ -37,7 +37,7 @@ describe('ExportPanel', () => {
     const button = await screen.findByRole('button', { name: '前往来源核验' });
     expect(release).toHaveBeenCalledWith(ids, 'N02', '', false);
     fireEvent.click(button);
-    expect(scope.onNavigate).toHaveBeenCalledWith('/requirements');
+    expect(scope.onNavigate).toHaveBeenCalledWith('/requirements?returnToCheck=1&checkId=source_signoffs');
     expect((screen.getByRole('button', { name: '下载正式提交包' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
@@ -68,5 +68,13 @@ describe('ExportPanel', () => {
     expect(screen.getByText('查看成果包内容与字段口径')).not.toBeNull();
     expect(screen.getByText(/student_cases\.json/)).not.toBeNull();
     expect(screen.getByText(/案例叙述仍需人工补充/)).not.toBeNull();
+  });
+
+  it('takes report actions to the visible report view instead of focusing hidden controls', () => {
+    render(<ExportPanel {...scope} ids={['D01', 'D02', 'D03']} />);
+    fireEvent.click(screen.getByRole('button', { name: '选择报告学生' }));
+    expect(scope.onNavigate).toHaveBeenCalledWith('/cases?view=report');
+    fireEvent.click(screen.getByRole('button', { name: '选择班级报告节点' }));
+    expect(scope.onNavigate).toHaveBeenLastCalledWith('/cases?view=report');
   });
 });

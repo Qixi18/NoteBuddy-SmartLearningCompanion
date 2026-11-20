@@ -22,14 +22,14 @@ function CaseEvidence({ run, suggestions, reviews, draft, onOpenReview }: { run:
   </Panel>;
 }
 
-export function CasesPage({ run, view = 'prepare', suggestions, reviews, draft, ids, onSelect, node, onNode, dataRevision = 0, onDataChanged, onDirtyChange, onBeforeScopeChange, onNavigate, onExport }: {
-  run: AnalysisRun; view?: NavigationView; suggestions: CaseSuggestion[]; reviews: Record<string, Review[]>; draft: Draft | null; ids: string[]; onSelect: (ids: string[]) => void; node: string; onNode: (node: string) => void; dataRevision?: number; onDataChanged?: () => void; onDirtyChange?: (dirty: boolean) => void; onBeforeScopeChange?: () => boolean; onNavigate: (path: string) => void; onExport: (ids: string[]) => void;
+export function CasesPage({ run, view = 'prepare', suggestions, reviews, draft, ids, onSelect, student, node, onNode, dataRevision = 0, onDataChanged, onDirtyChange, onBeforeScopeChange, onNavigate, onExport }: {
+  run: AnalysisRun; view?: NavigationView; suggestions: CaseSuggestion[]; reviews: Record<string, Review[]>; draft: Draft | null; ids: string[]; onSelect: (ids: string[]) => void; student?: string; node: string; onNode: (node: string) => void; dataRevision?: number; onDataChanged?: () => void; onDirtyChange?: (dirty: boolean) => void; onBeforeScopeChange?: () => boolean; onNavigate: (path: string) => void; onExport: (ids: string[]) => void;
 }) {
   const [caseRevision, setCaseRevision] = useState(0);
   return <div className="cases-layout">
     <nav className="case-workflow" aria-label="案例与交付视图导航">{([['prepare', '案例准备'], ['report', '阅读报告'], ['check', '交付检查']] as const).map(([target, label]) => <button key={target} type="button" className={`text-action${view === target ? ' active' : ''}`} aria-current={view === target ? 'page' : undefined} onClick={() => onNavigate(`/cases?view=${target}`)}>{label}</button>)}</nav>
     <section hidden={view !== 'prepare'} aria-label="案例准备"><CaseEvidence run={run} suggestions={suggestions} reviews={reviews} draft={draft} onOpenReview={(studentId, indicatorId, nodeId) => onNavigate(`/recommendations?view=read&studentId=${encodeURIComponent(studentId)}&indicatorId=${encodeURIComponent(indicatorId)}&nodeId=${encodeURIComponent(nodeId)}`)} />
-      <TeacherCaseEditor run={run} reviews={reviews} onSaved={() => { setCaseRevision(revision => revision + 1); onDataChanged?.(); }} onDirtyChange={onDirtyChange} onBeforeScopeChange={onBeforeScopeChange} /></section>
+      <TeacherCaseEditor run={run} reviews={reviews} initialStudentId={student} onSaved={() => { setCaseRevision(revision => revision + 1); onDataChanged?.(); }} onDirtyChange={onDirtyChange} onBeforeScopeChange={onBeforeScopeChange} /></section>
     <section hidden={view !== 'report'} aria-label="阅读报告"><CaseReport key={`${caseRevision}:${dataRevision}`} run={run} ids={ids} onSelect={onSelect} /><ClassReport run={run} node={node} onNode={onNode} /></section>
     <section hidden={view !== 'check'} aria-label="交付检查"><ExportPanel key={JSON.stringify([ids, node, caseRevision, dataRevision])} students={run.students} runId={run.run_id} ids={ids} node={node} onNavigate={onNavigate} onExport={onExport} /></section>
   </div>;

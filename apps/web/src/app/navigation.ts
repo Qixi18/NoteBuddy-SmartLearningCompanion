@@ -20,6 +20,8 @@ export type NavigationState = {
   sourceLine?: number;
   caseStudentIds?: string[];
   reportNodeId?: string;
+  returnToCheck?: boolean;
+  releaseCheckId?: string;
 };
 
 const legacyPaths: Record<string, { path: RoutePath; view?: NavigationView }> = {
@@ -77,6 +79,11 @@ export function parseNavigationHash(hash: string): NavigationState {
   }
   const reportNodeId = safeId(params.get('reportNodeId'));
   if (reportNodeId) state.reportNodeId = reportNodeId;
+  const releaseCheckId = safeId(params.get('checkId'));
+  if (params.get('returnToCheck') === '1' && releaseCheckId) {
+    state.returnToCheck = true;
+    state.releaseCheckId = releaseCheckId;
+  }
   const line = Number(params.get('sourceLine'));
   if (Number.isSafeInteger(line) && line > 0) state.sourceLine = line;
   const rawCaseIds = params.getAll('caseId').slice(0, 3);
@@ -99,6 +106,10 @@ export function serializeNavigation(state: NavigationState): string {
   }
   const reportNodeId = safeId(state.reportNodeId ?? null);
   if (reportNodeId) params.set('reportNodeId', reportNodeId);
+  if (state.returnToCheck && safeId(state.releaseCheckId ?? null)) {
+    params.set('returnToCheck', '1');
+    params.set('checkId', safeId(state.releaseCheckId ?? null)!);
+  }
   if (Number.isSafeInteger(state.sourceLine) && (state.sourceLine ?? 0) > 0) params.set('sourceLine', String(state.sourceLine));
   for (const id of (state.caseStudentIds ?? []).slice(0, 3)) params.append('caseId', safeId(id) ?? '');
   const query = params.toString();

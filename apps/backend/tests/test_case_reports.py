@@ -91,6 +91,20 @@ def test_case_report_uses_confirmed_stored_evidence_and_review_snapshot(report_d
     assert report["reviews"][0]["source_verification_versions"] == {"I1": 1}
 
 
+def test_case_report_distinguishes_referenced_source_from_the_current_signoff(report_data):
+    run, case, _, reviews, sources = report_data
+    sources["I1"].append({"version": 2, "status": "verified", "stale": False})
+
+    report = build_case_report(run, case, reviews, sources)
+    review = report["reviews"][0]
+
+    assert review["source_status"] == "verified"
+    assert review["source_verification_versions"] == {"I1": 1}
+    assert review["current_source_status"] == "verified"
+    assert review["current_source_version"] == 2
+    assert review["source_validity"] == "changed"
+
+
 def test_case_report_refuses_to_promote_candidates_or_other_run_cases(report_data):
     run, _, _, reviews, sources = report_data
     with pytest.raises(ValueError, match="三名不同学生"):
