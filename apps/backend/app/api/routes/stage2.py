@@ -2,9 +2,10 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from ...application.use_cases.workbench import WorkbenchUseCases
+from ...repositories.stage2_repository import SourceVerificationVersionConflict
 from ...schemas.http import (
     SourceVerificationRequest,
     SourceVerificationResponse,
@@ -34,7 +35,10 @@ def source_verifications(use_cases: UseCases) -> dict:
     tags=["stage2"],
 )
 def verify_source(payload: SourceVerificationRequest, use_cases: UseCases) -> dict:
-    return use_cases.stage2.verify_source(payload.model_dump())
+    try:
+        return use_cases.stage2.verify_source(payload.model_dump())
+    except SourceVerificationVersionConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.get(

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { learningApi } from '../../../api/client';
 import type { AnalysisRun } from '../../../api/types';
@@ -61,6 +61,20 @@ describe('ObjectivesPanel source checks', () => {
   });
 
   it('shows the latest human signoff instead of the immutable run snapshot status', async () => {
+    const save = vi.spyOn(learningApi, 'saveSourceVerification').mockResolvedValue({
+      run_id: 'run-1',
+      indicator_id: 'T01I1',
+      status: 'verified',
+      curriculum_locator: '课标第 62 页',
+      textbook_locator: '教材第 68 页',
+      material_ids: ['Q001'],
+      knowledge_links: [],
+      rubric_mappings: [{ issue_id: 'combine_like_terms', rubric_point_ids: ['Q001P1'], status: 'verified' }],
+      reviewer: '数学教师甲',
+      reason: '已核对原页',
+      version: 2,
+      reviewed_at: '2026-11-20T00:00:00+00:00',
+    });
     vi.spyOn(learningApi, 'sourceVerifications').mockResolvedValue({
       T01I1: [{
         run_id: 'run-1',
@@ -70,6 +84,7 @@ describe('ObjectivesPanel source checks', () => {
         textbook_locator: '教材第 68 页',
         material_ids: ['Q001'],
         knowledge_links: [],
+        rubric_mappings: [{ issue_id: 'combine_like_terms', rubric_point_ids: ['Q001P1'], status: 'verified' }],
         reviewer: '数学教师甲',
         reason: '已核对原页',
         version: 1,
@@ -88,6 +103,16 @@ describe('ObjectivesPanel source checks', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /T01I1.*已核验/ })).toBeTruthy();
       expect(screen.getByText('指标关系状态：已核验。主题说明仅供定位；以指标级核验记录判断材料关系。')).toBeTruthy();
+      expect(screen.getByText(/评分点问题 combine_like_terms · Q001P1 · verified/)).toBeTruthy();
     });
+
+    fireEvent.click(screen.getByText('更新签核'));
+    const editor = screen.getByText(/评分点问题 combine_like_terms/).closest('section');
+    fireEvent.click(within(editor!).getByRole('button', { name: '确认本指标来源' }));
+    await waitFor(() => expect(save).toHaveBeenCalledWith(expect.objectContaining({
+      indicator_id: 'T01I1',
+      expected_version: 1,
+      rubric_mappings: [{ issue_id: 'combine_like_terms', rubric_point_ids: ['Q001P1'], status: 'verified' }],
+    })));
   });
 });

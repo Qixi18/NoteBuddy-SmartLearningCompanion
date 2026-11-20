@@ -1,1 +1,1 @@
-{"indicator_id":"T01I1","status":"verified","curriculum_locator":"课标正文第 12 页","textbook_locator":"教材第 80 页","material_ids":["M01"],"knowledge_links":[],"reviewer":"学科教师","reason":"已逐项核对原页与题目关联"}
+{"indicator_id":"T01I1","status":"verified","curriculum_locator":"课标正文第 12 页","textbook_locator":"教材第 80 页","material_ids":["M01"],"knowledge_links":[],"rubric_mappings":[{"issue_id":"combine_like_terms","rubric_point_ids":["M01P1","M02P2"],"status":"verified"}],"expected_version":0,"reviewer":"学科教师","reason":"已逐项核对原页与题目关联及评分点问题"}

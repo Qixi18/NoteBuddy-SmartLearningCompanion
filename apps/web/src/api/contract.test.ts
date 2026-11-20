@@ -59,6 +59,8 @@ describe('shared API fixtures', () => {
     const casePayload = teacherCaseFixture as unknown as TeacherCasePayload;
     expect(sourcePayload.status).toBe('verified');
     expect(sourcePayload.knowledge_links).toEqual([]);
+    expect(sourcePayload.rubric_mappings?.[0].rubric_point_ids).toEqual(['M01P1', 'M02P2']);
+    expect(sourcePayload.expected_version).toBe(0);
     expect(casePayload.review_refs[0]).toEqual({ indicator_id: 'T01I1', node_id: 'N01', version: 1 });
   });
 });

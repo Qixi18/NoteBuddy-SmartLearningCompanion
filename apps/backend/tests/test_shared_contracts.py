@@ -2,8 +2,6 @@ import json
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
-
 from app.schemas.http import (
     AnalysisRunResponse,
     ErrorResponse,
@@ -16,6 +14,7 @@ from app.schemas.http import (
     TeacherCaseRequest,
     TeacherCaseResponse,
 )
+from pydantic import ValidationError
 
 
 def test_shared_frontend_backend_contract_fixtures():
@@ -51,6 +50,7 @@ def test_shared_frontend_backend_contract_fixtures():
         SourceVerificationRequest.model_validate(source_verification).model_dump()
         == source_verification
     )
+    assert source_verification["rubric_mappings"][0]["status"] == "verified"
     assert TeacherCaseRequest.model_validate(teacher_case).model_dump() == teacher_case
     assert (
         SourceVerificationResponse.model_validate(

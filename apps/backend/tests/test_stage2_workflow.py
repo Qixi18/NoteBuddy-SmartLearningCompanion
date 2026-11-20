@@ -158,6 +158,34 @@ def test_unverified_source_and_unconfirmed_case_never_enter_confirmed_export(tmp
         assert json.loads(archive.read("confirmed_cases.json")) == []
 
 
+def test_source_verification_expected_version_rejects_stale_editor(tmp_path):
+    client = client_for(tmp_path)
+    payload = {
+        "indicator_id": "T01I1",
+        "status": "pending",
+        "material_ids": ["Q001"],
+        "reviewer": "数学教师甲",
+        "reason": "待逐页核对",
+    }
+    first = client.post(
+        "/api/source-verification", json={**payload, "expected_version": 0}
+    )
+    assert first.status_code == 200
+    assert first.json()["version"] == 1
+
+    stale = client.post(
+        "/api/source-verification", json={**payload, "expected_version": 0}
+    )
+    assert stale.status_code == 409
+    assert client.get("/api/source-verifications").json()["T01I1"] == [first.json()]
+
+    current = client.post(
+        "/api/source-verification", json={**payload, "expected_version": 1}
+    )
+    assert current.status_code == 200
+    assert current.json()["version"] == 2
+
+
 def test_confirmed_case_requires_teacher_content_evidence_and_review_reference(
     tmp_path,
 ):
@@ -514,4 +542,57 @@ def test_teaching_adjustment_rejects_wrong_student_or_node_evidence(tmp_path):
         },
     )
     assert wrong_origin.status_code == 400
+    client.close()
+
+
+def test_source_signoff_roundtrips_verified_rubric_issue_mappings(tmp_path):
+    from test_core import sample_tables
+
+    tables = sample_tables()
+    tables["题目与材料"][0]["评分点"] = "Q001P1 正确识别同类项 2分"
+    client = client_for(tmp_path, tables=tables)
+    payload = {
+        "indicator_id": "T01I1",
+        "status": "verified",
+        "curriculum_locator": "课标第62页",
+        "textbook_locator": "教材第68页",
+        "material_ids": ["Q001"],
+        "knowledge_links": [],
+        "rubric_mappings": [
+            {
+                "issue_id": "combine_like_terms",
+                "rubric_point_ids": ["Q001P1"],
+                "status": "verified",
+            }
+        ],
+        "reviewer": "数学教师甲",
+        "reason": "已核验题目评分点与共同问题对应关系",
+    }
+
+    invalid_payloads = (
+        {
+            **payload,
+            "rubric_mappings": [
+                {**payload["rubric_mappings"][0], "rubric_point_ids": ["Q999P1"]}
+            ],
+        },
+        {
+            **payload,
+            "rubric_mappings": [
+                payload["rubric_mappings"][0],
+                {**payload["rubric_mappings"][0], "issue_id": "duplicate_issue"},
+            ],
+        },
+    )
+    for invalid_payload in invalid_payloads:
+        rejected = client.post("/api/source-verification", json=invalid_payload)
+        assert rejected.status_code == 400
+    assert client.get("/api/source-verifications").json() == {}
+
+    saved = client.post("/api/source-verification", json=payload)
+
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["rubric_mappings"] == payload["rubric_mappings"]
+    history = client.get("/api/source-verifications").json()["T01I1"]
+    assert history[0]["rubric_mappings"] == payload["rubric_mappings"]
     client.close()

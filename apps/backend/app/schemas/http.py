@@ -76,6 +76,13 @@ class KnowledgeLink(BaseModel):
     evidence: str = Field(min_length=1)
 
 
+class RubricIssueMapping(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    issue_id: str = Field(min_length=1, max_length=200)
+    rubric_point_ids: list[str] = Field(min_length=1, max_length=50)
+    status: Literal["pending", "verified"] = "pending"
+
+
 class SourceVerificationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     indicator_id: str = Field(min_length=1)
@@ -84,6 +91,8 @@ class SourceVerificationRequest(BaseModel):
     textbook_locator: str = Field(default="", max_length=500)
     material_ids: list[str] = Field(default_factory=list)
     knowledge_links: list[KnowledgeLink] = Field(default_factory=list)
+    rubric_mappings: list[RubricIssueMapping] = Field(default_factory=list)
+    expected_version: int | None = Field(default=None, ge=0)
     reviewer: str = Field(default="", max_length=200)
     reason: str = Field(default="", max_length=4000)
 

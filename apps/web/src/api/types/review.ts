@@ -34,13 +34,14 @@ export interface SourceVerification {
   textbook_locator: string;
   material_ids: string[];
   knowledge_links: Array<{ target_indicator_id: string; relation: string; evidence: string }>;
+  rubric_mappings?: Array<{ issue_id: string; rubric_point_ids: string[]; status: 'pending' | 'verified' }>;
   reviewer: string;
   reason: string;
   version: number;
   reviewed_at: string;
 }
 
-export type SourceVerificationPayload = Omit<SourceVerification, 'run_id' | 'version' | 'reviewed_at'>;
+export type SourceVerificationPayload = Omit<SourceVerification, 'run_id' | 'version' | 'reviewed_at'> & { expected_version?: number };
 
 export interface TeacherCase {
   run_id: string;

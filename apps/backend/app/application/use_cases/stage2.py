@@ -1,5 +1,7 @@
 """Human signoff decisions tied to one immutable analysis run."""
 
+import re
+
 
 class Stage2Decisions:
     def __init__(self, uow_factory):
@@ -17,6 +19,7 @@ class Stage2Decisions:
 
     def verify_source(self, payload: dict) -> dict:
         with self.uow_factory() as uow:
+            expected_version = payload.pop("expected_version", None)
             run = uow.runs.current()
             indicator_id = payload["indicator_id"]
             objectives = {row["指标编号"] for row in run["objectives"]}
@@ -32,6 +35,31 @@ class Stage2Decisions:
                 raise ValueError("核验包含非当前指标关联的题目")
             if len(material_ids) != len(payload["material_ids"]):
                 raise ValueError("核验题目编号重复")
+            rubric_point_ids = {
+                point_id
+                for item in run["items"]
+                if item["材料编号"] in linked
+                for point_id in re.findall(
+                    r"[A-Z]+\d+P\d+", str(item.get("评分点", ""))
+                )
+            }
+            mappings = payload.get("rubric_mappings", [])
+            issue_ids = [mapping["issue_id"] for mapping in mappings]
+            if len(issue_ids) != len(set(issue_ids)):
+                raise ValueError("评分点问题编号重复")
+            mapped_points = [
+                point_id
+                for mapping in mappings
+                for point_id in mapping["rubric_point_ids"]
+            ]
+            if len(mapped_points) != len(set(mapped_points)):
+                raise ValueError("评分点不能重复映射到多个问题")
+            if not set(mapped_points).issubset(rubric_point_ids):
+                raise ValueError("评分点问题映射包含未知或非当前指标评分点")
+            if payload["status"] != "verified" and any(
+                mapping["status"] == "verified" for mapping in mappings
+            ):
+                raise ValueError("评分点问题映射须随已核验来源一并确认")
             for relation in payload["knowledge_links"]:
                 if (
                     relation["target_indicator_id"] not in objectives
@@ -56,7 +84,9 @@ class Stage2Decisions:
                     for relation in payload["knowledge_links"]
                 ):
                     raise ValueError("知识联系须记录核验依据")
-            return uow.stage2.append_source(run["run_id"], indicator_id, payload)
+            return uow.stage2.append_source(
+                run["run_id"], indicator_id, payload, expected_version=expected_version
+            )
 
     def save_case(self, payload: dict) -> dict:
         with self.uow_factory() as uow:
