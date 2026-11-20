@@ -1,44 +1,93 @@
 import { useEffect, useState } from 'react';
 import { learningApi } from '../../api/client';
-import type { CaseSuggestion, Student } from '../../api/types';
+import type { ReleasePreflight, Student } from '../../api/types';
+import type { RoutePath } from '../../app/navigation';
 import { Panel } from '../../components/Panel';
-export function ExportPanel({ students, suggestions, runId = '', nodes = [], onExport }: { students: Student[]; suggestions: CaseSuggestion[]; runId?: string; nodes?: Array<{ '节点编号': string }>; onExport: (ids: string[]) => void }) {
-  const [ids, setIds] = useState<string[]>(['', '', '']);
-  const [node, setNode] = useState(nodes[0]?.['节点编号'] ?? '');
+
+const checkActions: Record<string, { label: string } & ({ target: string } | { route: RoutePath })> = {
+  confirmed_cases: { label: '前往案例确认', target: 'teacher-cases' },
+  evidence_references: { label: '前往案例证据签核', target: 'teacher-cases' },
+  teacher_reviews: { label: '前往建议复核', route: '/plan/reviews' },
+  source_signoffs: { label: '前往来源核验', route: '/knowledge/indicators' },
+  case_report: { label: '查看案例报告', target: 'case-report' },
+  class_report: { label: '查看班级报告', target: 'class-report' },
+};
+
+type ExportProps = {
+  students: Student[];
+  runId: string;
+  ids: string[];
+  node: string;
+  onNavigate: (path: RoutePath) => void;
+  onExport: (ids: string[]) => void;
+};
+
+export function ExportPanel({ students, runId, ids, node, onNavigate, onExport }: ExportProps) {
   const [reviewer, setReviewer] = useState('');
   const [contentReviewed, setContentReviewed] = useState(false);
-  const [preflight, setPreflight] = useState<Awaited<ReturnType<typeof learningApi.releaseChecks>> | null>(null);
-  const [releaseError, setReleaseError] = useState('');
+  const [result, setResult] = useState<{ scope: string; preflight?: ReleasePreflight; error?: string }>();
+  const [downloadError, setDownloadError] = useState('');
   const [exporting, setExporting] = useState(false);
-  const options = students.map(item => item['学生编号']);
-  const choose = (index: number, value: string) => setIds(old => { const next = [...old]; next[index] = value; return next; });
-  const selected = [0, 1, 2].map(index => ids[index] || '');
-  const uniqueReady = selected.every(id => Boolean(id) && options.includes(id)) && new Set(selected).size === 3;
+  const [retry, setRetry] = useState(0);
+  const uniqueReady = ids.length === 3 && new Set(ids).size === 3
+    && ids.every(id => id && students.some(student => student['学生编号'] === id));
+  const signer = contentReviewed ? reviewer.trim() : '';
+  const scope = JSON.stringify([runId, ids, node, signer, contentReviewed, retry]);
+  const current = result?.scope === scope ? result : undefined;
+  const preflight = current?.preflight;
+
   useEffect(() => {
+    if (!uniqueReady || !node) return;
     let active = true;
-    setPreflight(null);
-    setReleaseError('');
-    if (!uniqueReady || !node) return () => { active = false; };
-    learningApi.releaseChecks(selected, node, reviewer, contentReviewed)
-      .then(value => { if (active) setPreflight(value); })
-      .catch(reason => { if (active) setReleaseError(reason instanceof Error ? reason.message : String(reason)); });
+    learningApi.releaseChecks(ids, node, signer, contentReviewed).then(value => {
+      if (!active) return;
+      if (value.run_id !== runId || value.node_id !== node || value.case_ids.length !== ids.length || ids.some(id => !value.case_ids.includes(id))) {
+        setResult({ scope, error: '预检返回的范围已变化，请刷新当前数据批次。' });
+      } else {
+        setResult({ scope, preflight: value });
+      }
+    }).catch(reason => {
+      if (active) setResult({ scope, error: reason instanceof Error ? reason.message : String(reason) });
+    });
     return () => { active = false; };
-  }, [uniqueReady, selected.join('|'), node, reviewer, contentReviewed, runId]);
+  }, [uniqueReady, ids, node, signer, contentReviewed, runId, scope]);
+
+  const canExportFormal = Boolean(preflight && preflight.release_status !== 'blocked'
+    && !preflight.checks.some(check => check.status === 'blocked') && contentReviewed && signer);
+
   const exportFormal = async () => {
-    if (!preflight || !contentReviewed || !reviewer.trim() || preflight.run_id !== runId) return;
-    setExporting(true); setReleaseError('');
+    if (!preflight || !canExportFormal || exporting) return;
+    setExporting(true);
+    setDownloadError('');
     try {
-      const archive = await learningApi.exportSubmission({ run_id: runId, case_ids: selected, node_id: node, preflight_fingerprint: preflight.fingerprint, reviewer, content_reviewed: contentReviewed });
+      const archive = await learningApi.exportSubmission({
+        run_id: runId, case_ids: ids, node_id: node, preflight_fingerprint: preflight.fingerprint,
+        reviewer: signer, content_reviewed: contentReviewed,
+      });
       const url = URL.createObjectURL(archive);
-      const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'smart-learning-submission.zip'; anchor.click(); URL.revokeObjectURL(url);
-    } catch (reason) { setReleaseError(reason instanceof Error ? reason.message : String(reason)); }
-    finally { setExporting(false); }
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = 'smart-learning-submission.zip';
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (reason) {
+      setDownloadError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setExporting(false);
+    }
   };
-  const canExportFormal = Boolean(preflight && preflight.run_id === runId && !preflight.checks.some(check => check.status === 'blocked') && contentReviewed && reviewer.trim());
-  return <Panel title="三名案例与成果导出" className="export-panel"><p className="muted">上方可查看 {suggestions.length} 位系统候选及其证据。旧案例包保留为草稿导出；正式提交包须通过服务端预检并由内容负责人签核。</p>
-    <div className="export-slots">{[0, 1, 2].map(index => <label className="export-slot" key={index}>案例{['一', '二', '三'][index]}<select value={selected[index]} onChange={event => choose(index, event.target.value)}><option value="">请选择学生</option>{options.map(id => <option key={id} value={id}>{id}</option>)}</select></label>)}</div>
-    {!uniqueReady && <p className="muted" role="status">请选择三名不同的学生。重复选择会阻止导出。</p>}
-    <p className="muted">下载的是三名所选学生的案例包：学生作答与指标数据仅含这三人；班级统计列出其所属班级的整班汇总，可能包含其他同学的聚合贡献，不包含其个人作答。成果包不包含完整运行审计数据，也不自动生成完整案例叙述。</p>
+
+  return <Panel id="release-checks" title="成果包与发布预检" className="export-panel">
+    <dl className="release-scope">
+      <div><dt>案例学生</dt><dd>{ids.filter(Boolean).join('、') || '尚未选择'}</dd></div>
+      <div><dt>班级报告节点</dt><dd>{node || '尚未选择'}</dd></div>
+      <div><dt>数据批次</dt><dd><code>{runId}</code></dd></div>
+    </dl>
+    <div className="report-links">
+      <button className="text-action" onClick={() => document.getElementById('case-report')?.focus()}>选择报告学生</button>
+      <button className="text-action" onClick={() => document.getElementById('class-report')?.focus()}>选择班级报告节点</button>
+    </div>
+    <p className="muted">草稿包收录所选三人的个人记录及其班级汇总，不包含完整运行审计数据。正式包还需完成服务端预检和内容签核。</p>
     <details className="export-preview"><summary>查看成果包内容与字段口径</summary>
       <ul>
         <li><strong>运行与质量：</strong><code>manifest.json</code>、<code>data_quality.json</code>、<code>field_dictionary.json</code></li>
@@ -50,11 +99,49 @@ export function ExportPanel({ students, suggestions, runId = '', nodes = [], onE
       </ul>
       <p className="muted">案例叙述仍需人工补充背景、证据解释和课堂反思；字段口径文件说明有效评分分母、节点统计及待复核状态。</p>
     </details>
-    <button disabled={!uniqueReady} onClick={() => onExport(selected)}>下载成果包</button>
-    <section className="release-preflight" aria-label="正式提交发布预检"><h3>正式提交发布预检</h3><label>班级报告节点<select aria-label="正式提交班级报告节点" value={node} onChange={event => setNode(event.target.value)}>{nodes.map(item => <option key={item['节点编号']} value={item['节点编号']}>{item['节点编号']}</option>)}</select></label><label>内容负责人<input aria-label="内容负责人姓名" value={reviewer} onChange={event => setReviewer(event.target.value)} placeholder="填写逐页审阅报告的负责人" /></label><label className="check-row"><input type="checkbox" checked={contentReviewed} onChange={event => setContentReviewed(event.target.checked)} />我已逐页审阅三案例和班级报告，确认事实、解释及限制</label>
-      {!uniqueReady && <p className="muted">先选择三名不同学生，再运行发布预检。</p>}
-      {releaseError && <p role="alert" className="error">{releaseError}</p>}
-      {preflight && <><p className={`release-status release-${preflight.release_status}`} role="status">{preflight.release_status === 'blocked' ? '存在阻断项，不能生成正式成果包。' : preflight.release_status === 'ready_with_open_checks' ? '机器检查通过；仍有未完成的人工验收项，包内会明确保留。' : '发布检查全部通过。'}</p><ul className="release-check-list">{preflight.checks.map(check => <li className={`release-check status-${check.status}`} key={check.id}><strong>{check.status === 'passed' ? '通过' : check.status === 'blocked' ? '阻断' : '待检查'} · {check.label}</strong><p>{check.detail}</p></li>)}</ul><button disabled={!canExportFormal || exporting} onClick={() => void exportFormal()}>{exporting ? '正在生成正式成果包…' : '下载正式提交包'}</button></>}
+    <button className="secondary" disabled={!uniqueReady} onClick={() => onExport(ids)}>下载草稿成果包</button>
+    <section className="release-preflight" aria-label="正式提交发布预检">
+      <h3>正式提交发布预检</h3>
+      {(!uniqueReady || !node) && <p className="muted" role="status">请先在报告中选择三名不同学生和一个班级报告节点。</p>}
+      {uniqueReady && node && !current && <p className="muted" role="status">正在校验当前发布范围…</p>}
+      {current?.error && <div className="actions">
+        <p role="alert" className="error">预检失败：{current.error}</p>
+        <button className="secondary" onClick={() => setRetry(attempt => attempt + 1)}>重试预检</button>
+      </div>}
+      {preflight && <>
+        <p className={`release-status release-${preflight.release_status}`} role="status">
+          {preflight.release_status === 'blocked' ? '存在阻断项，不能生成正式成果包。'
+            : preflight.release_status === 'ready_with_open_checks' ? '机器检查通过；仍有未完成的人工验收项，包内会明确保留。'
+              : '发布检查全部通过。'}
+        </p>
+        <ul className="release-check-list">{preflight.checks.map(check => {
+          const action = checkActions[check.id];
+          return <li className={`release-check status-${check.status}`} key={check.id}>
+            <strong>{check.status === 'passed' ? '通过' : check.status === 'blocked' ? '阻断' : '待检查'} · {check.label}</strong>
+            <p>{check.detail}</p>
+            {check.status === 'blocked' && action && <button className="text-action" onClick={() => {
+              if ('route' in action) onNavigate(action.route);
+              else document.getElementById(action.target)?.focus();
+            }}>{action.label} <span aria-hidden="true">↗</span></button>}
+          </li>;
+        })}</ul>
+      </>}
+      <div className="release-signoff" id="release-signoff">
+        <label>内容负责人<input aria-label="内容负责人姓名" value={reviewer} onChange={event => {
+          setReviewer(event.target.value);
+          setContentReviewed(false);
+          setDownloadError('');
+        }} placeholder="填写审阅报告的负责人" /></label>
+        <label className="check-row"><input type="checkbox" checked={contentReviewed}
+          disabled={!uniqueReady || !node || !reviewer.trim()}
+          onChange={event => { setContentReviewed(event.target.checked); setDownloadError(''); }} />
+          我已逐页审阅三案例和班级报告，确认事实、解释及限制
+        </label>
+      </div>
+      {downloadError && <p role="alert" className="error">{downloadError}</p>}
+      <button disabled={!canExportFormal || exporting} onClick={() => void exportFormal()}>
+        {exporting ? '正在生成正式成果包…' : '下载正式提交包'}
+      </button>
     </section>
   </Panel>;
 }

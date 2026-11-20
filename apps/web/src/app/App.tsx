@@ -16,6 +16,9 @@ export function App() {
   const workbench = useWorkbench();
   const [path, setPath] = useState<RoutePath>(() => normalizeHash(window.location.hash));
   const [importOpen, setImportOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const sidebar = useRef<HTMLElement>(null);
   const [focusEvidence, setFocusEvidence] = useState<{ recordId: string; sourceLine: number } | null>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -27,6 +30,7 @@ export function App() {
       const next = normalizeHash(window.location.hash);
       if (window.location.hash !== `#${next}`) window.history.replaceState(null, '', `#${next}`);
       setPath(next);
+      setNavOpen(false);
     };
     if (!window.location.hash) window.history.replaceState(null, '', '#/home');
     else sync();
@@ -51,9 +55,21 @@ export function App() {
     } else if (dialogRef.current?.open) dialogRef.current.close();
   }, [importOpen]);
 
+  useEffect(() => {
+    if (!navOpen) return;
+    const wideLayout = window.matchMedia('(min-width: 821px)');
+    if (wideLayout.matches) { setNavOpen(false); return; }
+    const currentLink = sidebar.current?.querySelector<HTMLElement>('[aria-current="page"]');
+    (currentLink ?? sidebar.current?.querySelector<HTMLElement>('.nav-link.active'))?.focus();
+    const closeOnResize = () => { if (wideLayout.matches) setNavOpen(false); };
+    wideLayout.addEventListener('change', closeOnResize);
+    return () => wideLayout.removeEventListener('change', closeOnResize);
+  }, [navOpen]);
+
   const navigate = (next: RoutePath) => {
+    setNavOpen(false);
     if (path !== next) window.location.hash = next;
-    else titleRef.current?.focus();
+    else window.requestAnimationFrame(() => titleRef.current?.focus());
   };
   const imported = async (id: string) => {
     const refreshed = await workbench.refresh();
@@ -66,8 +82,14 @@ export function App() {
     workbench.announce('数据已导入，当前运行已更新。');
   };
 
-  return <div className="workbench-shell">
-    <aside className="sidebar" aria-label="主导航">
+  return <div className="workbench-shell" onKeyDown={event => {
+    if (event.key === 'Escape' && navOpen && !importOpen) {
+      event.preventDefault();
+      setNavOpen(false);
+      menuButton.current?.focus();
+    }
+  }}>
+    <aside id="workbench-navigation" ref={sidebar} className={`sidebar${navOpen ? ' is-open' : ''}`} aria-label="主导航">
       <a className="brand" href="#/home" onClick={event => { event.preventDefault(); navigate('/home'); }}><span className="brand-mark" aria-hidden="true">知</span><span>智慧学伴<small>证据工作台</small></span></a>
       <nav aria-label="主要功能">
         {primary.map(item => {
@@ -75,16 +97,25 @@ export function App() {
           const children = routes.filter(route => route.section === item.title && route.title !== item.title);
           return <div className="nav-group" key={item.title}>
             <a className={`nav-link${active ? ' active' : ''}`} href={`#${item.path}`} aria-current={active && path === item.path ? 'page' : undefined} onClick={event => { event.preventDefault(); navigate(item.path); }}><NavIcon name={item.icon} /><span>{item.title}</span></a>
-            {active && children.length > 0 && <div className="subnav" aria-label={`${item.title}子页面`}>{children.map(child => <a key={child.path} className={`subnav-link${path === child.path ? ' active' : ''}`} href={`#${child.path}`} aria-current={path === child.path ? 'page' : undefined} onClick={event => { event.preventDefault(); navigate(child.path); }}>{child.title}</a>)}</div>}
+            {children.length > 0 && <div className={`subnav${active ? ' is-current' : ''}`} aria-label={`${item.title}子页面`}>{children.map(child => <a key={child.path} className={`subnav-link${path === child.path ? ' active' : ''}`} href={`#${child.path}`} aria-current={path === child.path ? 'page' : undefined} onClick={event => { event.preventDefault(); navigate(child.path); }}>{child.title}</a>)}</div>}
           </div>;
         })}
       </nav>
       <div className="sidebar-note"><span className="local-state-dot" aria-hidden="true" />本地工作台</div>
     </aside>
+    {navOpen && <div className="mobile-nav-backdrop" aria-hidden="true" onClick={() => {
+      setNavOpen(false);
+      menuButton.current?.focus();
+    }} />}
 
     <div className="workspace">
-      <header className="topbar"><div className="breadcrumb">智慧学伴 <span aria-hidden="true">/</span> {page.section}{page.title !== page.section && <> <span aria-hidden="true">/</span> {page.title}</>}</div><div className="topbar-actions">{workbench.run && <span className="local-processing"><span aria-hidden="true" />本地数据</span>}{workbench.run && <button className="topbar-import" onClick={() => setImportOpen(true)}>导入数据</button>}</div></header>
-      <main className="page-content">
+      <header className="topbar">
+        <button ref={menuButton} type="button" className="secondary mobile-menu" aria-expanded={navOpen} aria-controls="workbench-navigation" onClick={() => setNavOpen(open => !open)}>
+          <span className="menu-glyph" aria-hidden="true" /> 导航
+        </button>
+        <span className="mobile-brand">智慧学伴</span>
+        <div className="breadcrumb">智慧学伴 <span aria-hidden="true">/</span> {page.section}{page.title !== page.section && <> <span aria-hidden="true">/</span> {page.title}</>}</div><div className="topbar-actions">{workbench.run && <span className="local-processing"><span aria-hidden="true" />本地数据</span>}{workbench.run && <button className="topbar-import" onClick={() => { setNavOpen(false); setImportOpen(true); }}>导入数据</button>}</div></header>
+      <main className="page-content" inert={navOpen}>
         {workbench.run && <div className="page-heading"><div><h1 ref={titleRef} tabIndex={-1}>{page.title}</h1><p>{page.description}</p></div><details className="run-details"><summary><span className="run-details-label">当前数据批次</span><strong>{new Date(workbench.run.created_at).toLocaleDateString('zh-CN')}</strong><span className="run-chevron" aria-hidden="true" /></summary><div className="run-details-popover"><span>运行编号</span><code>{workbench.run.run_id}</code><span>规则版本 {workbench.run.rule_version}</span></div></details></div>}
         {workbench.message && <p id="message" className={`global-message${workbench.error ? ' error' : ''}`} role={workbench.error ? 'alert' : 'status'} aria-live={workbench.error ? 'assertive' : 'polite'}>{workbench.message}</p>}
         {workbench.error && workbench.run && <div className="retry-row"><button className="secondary" onClick={() => void workbench.refresh()}>重试读取当前运行</button></div>}
