@@ -1,0 +1,27 @@
+{
+  "student_count": 40,
+  "class_count": 2,
+  "node_count": 2,
+  "indicator_count": 9,
+  "item_count": 65,
+  "record_count": 806,
+  "event_count": 799,
+  "disposition_counts": {
+    "excluded": 4,
+    "pending": 4,
+    "scored": 786,
+    "superseded": 7,
+    "unanswered": 5
+  },
+  "scored_record_count": 786,
+  "scored_points": 744,
+  "scored_maximum": 1304,
+  "file_sha256": {
+    "课程要求.csv": "1a2e43dad2d9741e2c30268a56b4ae1d0905fa63e5ced871e138ea921a02cf11",
+    "题目与材料.csv": "787147c2610c6cee7a4424af46e6fa469c3dd7d496392fe139becd8f433acb19",
+    "模拟学生.csv": "fc497cd9e4e731b695ec6f300916e17c154243abeef9af43b456aa1ae9d7964b",
+    "测验节点.csv": "4eba902326d9e22582b162f345f67abfe1c6dc3efae1e208717c0cc8e782ff0b",
+    "作答记录.csv": "fb055bdcb0e83524f6e02c42713c9cf580a8c490a7fa609c31ab7b3ec43cf2be",
+    "字段说明.csv": "4771809373818fd5a729e111fd7e70e2cdccb85c1631ea75adc2707e57455966"
+  }
+}
