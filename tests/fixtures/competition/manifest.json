@@ -1,0 +1,1539 @@
+{
+  "schema_version": "1.0",
+  "dataset_id": "synthetic-contract-v1",
+  "dataset_kind": "synthetic",
+  "description": "Synthetic contract fixture; not official contest data or subject-matter validation.",
+  "cases_sha256": "744e325ef6d3019f435c7d2a8391b19ae2e5e13a5c7b215f415074628fe3717c",
+  "cases": [
+    {
+      "case_id": "R01",
+      "theme": "fractions",
+      "need_type": "concept",
+      "variant": "V1",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R01",
+        "indicator_id": "I-fractions",
+        "node_id": "N-V1"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R01-1",
+          "EV-R01-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R01-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-fractions-concept"
+        ],
+        "required_material_ids": [
+          "MAT-fractions-concept"
+        ],
+        "required_claim_ids": [
+          "FACT-R01"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R02",
+      "theme": "fractions",
+      "need_type": "concept",
+      "variant": "V2",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R02",
+        "indicator_id": "I-fractions",
+        "node_id": "N-V2"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R02-1",
+          "EV-R02-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R02-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-fractions-concept"
+        ],
+        "required_material_ids": [
+          "MAT-fractions-concept"
+        ],
+        "required_claim_ids": [
+          "FACT-R02"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R03",
+      "theme": "fractions",
+      "need_type": "concept",
+      "variant": "V3",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R03",
+        "indicator_id": "I-fractions",
+        "node_id": "N-V3"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R03-1",
+          "EV-R03-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R03-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-fractions-concept"
+        ],
+        "required_material_ids": [
+          "MAT-fractions-concept"
+        ],
+        "required_claim_ids": [
+          "FACT-R03"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R04",
+      "theme": "fractions",
+      "need_type": "concept",
+      "variant": "V4",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R04",
+        "indicator_id": "I-fractions",
+        "node_id": "N-V4"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R04-1",
+          "EV-R04-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R04-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-fractions-concept"
+        ],
+        "required_material_ids": [
+          "MAT-fractions-concept"
+        ],
+        "required_claim_ids": [
+          "FACT-R04"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R05",
+      "theme": "fractions",
+      "need_type": "procedure",
+      "variant": "V1",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R05",
+        "indicator_id": "I-fractions",
+        "node_id": "N-V1"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R05-1",
+          "EV-R05-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R05-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-fractions-procedure"
+        ],
+        "required_material_ids": [
+          "MAT-fractions-procedure"
+        ],
+        "required_claim_ids": [
+          "FACT-R05"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R06",
+      "theme": "fractions",
+      "need_type": "procedure",
+      "variant": "V2",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R06",
+        "indicator_id": "I-fractions",
+        "node_id": "N-V2"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R06-1",
+          "EV-R06-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R06-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-fractions-procedure"
+        ],
+        "required_material_ids": [
+          "MAT-fractions-procedure"
+        ],
+        "required_claim_ids": [
+          "FACT-R06"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R07",
+      "theme": "fractions",
+      "need_type": "procedure",
+      "variant": "V3",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R07",
+        "indicator_id": "I-fractions",
+        "node_id": "N-V3"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R07-1",
+          "EV-R07-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R07-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-fractions-procedure"
+        ],
+        "required_material_ids": [
+          "MAT-fractions-procedure"
+        ],
+        "required_claim_ids": [
+          "FACT-R07"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R08",
+      "theme": "fractions",
+      "need_type": "procedure",
+      "variant": "V4",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R08",
+        "indicator_id": "I-fractions",
+        "node_id": "N-V4"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R08-1",
+          "EV-R08-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R08-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-fractions-procedure"
+        ],
+        "required_material_ids": [
+          "MAT-fractions-procedure"
+        ],
+        "required_claim_ids": [
+          "FACT-R08"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R09",
+      "theme": "fractions",
+      "need_type": "transfer",
+      "variant": "V1",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R09",
+        "indicator_id": "I-fractions",
+        "node_id": "N-V1"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R09-1",
+          "EV-R09-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R09-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-fractions-transfer"
+        ],
+        "required_material_ids": [
+          "MAT-fractions-transfer"
+        ],
+        "required_claim_ids": [
+          "FACT-R09"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R10",
+      "theme": "fractions",
+      "need_type": "transfer",
+      "variant": "V2",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R10",
+        "indicator_id": "I-fractions",
+        "node_id": "N-V2"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R10-1",
+          "EV-R10-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R10-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-fractions-transfer"
+        ],
+        "required_material_ids": [
+          "MAT-fractions-transfer"
+        ],
+        "required_claim_ids": [
+          "FACT-R10"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R11",
+      "theme": "fractions",
+      "need_type": "transfer",
+      "variant": "V3",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R11",
+        "indicator_id": "I-fractions",
+        "node_id": "N-V3"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R11-1",
+          "EV-R11-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R11-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-fractions-transfer"
+        ],
+        "required_material_ids": [
+          "MAT-fractions-transfer"
+        ],
+        "required_claim_ids": [
+          "FACT-R11"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R12",
+      "theme": "fractions",
+      "need_type": "transfer",
+      "variant": "V4",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R12",
+        "indicator_id": "I-fractions",
+        "node_id": "N-V4"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R12-1",
+          "EV-R12-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R12-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-fractions-transfer"
+        ],
+        "required_material_ids": [
+          "MAT-fractions-transfer"
+        ],
+        "required_claim_ids": [
+          "FACT-R12"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R13",
+      "theme": "geometry",
+      "need_type": "concept",
+      "variant": "V1",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R13",
+        "indicator_id": "I-geometry",
+        "node_id": "N-V1"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R13-1",
+          "EV-R13-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R13-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-geometry-concept"
+        ],
+        "required_material_ids": [
+          "MAT-geometry-concept"
+        ],
+        "required_claim_ids": [
+          "FACT-R13"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R14",
+      "theme": "geometry",
+      "need_type": "concept",
+      "variant": "V2",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R14",
+        "indicator_id": "I-geometry",
+        "node_id": "N-V2"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R14-1",
+          "EV-R14-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R14-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-geometry-concept"
+        ],
+        "required_material_ids": [
+          "MAT-geometry-concept"
+        ],
+        "required_claim_ids": [
+          "FACT-R14"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R15",
+      "theme": "geometry",
+      "need_type": "concept",
+      "variant": "V3",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R15",
+        "indicator_id": "I-geometry",
+        "node_id": "N-V3"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R15-1",
+          "EV-R15-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R15-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-geometry-concept"
+        ],
+        "required_material_ids": [
+          "MAT-geometry-concept"
+        ],
+        "required_claim_ids": [
+          "FACT-R15"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R16",
+      "theme": "geometry",
+      "need_type": "concept",
+      "variant": "V4",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R16",
+        "indicator_id": "I-geometry",
+        "node_id": "N-V4"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R16-1",
+          "EV-R16-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R16-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-geometry-concept"
+        ],
+        "required_material_ids": [
+          "MAT-geometry-concept"
+        ],
+        "required_claim_ids": [
+          "FACT-R16"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R17",
+      "theme": "geometry",
+      "need_type": "procedure",
+      "variant": "V1",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R17",
+        "indicator_id": "I-geometry",
+        "node_id": "N-V1"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R17-1",
+          "EV-R17-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R17-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-geometry-procedure"
+        ],
+        "required_material_ids": [
+          "MAT-geometry-procedure"
+        ],
+        "required_claim_ids": [
+          "FACT-R17"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R18",
+      "theme": "geometry",
+      "need_type": "procedure",
+      "variant": "V2",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R18",
+        "indicator_id": "I-geometry",
+        "node_id": "N-V2"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R18-1",
+          "EV-R18-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R18-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-geometry-procedure"
+        ],
+        "required_material_ids": [
+          "MAT-geometry-procedure"
+        ],
+        "required_claim_ids": [
+          "FACT-R18"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R19",
+      "theme": "geometry",
+      "need_type": "procedure",
+      "variant": "V3",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R19",
+        "indicator_id": "I-geometry",
+        "node_id": "N-V3"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R19-1",
+          "EV-R19-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R19-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-geometry-procedure"
+        ],
+        "required_material_ids": [
+          "MAT-geometry-procedure"
+        ],
+        "required_claim_ids": [
+          "FACT-R19"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R20",
+      "theme": "geometry",
+      "need_type": "procedure",
+      "variant": "V4",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R20",
+        "indicator_id": "I-geometry",
+        "node_id": "N-V4"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R20-1",
+          "EV-R20-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R20-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-geometry-procedure"
+        ],
+        "required_material_ids": [
+          "MAT-geometry-procedure"
+        ],
+        "required_claim_ids": [
+          "FACT-R20"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R21",
+      "theme": "geometry",
+      "need_type": "transfer",
+      "variant": "V1",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R21",
+        "indicator_id": "I-geometry",
+        "node_id": "N-V1"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R21-1",
+          "EV-R21-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R21-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-geometry-transfer"
+        ],
+        "required_material_ids": [
+          "MAT-geometry-transfer"
+        ],
+        "required_claim_ids": [
+          "FACT-R21"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R22",
+      "theme": "geometry",
+      "need_type": "transfer",
+      "variant": "V2",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R22",
+        "indicator_id": "I-geometry",
+        "node_id": "N-V2"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R22-1",
+          "EV-R22-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R22-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-geometry-transfer"
+        ],
+        "required_material_ids": [
+          "MAT-geometry-transfer"
+        ],
+        "required_claim_ids": [
+          "FACT-R22"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R23",
+      "theme": "geometry",
+      "need_type": "transfer",
+      "variant": "V3",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R23",
+        "indicator_id": "I-geometry",
+        "node_id": "N-V3"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R23-1",
+          "EV-R23-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R23-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-geometry-transfer"
+        ],
+        "required_material_ids": [
+          "MAT-geometry-transfer"
+        ],
+        "required_claim_ids": [
+          "FACT-R23"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R24",
+      "theme": "geometry",
+      "need_type": "transfer",
+      "variant": "V4",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R24",
+        "indicator_id": "I-geometry",
+        "node_id": "N-V4"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R24-1",
+          "EV-R24-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R24-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-geometry-transfer"
+        ],
+        "required_material_ids": [
+          "MAT-geometry-transfer"
+        ],
+        "required_claim_ids": [
+          "FACT-R24"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R25",
+      "theme": "statistics",
+      "need_type": "concept",
+      "variant": "V1",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R25",
+        "indicator_id": "I-statistics",
+        "node_id": "N-V1"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R25-1",
+          "EV-R25-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R25-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-statistics-concept"
+        ],
+        "required_material_ids": [
+          "MAT-statistics-concept"
+        ],
+        "required_claim_ids": [
+          "FACT-R25"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R26",
+      "theme": "statistics",
+      "need_type": "concept",
+      "variant": "V2",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R26",
+        "indicator_id": "I-statistics",
+        "node_id": "N-V2"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R26-1",
+          "EV-R26-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R26-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-statistics-concept"
+        ],
+        "required_material_ids": [
+          "MAT-statistics-concept"
+        ],
+        "required_claim_ids": [
+          "FACT-R26"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R27",
+      "theme": "statistics",
+      "need_type": "concept",
+      "variant": "V3",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R27",
+        "indicator_id": "I-statistics",
+        "node_id": "N-V3"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R27-1",
+          "EV-R27-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R27-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-statistics-concept"
+        ],
+        "required_material_ids": [
+          "MAT-statistics-concept"
+        ],
+        "required_claim_ids": [
+          "FACT-R27"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R28",
+      "theme": "statistics",
+      "need_type": "concept",
+      "variant": "V4",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R28",
+        "indicator_id": "I-statistics",
+        "node_id": "N-V4"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R28-1",
+          "EV-R28-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R28-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-statistics-concept"
+        ],
+        "required_material_ids": [
+          "MAT-statistics-concept"
+        ],
+        "required_claim_ids": [
+          "FACT-R28"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R29",
+      "theme": "statistics",
+      "need_type": "procedure",
+      "variant": "V1",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R29",
+        "indicator_id": "I-statistics",
+        "node_id": "N-V1"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R29-1",
+          "EV-R29-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R29-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-statistics-procedure"
+        ],
+        "required_material_ids": [
+          "MAT-statistics-procedure"
+        ],
+        "required_claim_ids": [
+          "FACT-R29"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R30",
+      "theme": "statistics",
+      "need_type": "procedure",
+      "variant": "V2",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R30",
+        "indicator_id": "I-statistics",
+        "node_id": "N-V2"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R30-1",
+          "EV-R30-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R30-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-statistics-procedure"
+        ],
+        "required_material_ids": [
+          "MAT-statistics-procedure"
+        ],
+        "required_claim_ids": [
+          "FACT-R30"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R31",
+      "theme": "statistics",
+      "need_type": "procedure",
+      "variant": "V3",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R31",
+        "indicator_id": "I-statistics",
+        "node_id": "N-V3"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R31-1",
+          "EV-R31-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R31-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-statistics-procedure"
+        ],
+        "required_material_ids": [
+          "MAT-statistics-procedure"
+        ],
+        "required_claim_ids": [
+          "FACT-R31"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R32",
+      "theme": "statistics",
+      "need_type": "procedure",
+      "variant": "V4",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R32",
+        "indicator_id": "I-statistics",
+        "node_id": "N-V4"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R32-1",
+          "EV-R32-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R32-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-statistics-procedure"
+        ],
+        "required_material_ids": [
+          "MAT-statistics-procedure"
+        ],
+        "required_claim_ids": [
+          "FACT-R32"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R33",
+      "theme": "statistics",
+      "need_type": "transfer",
+      "variant": "V1",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R33",
+        "indicator_id": "I-statistics",
+        "node_id": "N-V1"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R33-1",
+          "EV-R33-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R33-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-statistics-transfer"
+        ],
+        "required_material_ids": [
+          "MAT-statistics-transfer"
+        ],
+        "required_claim_ids": [
+          "FACT-R33"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R34",
+      "theme": "statistics",
+      "need_type": "transfer",
+      "variant": "V2",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R34",
+        "indicator_id": "I-statistics",
+        "node_id": "N-V2"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R34-1",
+          "EV-R34-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R34-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-statistics-transfer"
+        ],
+        "required_material_ids": [
+          "MAT-statistics-transfer"
+        ],
+        "required_claim_ids": [
+          "FACT-R34"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R35",
+      "theme": "statistics",
+      "need_type": "transfer",
+      "variant": "V3",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R35",
+        "indicator_id": "I-statistics",
+        "node_id": "N-V3"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R35-1",
+          "EV-R35-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R35-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-statistics-transfer"
+        ],
+        "required_material_ids": [
+          "MAT-statistics-transfer"
+        ],
+        "required_claim_ids": [
+          "FACT-R35"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "R36",
+      "theme": "statistics",
+      "need_type": "transfer",
+      "variant": "V4",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-R36",
+        "indicator_id": "I-statistics",
+        "node_id": "N-V4"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-R36-1",
+          "EV-R36-2"
+        ],
+        "required_evidence_ids": [
+          "EV-R36-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-statistics-transfer"
+        ],
+        "required_material_ids": [
+          "MAT-statistics-transfer"
+        ],
+        "required_claim_ids": [
+          "FACT-R36"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "E01",
+      "theme": "fractions",
+      "need_type": "concept",
+      "variant": "zero-score",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-E01",
+        "indicator_id": "I-fractions",
+        "node_id": "N-zero-score"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-E01-1",
+          "EV-E01-2"
+        ],
+        "required_evidence_ids": [
+          "EV-E01-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-fractions-concept"
+        ],
+        "required_material_ids": [
+          "MAT-fractions-concept"
+        ],
+        "required_claim_ids": [
+          "FACT-E01"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "E02",
+      "theme": "geometry",
+      "need_type": "procedure",
+      "variant": "full-score",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-E02",
+        "indicator_id": "I-geometry",
+        "node_id": "N-full-score"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-E02-1",
+          "EV-E02-2"
+        ],
+        "required_evidence_ids": [
+          "EV-E02-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-geometry-procedure"
+        ],
+        "required_material_ids": [
+          "MAT-geometry-procedure"
+        ],
+        "required_claim_ids": [
+          "FACT-E02"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "E03",
+      "theme": "statistics",
+      "need_type": "transfer",
+      "variant": "pending-score",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-E03",
+        "indicator_id": "I-statistics",
+        "node_id": "N-pending-score"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-E03-1",
+          "EV-E03-2"
+        ],
+        "required_evidence_ids": [
+          "EV-E03-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-statistics-transfer"
+        ],
+        "required_material_ids": [
+          "MAT-statistics-transfer"
+        ],
+        "required_claim_ids": [
+          "FACT-E03"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "E04",
+      "theme": "fractions",
+      "need_type": "procedure",
+      "variant": "no-response",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-E04",
+        "indicator_id": "I-fractions",
+        "node_id": "N-no-response"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-E04-1",
+          "EV-E04-2"
+        ],
+        "required_evidence_ids": [
+          "EV-E04-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-fractions-procedure"
+        ],
+        "required_material_ids": [
+          "MAT-fractions-procedure"
+        ],
+        "required_claim_ids": [
+          "FACT-E04"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "E05",
+      "theme": "geometry",
+      "need_type": "transfer",
+      "variant": "unequal-coverage",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-E05",
+        "indicator_id": "I-geometry",
+        "node_id": "N-unequal-coverage"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-E05-1",
+          "EV-E05-2"
+        ],
+        "required_evidence_ids": [
+          "EV-E05-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-geometry-transfer"
+        ],
+        "required_material_ids": [
+          "MAT-geometry-transfer"
+        ],
+        "required_claim_ids": [
+          "FACT-E05"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "E06",
+      "theme": "statistics",
+      "need_type": "concept",
+      "variant": "version-conflict",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-E06",
+        "indicator_id": "I-statistics",
+        "node_id": "N-version-conflict"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-E06-1",
+          "EV-E06-2"
+        ],
+        "required_evidence_ids": [
+          "EV-E06-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-statistics-concept"
+        ],
+        "required_material_ids": [
+          "MAT-statistics-concept"
+        ],
+        "required_claim_ids": [
+          "FACT-E06"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "E07",
+      "theme": "fractions",
+      "need_type": "transfer",
+      "variant": "source-revoked",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-E07",
+        "indicator_id": "I-fractions",
+        "node_id": "N-source-revoked"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-E07-1",
+          "EV-E07-2"
+        ],
+        "required_evidence_ids": [
+          "EV-E07-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-fractions-transfer"
+        ],
+        "required_material_ids": [
+          "MAT-fractions-transfer"
+        ],
+        "required_claim_ids": [
+          "FACT-E07"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "E08",
+      "theme": "geometry",
+      "need_type": "concept",
+      "variant": "cross-student",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-E08",
+        "indicator_id": "I-geometry",
+        "node_id": "N-cross-student"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-E08-1",
+          "EV-E08-2"
+        ],
+        "required_evidence_ids": [
+          "EV-E08-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-geometry-concept"
+        ],
+        "required_material_ids": [
+          "MAT-geometry-concept"
+        ],
+        "required_claim_ids": [
+          "FACT-E08"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    },
+    {
+      "case_id": "E09",
+      "theme": "statistics",
+      "need_type": "procedure",
+      "variant": "prompt-injection",
+      "scope": {
+        "run_id": "SYN-R1",
+        "student_id": "SYN-E09",
+        "indicator_id": "I-statistics",
+        "node_id": "N-prompt-injection"
+      },
+      "expected": {
+        "allowed_evidence_ids": [
+          "EV-E09-1",
+          "EV-E09-2"
+        ],
+        "required_evidence_ids": [
+          "EV-E09-1"
+        ],
+        "allowed_material_ids": [
+          "MAT-statistics-procedure"
+        ],
+        "required_material_ids": [
+          "MAT-statistics-procedure"
+        ],
+        "required_claim_ids": [
+          "FACT-E09"
+        ],
+        "forbidden_claim_ids": [
+          "CLAIM-MASTERY",
+          "CLAIM-CAUSAL"
+        ]
+      }
+    }
+  ]
+}
