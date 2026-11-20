@@ -267,11 +267,24 @@ def test_submission_package_adds_release_checks_reports_schema_and_html_without_
             "submission-report.html",
             "data_quality.json",
             "checksums.json",
+            "examples/input.csv",
+            "examples/output.json",
+            "examples/README.md",
         }.issubset(names)
         manifest = json.loads(archive.read("manifest.json"))
         assert manifest["package_type"] == "competition_submission"
         assert manifest["schema_version"] == "2.0"
         assert manifest["release_status"] == "ready_with_open_checks"
+        assert manifest["examples"] == [
+            "examples/README.md",
+            "examples/input.csv",
+            "examples/output.json",
+        ]
+        example_output = json.loads(archive.read("examples/output.json"))
+        assert example_output["scope"]["student_id"] == "D1"
+        assert "D2" not in archive.read("examples/input.csv").decode("utf-8-sig")
+        assert "D2" not in json.dumps(example_output, ensure_ascii=False)
+        assert "脱敏片段" in archive.read("examples/README.md").decode("utf-8")
         assert (
             json.loads(archive.read("release_checks.json"))[0]["status"]
             == "not_checked"

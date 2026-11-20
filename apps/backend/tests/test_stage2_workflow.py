@@ -791,10 +791,18 @@ def test_resource_links_include_unscoped_textbook_and_card_with_server_metadata(
     ]
     assert all(link["content_hash"] != "caller-forged-hash" for link in links)
     assert all(len(link["content_hash"]) == 64 for link in links)
-    assert set(saved.json()["source_fingerprints"]) == {
+    # Source-file fingerprints are included when allowlisted PDFs are present on
+    # this machine; their presence must not invalidate the material fingerprints.
+    expected_material_keys = {
         "material:Q001",
         *(f"material:{material_id}" for material_id in supporting_ids),
     }
+    assert expected_material_keys.issubset(set(saved.json()["source_fingerprints"]))
+    assert all(
+        key == "material:Q001" or key.startswith("material:")
+        for key in saved.json()["source_fingerprints"]
+        if not key.startswith("file:")
+    )
     assert all(
         saved.json()["source_fingerprints"][f"material:{link['material_id']}"]
         == link["content_hash"]

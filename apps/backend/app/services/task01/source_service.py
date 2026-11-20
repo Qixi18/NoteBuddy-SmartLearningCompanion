@@ -64,11 +64,25 @@ class SourceService:
         }
         try:
             reader = PdfReader(BytesIO(content), strict=False)
+            page_count = len(reader.pages)
+        except (OSError, ValueError, PdfReadError, PdfStreamError):
+            return {**result, "status": "unreadable", "page_count": None}
+        try:
             text_pages = [
                 bool((page.extract_text() or "").strip()) for page in reader.pages
             ]
-        except (OSError, ValueError, PdfReadError, PdfStreamError):
-            return {**result, "status": "unreadable", "page_count": None}
+        except (OSError, ValueError, TypeError, PdfReadError, PdfStreamError):
+            # Scanned PDFs with unusual font encodings can fail text extraction even
+            # though the file itself is readable. Keep page facts and mark the text
+            # layer unavailable so callers fall back to manual review instead of 500.
+            return {
+                **result,
+                "status": "readable",
+                "page_count": page_count,
+                "text_page_count": 0,
+                "text_pages": [],
+                "text_layer_error": "unavailable",
+            }
         return {
             **result,
             "status": "readable",

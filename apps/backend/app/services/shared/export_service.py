@@ -20,6 +20,82 @@ from ..task03.recommendation_service import draft
 from ..task03.teaching_plan_service import validate_teaching_plan
 
 
+def build_submission_examples(run: dict, case_ids: list[str]) -> dict[str, str]:
+    """Build de-identified input/output examples for the competition package.
+
+    Only the first selected student, first objective and first available node are
+    used. The example is illustrative: it contains no real answer payload beyond
+    what is already present in the frozen run, and never includes unselected
+    students.
+    """
+    student_id = case_ids[0]
+    objective_id = (
+        run["objectives"][0].get("指标编号") if run.get("objectives") else ""
+    )
+    node_id = run["nodes"][0].get("节点编号") if run.get("nodes") else ""
+    responses = [
+        row
+        for row in run.get("responses", [])
+        if row.get("学生编号") == student_id
+        and row.get("指标编号") == objective_id
+        and row.get("节点编号") == node_id
+    ]
+    input_rows = [
+        {
+            "学生编号": student_id,
+            "指标编号": objective_id,
+            "节点编号": node_id,
+            "材料编号": row.get("材料编号", ""),
+            "记录编号": row.get("记录编号", ""),
+        }
+        for row in responses
+    ]
+    input_csv = io.StringIO(newline="")
+    writer = csv.DictWriter(
+        input_csv,
+        fieldnames=["学生编号", "指标编号", "节点编号", "材料编号", "记录编号"],
+    )
+    writer.writeheader()
+    writer.writerows(input_rows)
+    accepted_recommendations = []
+    for review in run.get("reviews", {}).get(f"{student_id}:{objective_id}", []):
+        if review.get("node_id") == node_id and review.get("status") in {
+            "accepted",
+            "edited",
+        }:
+            accepted_recommendations.append(
+                {
+                    "version": review.get("version"),
+                    "status": review.get("status"),
+                    "reason": review.get("reason", ""),
+                }
+            )
+    example_output = {
+        "scope": {
+            "student_id": student_id,
+            "indicator_id": objective_id,
+            "node_id": node_id,
+            "run_id": run.get("run_id", ""),
+        },
+        "evidence_record_ids": [row.get("记录编号", "") for row in responses],
+        "accepted_reviews": accepted_recommendations,
+        "note": "示例仅展示输入输出结构；正式结论须以同一冻结运行的完整成果包为准。",
+    }
+    return {
+        "examples/input.csv": "\ufeff" + input_csv.getvalue(),
+        "examples/output.json": json.dumps(
+            example_output, ensure_ascii=False, indent=2
+        ),
+        "examples/README.md": (
+            "# 输入输出样例\n\n"
+            "本目录展示成果包的输入输出结构。输入为当前冻结运行中一名所选学生、"
+            "一个指标、一个测验节点的脱敏片段；输出为同一范围的证据引用与教师复核摘要。\n\n"
+            "样例不含未选学生信息，也不替代完整成果包；任何正式结论都须回到 "
+            "`evidence_index.json` 与原始记录行核对。\n"
+        ),
+    }
+
+
 def validate_package_scope(files: dict, case_ids: set[str]) -> list[dict]:
     """Find current-run student or evidence identifiers outside the selected case scope."""
     raw_rows = files.get("raw_responses.json", [])
@@ -645,6 +721,10 @@ def package(
                 ),
             }
         )
+        examples = build_submission_examples(run, case_ids)
+        formal_manifest = dict(files["manifest.json"])
+        formal_manifest["examples"] = sorted(examples)
+        files["manifest.json"] = formal_manifest
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
         for name, value in files.items():
@@ -693,6 +773,8 @@ def package(
                 f"<p>报告状态：{html.escape(submission['release_status'])} · 内容审阅人：{html.escape(submission['reviewer'])}</p>"
                 f"<table><thead><tr><th>检查项</th><th>状态</th><th>依据</th></tr></thead><tbody>{check_rows}</tbody></table>{case_sections}{class_sections}</html>",
             )
+            for name, content in build_submission_examples(run, case_ids).items():
+                archive.writestr(name, content)
         metric_csv = io.StringIO(newline="")
         writer = csv.DictWriter(
             metric_csv,
