@@ -25,6 +25,7 @@ from .routes import (
     exports,
     health,
     imports,
+    readiness,
     recommendations,
     release,
     reports,
@@ -234,6 +235,7 @@ def create_app(store: Store | None = None, config: Settings = settings) -> FastA
         return error(request, 500, "服务器内部错误", "INTERNAL_ERROR")
 
     application.include_router(health.router)
+    application.include_router(readiness.router)
     application.include_router(imports.router)
     application.include_router(analysis.router)
     application.include_router(recommendations.router)

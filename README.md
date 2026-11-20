@@ -15,6 +15,8 @@
 从仓库根目录安装后端及开发依赖，并安装前端锁定依赖：
 
 ```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
 python -m pip install -e ".[dev]"
 Push-Location apps/web
 npm ci
@@ -48,10 +50,15 @@ $env:DEEPSEEK_TIMEOUT_SECONDS = "30"
 开发时打开两个 PowerShell 窗口。窗口一启动后端：
 
 ```powershell
+Set-Location 'D:\path\to\NoteBuddy-SmartLearningCompanion'
+python -m app.cli doctor # 只读检查；首次建库前会提示 migration_required
+python -m app.cli db-upgrade # 显式升级；应用启动不会自动建表或迁移
+python -m app.cli doctor # 再检查版本、资源、前端构建和可选模型状态
 Set-Location apps/backend
-python -m app.cli db-upgrade
 python -m app.main
 ```
+
+`doctor` 退出码 1 表示数据库迁移未完成或核心运行环境被阻断；存在未核验 PDF 或未配置可选模型时会给出警告，但不会把来源标记为已核验，也不会阻止核心统计和规则草稿使用。`GET /api/readiness`提供相同的只读诊断；`GET /api/health`仍只表示服务进程可响应。检查不会创建数据库、执行迁移或改变签核。
 
 窗口二启动前端开发服务器：
 

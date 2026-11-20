@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import sys
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
@@ -24,6 +25,7 @@ def main():
         "command",
         choices=[
             "serve",
+            "doctor",
             "import",
             "summary",
             "db-upgrade",
@@ -53,6 +55,15 @@ def main():
     )
     if args.command == "serve":
         serve(data_dir, args.port, args.host, database_url)
+    elif args.command == "doctor":
+        from app.services.shared.readiness_service import inspect_readiness
+
+        report = inspect_readiness(
+            replace(settings, database_url_override=database_url)
+        )
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        if report["status"] in {"migration_required", "blocked"}:
+            raise SystemExit(1)
     elif args.command == "import":
         if not args.folder:
             parser.error("import 需要 CSV 目录")
@@ -118,6 +129,8 @@ def main():
     else:
         from alembic import command
         from alembic.config import Config
+
+        from app.infrastructure.database.backup import backup_database, sqlite_path
         from app.infrastructure.migration.json_to_sqlite import (
             create_verified_backup,
             discover,
@@ -127,8 +140,6 @@ def main():
             write_migration_report,
         )
         from app.repositories.store import Store
-
-        from app.infrastructure.database.backup import backup_database, sqlite_path
 
         target_db = sqlite_path(database_url)
         backup_base = (

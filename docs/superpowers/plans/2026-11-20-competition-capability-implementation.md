@@ -78,11 +78,11 @@
 
 **接口：** `inspect_readiness(config) -> dict`只读检查；CLI新增`doctor`；新增`GET /api/readiness`，保持`/api/health`兼容。报告schema_revision/head、资源可用性、前端构建和运行依赖，绝不返回密钥。
 
-- [ ] 测试旧库返回migration_required但不产生DDL，缺PDF不冒充文件已核验，未配置模型是可选状态而非核心不可用。
-- [ ] 修正E2E样本生成进程，使其使用显式Python解释器及绝对backend导入路径；从新终端运行而不依赖偶然继承PYTHONPATH。
-- [ ] 在临时库升级两次、备份、恢复新目标，校验版本与行数；检查升级失败保持可诊断状态。
-- [ ] 运行`python -m pytest apps/backend/tests/test_readiness.py apps/backend/tests/test_infrastructure_phase025.py -q`及根目录E2E。
-- [ ] README给出虚拟环境安装、doctor、备份、显式迁移、启动顺序；实现阶段再按该流程处理演示库副本，不在开发测试里动日常库。
+- [x] 新增只读`inspect_readiness`、CLI`doctor`与`GET /api/readiness`；测试旧库提示migration_required且字节/表结构不变，缺PDF保留`verified=false`，模型未配置时核心状态仍为ready_with_warnings。
+- [x] E2E CSV生成器与包检查改用仓库虚拟环境Python（可显式覆盖）及绝对backend/tests路径。浏览器导入用例主体通过；同轮发现并修正两个过时断言标签/全局status定位。运行器仍在测试结束后挂起并触发清理失败，单独归入P13。
+- [x] 复用现有临时数据库用例验证重复升级、在线备份和新目标恢复，含schema revision、行数、完整性与恢复内容检查。
+- [x] `apps/backend/tests/test_readiness.py apps/backend/tests/test_infrastructure_phase025.py -q`：38 passed、1 skipped；readiness与CLI专项5 passed。根目录Playwright导入用例打印`ok 1`，但wrapper最终因Windows残留服务返回失败，不能计为命令整体通过。
+- [x] README补充Python venv、doctor、备份/恢复、显式迁移和启动顺序；本轮检查只使用临时数据库，未碰日常数据库。
 
 ### P03 打通学科映射与资源契约
 

@@ -1,14 +1,23 @@
 import { expect, test } from '@playwright/test';
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const repoRoot = process.cwd();
+const pythonExecutable = process.env.SMART_LEARNING_PYTHON
+  || [path.join(repoRoot, '.venv', 'Scripts', 'python.exe'), path.join(repoRoot, '.venv', 'bin', 'python')].find(existsSync)
+  || 'python';
+const pythonEnvironment = {
+  ...process.env,
+  PYTHONPATH: [path.resolve(repoRoot, 'apps/backend'), path.resolve(repoRoot, 'apps/backend/tests'), process.env.PYTHONPATH]
+    .filter(Boolean)
+    .join(path.delimiter),
+};
 const bundlePath = path.join(repoRoot, 'data', `playwright-${process.env.PLAYWRIGHT_RUN_ID}`, 'bundle');
 
 function sampleCsvFiles(targetBundle = bundlePath, includeExtraStudent = false, longEvidence = false, noRecordsStudent = ''): string[] {
-  const python = spawnSync('python', ['-c', [
+  const python = spawnSync(pythonExecutable, ['-c', [
     'import csv, sys',
     'from pathlib import Path',
     'sys.path.insert(0, str(Path("apps/backend/tests").resolve()))',
@@ -31,7 +40,7 @@ function sampleCsvFiles(targetBundle = bundlePath, includeExtraStudent = false, 
     ' fields = list(dict.fromkeys(required + [key for row in rows for key in row if not key.startswith("_")]))',
     ' with (target / f"{name}.csv").open("w", encoding="utf-8-sig", newline="") as stream:',
     '  writer = csv.DictWriter(stream, fieldnames=fields, extrasaction="ignore"); writer.writeheader(); writer.writerows(rows)',
-  ].join('\n'), targetBundle, includeExtraStudent ? 'extra' : '', longEvidence ? 'long' : '', noRecordsStudent], { cwd: repoRoot, encoding: 'utf8' });
+  ].join('\n'), targetBundle, includeExtraStudent ? 'extra' : '', longEvidence ? 'long' : '', noRecordsStudent], { cwd: repoRoot, env: pythonEnvironment, encoding: 'utf8' });
   if (python.status !== 0) throw new Error(`Unable to generate sample CSV bundle: ${python.stderr}`);
   return readdirSync(targetBundle)
     .filter((name) => name.endsWith('.csv'))
@@ -128,7 +137,7 @@ test('loads the local workbench and imports the sample bundle', async ({ page })
   await expect(page.getByText('未确认 · 请核对左侧证据和来源边界')).toBeVisible();
   await page.getByText('编辑完整教学方案', { exact: true }).click();
   const structuredPlan = page.locator('.review-structured');
-  await structuredPlan.getByLabel('保存完整方案').check();
+  await structuredPlan.getByLabel('保存旧版结构化方案').check();
   await structuredPlan.getByLabel(/Q001/).check();
   await structuredPlan.getByLabel('学习活动').fill('核对当前节点的解题步骤');
   await structuredPlan.getByLabel('活动步骤（每行一步）').fill('独立重做原题\n解释关键步骤');
@@ -142,7 +151,7 @@ test('loads the local workbench and imports the sample bundle', async ({ page })
   await expect(page.getByLabel('复核理由')).toHaveValue('核对当前节点的原始证据');
   await page.unroute('**/api/review');
   await page.getByRole('button', { name: '保存复核' }).click();
-  await expect(page.getByRole('status')).toContainText('复核已保存');
+  await expect(page.locator('#message')).toContainText('复核已保存');
   await page.getByRole('link', { name: '案例与导出', exact: true }).click();
   const candidate = page.locator('.case-candidate').filter({ hasText: 'D01' }).first();
   await candidate.locator('summary').click();
@@ -178,9 +187,9 @@ test('loads the local workbench and imports the sample bundle', async ({ page })
   await expect(page.getByText(/不包含完整运行审计数据/)).toBeVisible();
   const archivePath = await download.path();
   expect(archivePath).toBeTruthy();
-  const artifactScan = spawnSync('python', ['scan-artifacts.py', archivePath!], { encoding: 'utf8' });
+  const artifactScan = spawnSync(pythonExecutable, ['scan-artifacts.py', archivePath!], { cwd: repoRoot, env: pythonEnvironment, encoding: 'utf8' });
   expect(artifactScan.status, artifactScan.stdout + artifactScan.stderr).toBe(0);
-  const archiveCheck = spawnSync('python', ['-c', [
+  const archiveCheck = spawnSync(pythonExecutable, ['-c', [
     'import json, sys, zipfile',
     'with zipfile.ZipFile(sys.argv[1]) as archive:',
     ' assert archive.testzip() is None',
@@ -196,7 +205,7 @@ test('loads the local workbench and imports the sample bundle', async ({ page })
     ' quality=json.loads(archive.read("data_quality.json"))',
     ' assert all(row["record_id"] in records for row in quality["record_dispositions"])',
     ' assert all(row.get("record_id") in records for row in quality["findings"])',
-  ].join('\n'), archivePath!], { encoding: 'utf8' });
+  ].join('\n'), archivePath!], { cwd: repoRoot, env: pythonEnvironment, encoding: 'utf8' });
   expect(archiveCheck.status, archiveCheck.stderr).toBe(0);
   await expect(page.locator('#message')).toContainText('成果包下载已开始');
   await page.getByRole('link', { name: '教学调整', exact: true }).click();
@@ -381,7 +390,7 @@ test('confirms a teacher-reviewed no-response coverage case', async ({ page }) =
   ]);
   const submissionPath = await submissionDownload.path();
   expect(submissionPath).toBeTruthy();
-  const submissionCheck = spawnSync('python', ['-c', [
+  const submissionCheck = spawnSync(pythonExecutable, ['-c', [
     'import hashlib, json, sys, zipfile',
     'with zipfile.ZipFile(sys.argv[1]) as z:',
     ' assert z.testzip() is None',
@@ -400,7 +409,7 @@ test('confirms a teacher-reviewed no-response coverage case', async ({ page }) =
     ' assert set(sums) == set(z.namelist()) - {"checksums.json"}',
     ' assert all(hashlib.sha256(z.read(name)).hexdigest() == value for name, value in sums.items())',
     ' assert {"case_reports.json", "class_report.json", "submission-report.html", "submission.schema.json"}.issubset(z.namelist())',
-  ].join('\n'), submissionPath!], { encoding: 'utf8' });
+  ].join('\n'), submissionPath!], { cwd: repoRoot, env: pythonEnvironment, encoding: 'utf8' });
   expect(submissionCheck.status, submissionCheck.stderr).toBe(0);
 });
 
@@ -876,7 +885,7 @@ test('key pages fit and render at four desktop widths', async ({ page }, testInf
       });
     }
   }
-  const screenshotScan = spawnSync('python', ['scan-artifacts.py', testInfo.outputDir], { cwd: repoRoot, encoding: 'utf8' });
+  const screenshotScan = spawnSync(pythonExecutable, ['scan-artifacts.py', testInfo.outputDir], { cwd: repoRoot, env: pythonEnvironment, encoding: 'utf8' });
   expect(screenshotScan.status, screenshotScan.stdout + screenshotScan.stderr).toBe(0);
   expect(pageErrors).toEqual([]);
 });

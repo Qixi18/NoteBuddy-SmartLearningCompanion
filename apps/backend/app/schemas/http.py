@@ -548,3 +548,13 @@ class ErrorResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: Literal["ok"]
+
+
+class ReadinessResponse(BaseModel):
+    status: Literal["ready", "ready_with_warnings", "migration_required", "blocked"]
+    database: dict[str, Any]
+    sources: dict[str, Any]
+    frontend: dict[str, Any]
+    runtime: dict[str, Any]
+    model: dict[str, Any]
+    checks: list[dict[str, str]]
