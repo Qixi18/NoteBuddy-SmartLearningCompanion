@@ -2,15 +2,61 @@
 
 import re
 
+from ...domain.subject.source_mapping import bind_resource_links, fingerprint_material
+
 
 class Stage2Decisions:
-    def __init__(self, uow_factory):
+    def __init__(self, uow_factory, source_service=None):
         self.uow_factory = uow_factory
+        self.source_service = source_service
+
+    def current_source_fingerprints(self, run: dict, material_ids=()) -> dict[str, str]:
+        fingerprints = {}
+        if self.source_service is not None:
+            fingerprints.update(
+                {
+                    f"file:{name}": record["sha256"]
+                    for name, record in self.source_service.fingerprints(run).items()
+                }
+            )
+        material_by_id = {
+            str(item.get("材料编号")): item
+            for item in run.get("items", [])
+            if item.get("材料编号")
+        }
+        for material_id in sorted(set(material_ids)):
+            item = material_by_id.get(material_id)
+            if item is None:
+                continue
+            fingerprints[f"material:{material_id}"] = fingerprint_material(item)
+        return dict(sorted(fingerprints.items()))
+
+    def with_source_freshness(self, run: dict, histories: dict) -> dict:
+        for history in histories.values():
+            if not history:
+                continue
+            latest = history[-1]
+            if latest.get("status") != "verified":
+                continue
+            if "source_fingerprints" not in latest:
+                # Legacy signoffs cannot prove which source bytes were checked.
+                latest["stale"] = True
+                continue
+            material_ids = set(latest.get("material_ids", []))
+            material_ids.update(
+                link.get("material_id")
+                for link in latest.get("resource_links", [])
+                if isinstance(link, dict) and link.get("material_id")
+            )
+            current = self.current_source_fingerprints(run, material_ids)
+            latest["stale"] = current != latest["source_fingerprints"]
+        return histories
 
     def sources(self) -> dict:
         with self.uow_factory(immediate=False) as uow:
             run = uow.runs.current()
-            return uow.stage2.list_sources(run["run_id"])
+            histories = uow.stage2.list_sources(run["run_id"])
+        return self.with_source_freshness(run, histories)
 
     def cases(self) -> dict:
         with self.uow_factory(immediate=False) as uow:
@@ -26,6 +72,11 @@ class Stage2Decisions:
             if indicator_id not in objectives:
                 raise ValueError("指标编号不存在")
             material_ids = set(payload["material_ids"])
+            materials = {
+                str(row.get("材料编号", "")): row
+                for row in run["items"]
+                if row.get("材料编号")
+            }
             linked = {
                 row["材料编号"]
                 for row in run["items"]
@@ -56,16 +107,57 @@ class Stage2Decisions:
                 raise ValueError("评分点不能重复映射到多个问题")
             if not set(mapped_points).issubset(rubric_point_ids):
                 raise ValueError("评分点问题映射包含未知或非当前指标评分点")
-            if payload["status"] != "verified" and any(
-                mapping["status"] == "verified" for mapping in mappings
-            ):
-                raise ValueError("评分点问题映射须随已核验来源一并确认")
+            for mapping in mappings:
+                mapping_materials = mapping.get("material_ids", [])
+                if len(mapping_materials) != len(set(mapping_materials)):
+                    raise ValueError("评分点问题关联材料重复")
+                if not set(mapping_materials).issubset(linked):
+                    raise ValueError("评分点问题关联了非当前指标题目")
+                if mapping["status"] == "verified":
+                    if payload["status"] != "verified":
+                        raise ValueError("评分点问题映射须随已核验来源一并确认")
+                    if not all(
+                        (
+                            mapping.get("label", "").strip(),
+                            mapping_materials,
+                            mapping.get("evidence", "").strip(),
+                            mapping.get("reviewer", "").strip(),
+                        )
+                    ):
+                        raise ValueError(
+                            "已核验评分点问题需填写名称、材料、依据和核验人"
+                        )
+                    if any(
+                        not any(
+                            point_id.startswith(f"{material_id}P")
+                            for material_id in mapping_materials
+                        )
+                        for point_id in mapping["rubric_point_ids"]
+                    ):
+                        raise ValueError("评分点问题引用的评分点不属于关联材料")
             for relation in payload["knowledge_links"]:
                 if (
                     relation["target_indicator_id"] not in objectives
                     or relation["target_indicator_id"] == indicator_id
                 ):
                     raise ValueError("知识联系目标指标无效")
+            resource_links = payload.get("resource_links", [])
+            resource_ids = [link["material_id"] for link in resource_links]
+            node_ids = {row["节点编号"] for row in run["nodes"]}
+            source_fingerprints = {
+                **self.current_source_fingerprints(
+                    run, material_ids | set(resource_ids)
+                )
+            }
+            payload["resource_links"] = bind_resource_links(
+                resource_links,
+                materials,
+                objectives,
+                node_ids,
+                indicator_id,
+                payload["status"],
+            )
+            payload["source_fingerprints"] = source_fingerprints
             if payload["status"] == "verified":
                 if material_ids != linked or not material_ids:
                     raise ValueError("确认来源前须核对当前指标的全部关联题目")

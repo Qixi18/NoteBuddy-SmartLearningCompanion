@@ -69,7 +69,9 @@ describe('ObjectivesPanel source checks', () => {
       textbook_locator: '教材第 68 页',
       material_ids: ['Q001'],
       knowledge_links: [],
-      rubric_mappings: [{ issue_id: 'combine_like_terms', rubric_point_ids: ['Q001P1'], status: 'verified' }],
+      rubric_mappings: [{ issue_id: 'combine_like_terms', label: '同类项识别有误', rubric_point_ids: ['Q001P1'], material_ids: ['Q001'], evidence: '评分点定义', reviewer: '数学教师甲', status: 'verified' }],
+      resource_links: [{ material_id: 'TB01', purpose: '再次讲解', indicator_ids: ['T01I1'], allowed_node_ids: ['N01'], source_locator: '教材第 68 页', evidence: '例题对应', status: 'verified', resource_type: '教材', content_hash: 'a'.repeat(64) }],
+      source_fingerprints: { TB01: 'a'.repeat(64) },
       reviewer: '数学教师甲',
       reason: '已核对原页',
       version: 2,
@@ -84,7 +86,9 @@ describe('ObjectivesPanel source checks', () => {
         textbook_locator: '教材第 68 页',
         material_ids: ['Q001'],
         knowledge_links: [],
-        rubric_mappings: [{ issue_id: 'combine_like_terms', rubric_point_ids: ['Q001P1'], status: 'verified' }],
+        rubric_mappings: [{ issue_id: 'combine_like_terms', label: '同类项识别有误', rubric_point_ids: ['Q001P1'], material_ids: ['Q001'], evidence: '评分点定义', reviewer: '数学教师甲', status: 'verified' }],
+        resource_links: [{ material_id: 'TB01', purpose: '再次讲解', indicator_ids: ['T01I1'], allowed_node_ids: ['N01'], source_locator: '教材第 68 页', evidence: '例题对应', status: 'verified', resource_type: '教材', content_hash: 'a'.repeat(64) }],
+        source_fingerprints: { TB01: 'a'.repeat(64) },
         reviewer: '数学教师甲',
         reason: '已核对原页',
         version: 1,
@@ -103,16 +107,42 @@ describe('ObjectivesPanel source checks', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /T01I1.*已核验/ })).toBeTruthy();
       expect(screen.getByText('指标关系状态：已核验。主题说明仅供定位；以指标级核验记录判断材料关系。')).toBeTruthy();
-      expect(screen.getByText(/评分点问题 combine_like_terms · Q001P1 · verified/)).toBeTruthy();
+      expect(screen.getByText(/评分点问题 同类项识别有误 · Q001P1 · Q001 · verified/)).toBeTruthy();
+      expect(screen.getByText(/教材 TB01 · 再次讲解 · verified/)).toBeTruthy();
     });
 
     fireEvent.click(screen.getByText('更新签核'));
-    const editor = screen.getByText(/评分点问题 combine_like_terms/).closest('section');
+    const editor = screen.getByText(/评分点问题 同类项识别有误/).closest('section');
     fireEvent.click(within(editor!).getByRole('button', { name: '确认本指标来源' }));
     await waitFor(() => expect(save).toHaveBeenCalledWith(expect.objectContaining({
       indicator_id: 'T01I1',
       expected_version: 1,
-      rubric_mappings: [{ issue_id: 'combine_like_terms', rubric_point_ids: ['Q001P1'], status: 'verified' }],
+      rubric_mappings: [{ issue_id: 'combine_like_terms', label: '同类项识别有误', rubric_point_ids: ['Q001P1'], material_ids: ['Q001'], evidence: '评分点定义', reviewer: '数学教师甲', status: 'verified' }],
+      resource_links: [{ material_id: 'TB01', purpose: '再次讲解', indicator_ids: ['T01I1'], allowed_node_ids: ['N01'], source_locator: '教材第 68 页', evidence: '例题对应', status: 'verified' }],
     })));
+  });
+
+  it('labels a changed source fingerprint as requiring renewed review', async () => {
+    vi.spyOn(learningApi, 'sourceVerifications').mockResolvedValue({
+      T01I1: [{
+        run_id: 'run-1', indicator_id: 'T01I1', status: 'verified',
+        curriculum_locator: '课标第 62 页', textbook_locator: '教材第 68 页',
+        material_ids: [], knowledge_links: [], reviewer: '数学教师甲', reason: '已核验',
+        version: 1, reviewed_at: '2026-11-19T00:00:00+00:00', stale: true,
+      }],
+    });
+    const run = {
+      run_id: 'run-1',
+      objectives: [{ '指标编号': 'T01I1', '观察指标': '理解代数式', '主题编号': 'T01' }],
+      items: [],
+      source_index: [{ indicator_id: 'T01I1', verification: 'verified' }],
+    } as unknown as AnalysisRun;
+
+    render(<ObjectivesPanel run={run} />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /T01I1.*来源已变化，需重新核验/ })).toBeTruthy();
+      expect(screen.getByText(/指标关系状态：来源已变化，需重新核验/)).toBeTruthy();
+    });
   });
 });

@@ -4,7 +4,8 @@ import { learningApi } from '../../../api/client';
 import { Panel } from '../../../components/Panel';
 import { SourceVerificationEditor } from './SourceVerificationEditor';
 
-function verificationLabel(status?: string) {
+function verificationLabel(status?: string, stale = false) {
+  if (stale) return '来源已变化，需重新核验';
   switch (status) {
     case 'verified': return '已核验';
     case 'topic_checked_indicator_page_pending': return '主题已定位，指标页待核验';
@@ -44,7 +45,7 @@ export function ObjectivesPanel({ run }: { run: AnalysisRun }) {
     ? '签核记录暂不可用'
     : !sourceHistoryLoaded
       ? '正在读取签核记录'
-      : verificationLabel(currentVerification);
+      : verificationLabel(currentVerification, latestSignoff?.stale);
   const items = run.items.filter(item => item['指标编号'] === objective['指标编号']);
   const topicCheck = source?.source_check;
   const indicatorCheck = source?.indicator_check;
@@ -52,7 +53,7 @@ export function ObjectivesPanel({ run }: { run: AnalysisRun }) {
   return <div className="knowledge-layout">
     <Panel title="主题与指标目录"><p className="muted">{topics.length} 个数据主题 · {run.objectives.length} 项指标</p>
       {topics.map(topic => <section className="topic-group" key={topic}><h3>{topic} <small>{run.objectives.filter(item => (item['主题'] || item['主题编号']) === topic).length} 项</small></h3>
-        {run.objectives.filter(item => (item['主题'] || item['主题编号']) === topic).map(item => <button type="button" className={`knowledge-option${objective['指标编号'] === item['指标编号'] ? ' selected' : ''}`} aria-current={objective['指标编号'] === item['指标编号'] ? 'true' : undefined} key={item['指标编号']} onClick={() => setSelectedId(item['指标编号'])}><strong>{item['指标编号']}</strong><span>{item['观察指标']}</span><small>关联题目 {run.items.filter(question => question['指标编号'] === item['指标编号']).length} 道 · {sourceHistoryLoaded && !sourceHistoryFailed ? verificationLabel(sourceHistory[item['指标编号']]?.at(-1)?.status ?? run.source_index.find(entry => entry.indicator_id === item['指标编号'])?.verification) : sourceHistoryFailed ? '签核记录暂不可用' : '正在读取签核记录'}</small></button>)}</section>)}
+      {run.objectives.filter(item => (item['主题'] || item['主题编号']) === topic).map(item => { const signoff = sourceHistory[item['指标编号']]?.at(-1); return <button type="button" className={`knowledge-option${objective['指标编号'] === item['指标编号'] ? ' selected' : ''}`} aria-current={objective['指标编号'] === item['指标编号'] ? 'true' : undefined} key={item['指标编号']} onClick={() => setSelectedId(item['指标编号'])}><strong>{item['指标编号']}</strong><span>{item['观察指标']}</span><small>关联题目 {run.items.filter(question => question['指标编号'] === item['指标编号']).length} 道 · {sourceHistoryLoaded && !sourceHistoryFailed ? verificationLabel(signoff?.status ?? run.source_index.find(entry => entry.indicator_id === item['指标编号'])?.verification, signoff?.stale) : sourceHistoryFailed ? '签核记录暂不可用' : '正在读取签核记录'}</small></button>; })}</section>)}
     </Panel>
     <Panel title="指标详情"><h3>{objective['指标编号']} · {objective['观察指标']}</h3><p>主题：{objective['主题'] || objective['主题编号']}</p><p>主题目标：{objective['主题目标'] || '未提供'}</p>
       <section className="source-detail"><h3>关联题目 · {items.length} 道</h3>{items.length ? items.map(item => <div className="row" key={item['材料编号']}><strong>{item['材料编号']}</strong><p>{item['题干或内容'] || '未提供题干'}</p><small>指标与题目关系：{verificationText}</small></div>) : <p>当前快照没有关联题目；不能据此判断知识覆盖。</p>}</section>

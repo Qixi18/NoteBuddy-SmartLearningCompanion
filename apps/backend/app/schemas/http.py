@@ -79,8 +79,27 @@ class KnowledgeLink(BaseModel):
 class RubricIssueMapping(BaseModel):
     model_config = ConfigDict(extra="forbid")
     issue_id: str = Field(min_length=1, max_length=200)
+    label: str = Field(default="", max_length=500)
     rubric_point_ids: list[str] = Field(min_length=1, max_length=50)
+    material_ids: list[str] = Field(default_factory=list, max_length=50)
+    evidence: str = Field(default="", max_length=4000)
+    reviewer: str = Field(default="", max_length=200)
     status: Literal["pending", "verified"] = "pending"
+
+
+class ResourceLink(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    material_id: str = Field(min_length=1, max_length=200)
+    purpose: str = Field(min_length=1, max_length=1000)
+    indicator_ids: list[str] = Field(min_length=1, max_length=50)
+    allowed_node_ids: list[str] = Field(min_length=1, max_length=50)
+    source_locator: str = Field(min_length=1, max_length=1000)
+    evidence: str = Field(min_length=1, max_length=4000)
+    status: Literal["pending", "verified"] = "pending"
+    # These values are accepted for response round-tripping, then overwritten
+    # from the immutable run material by the application use case.
+    resource_type: str = ""
+    content_hash: str = ""
 
 
 class SourceVerificationRequest(BaseModel):
@@ -92,6 +111,8 @@ class SourceVerificationRequest(BaseModel):
     material_ids: list[str] = Field(default_factory=list)
     knowledge_links: list[KnowledgeLink] = Field(default_factory=list)
     rubric_mappings: list[RubricIssueMapping] = Field(default_factory=list)
+    resource_links: list[ResourceLink] = Field(default_factory=list)
+    source_fingerprints: dict[str, str] = Field(default_factory=dict)
     expected_version: int | None = Field(default=None, ge=0)
     reviewer: str = Field(default="", max_length=200)
     reason: str = Field(default="", max_length=4000)
@@ -259,6 +280,7 @@ class SourceVerificationResponse(SourceVerificationRequest):
     run_id: str
     version: int
     reviewed_at: str
+    stale: bool = False
 
 
 class TeacherCaseResponse(TeacherCaseRequest):

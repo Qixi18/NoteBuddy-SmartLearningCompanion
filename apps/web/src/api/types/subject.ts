@@ -12,6 +12,9 @@ export interface LearningItem {
   '材料编号': string;
   '主题编号'?: string;
   '指标编号': string;
+  '材料类型'?: string;
+  '题型'?: string;
+  '来源或资料文件'?: string;
   '题干或内容'?: string;
   '评分点'?: string;
   '满分'?: string;

@@ -92,12 +92,12 @@
 
 **接口：** 原SourceVerificationRequest/Response新增`resource_links: list[ResourceLink]=[]`、`rubric_mappings: list[RubricIssueMapping]=[]`、`source_fingerprints: dict[str,str]={}`、`expected_version: int|None=None`；保留原material_ids与knowledge_links。
 
-- [ ] 写HTTP往返测试：两题评分点映射经人工提交后仍在响应、数据库读取和规则输入中；未知评分点、别题评分点、重复ID均拒绝。
-- [ ] 测试8项教材/3张学习卡可通过ResourceLink关联，不能因为缺单一指标编号被静默丢弃；旧请求不带新字段仍可保存。
-- [ ] 给当前UI提交增加expected_version，旧客户端省略时兼容但不宣称拥有防陈旧覆盖能力；冲突返回409，保留用户编辑。
-- [ ] 在现有payload_json保存新字段；仅在实际需要新增约束/索引时添加显式Alembic迁移，避免无用表。
-- [ ] 核验必须由用户操作提交，不根据“字段齐全”自动verified；已verified来源变更生成追加版本。
-- [ ] 运行`python -m pytest apps/backend/tests/test_source_mapping_v2.py apps/backend/tests/test_shared_contracts.py -q`、前端API合同与来源编辑测试，确认读写完整后提交。
+- [x] 写HTTP往返测试：两题评分点映射经人工提交后仍在响应、数据库读取和规则输入中；未知评分点、别题评分点、重复ID均拒绝。
+- [x] 测试8项教材/3张学习卡可通过ResourceLink关联，不能因为缺单一指标编号被静默丢弃；旧请求不带新字段仍可保存。
+- [x] 给当前UI提交增加expected_version，旧客户端省略时兼容但不宣称拥有防陈旧覆盖能力；冲突返回409，保留用户编辑。
+- [x] 在现有payload_json保存新字段；当前字段无需新增数据库约束/索引，故未添加迁移。
+- [x] 核验必须由用户操作提交，不根据“字段齐全”自动verified；来源变更会标记旧签核过期，人工重新确认后追加版本。
+- [x] 运行来源映射、共享契约、前端API/编辑器测试与构建；后端15项、前端11项通过，Ruff通过。
 
 ### P04 来源定位与学科内容交付
 

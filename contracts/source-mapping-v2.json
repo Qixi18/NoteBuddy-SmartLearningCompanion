@@ -1,0 +1,30 @@
+{
+  "resource_links": [
+    {
+      "material_id": "TB01",
+      "purpose": "再次解释目标概念",
+      "indicator_ids": ["T01I1"],
+      "allowed_node_ids": ["N01"],
+      "source_locator": "教材第 68 页",
+      "evidence": "页内例题覆盖该指标",
+      "status": "verified",
+      "resource_type": "教材",
+      "content_hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    }
+  ],
+  "rubric_mappings": [
+    {
+      "issue_id": "combine_like_terms",
+      "label": "同类项识别有误",
+      "rubric_point_ids": ["Q001P1", "Q004P2"],
+      "material_ids": ["Q001", "Q004"],
+      "evidence": "两题评分点描述指向同一错误",
+      "reviewer": "数学教师甲",
+      "status": "verified"
+    }
+  ],
+  "source_fingerprints": {
+    "file:B05_相关资料切片.pdf": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+  },
+  "expected_version": 3
+}

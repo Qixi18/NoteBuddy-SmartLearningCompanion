@@ -102,16 +102,19 @@ def _verified_indicator_check(
     history = (source_verifications or {}).get(indicator_id, [])
     if history:
         latest = history[-1]
-        if latest.get("status") != "verified":
+        if latest.get("status") != "verified" or latest.get("stale"):
             return None
         return {
             "status": "verified",
+            "indicator_id": indicator_id,
             "material_ids": latest.get("material_ids", []),
             "learning_card_ids": latest.get("learning_card_ids", []),
             "resource_ids": latest.get("resource_ids", []),
             "curriculum_locator": latest.get("curriculum_locator", ""),
             "textbook_locator": latest.get("textbook_locator", ""),
             "rubric_mappings": latest.get("rubric_mappings", []),
+            "resource_links": latest.get("resource_links", []),
+            "source_fingerprints": latest.get("source_fingerprints", {}),
         }
     entry = next(
         (
@@ -129,7 +132,9 @@ def _verified_indicator_check(
     return check
 
 
-def _mapped_resources(run: dict, check: dict | None) -> tuple[list[str], str | None]:
+def _mapped_resources(
+    run: dict, check: dict | None, node_id: str | None = None
+) -> tuple[list[str], str | None]:
     if not check:
         return [], None
     known_ids = {item.get("材料编号") for item in run.get("items", [])}
@@ -142,6 +147,15 @@ def _mapped_resources(run: dict, check: dict | None) -> tuple[list[str], str | N
                 for value in values
                 if isinstance(value, str) and value in known_ids
             )
+    for link in check.get("resource_links", []):
+        if (
+            isinstance(link, dict)
+            and link.get("status") == "verified"
+            and link.get("material_id") in known_ids
+            and node_id in link.get("allowed_node_ids", [])
+            and check.get("indicator_id") in link.get("indicator_ids", [])
+        ):
+            ids.append(link["material_id"])
     locator = check.get("textbook_locator") or check.get("curriculum_locator")
     return sorted(set(ids)), locator if isinstance(
         locator, str
@@ -223,7 +237,7 @@ def draft(
     pending = [row for row in records if row.get("评分状态") == "待评分"]
     unanswered = [row for row in records if row.get("评分状态") == "未作答"]
     check = _verified_indicator_check(run, indicator_id, source_verifications)
-    material_ids, source_locator = _mapped_resources(run, check)
+    material_ids, source_locator = _mapped_resources(run, check, resolved_node)
     unknown_reason: str | None = None
     rule_id = "TR-08"
     evidence_kind = "unknown"
@@ -543,7 +557,7 @@ def draft(
                 "完成另一道迁移题并记录过程",
             ]
             evidence_ids = sorted({row["记录编号"] for row in partial_rows})
-            material_ids, source_locator = _mapped_resources(run, check)
+            material_ids, source_locator = _mapped_resources(run, check, resolved_node)
         else:
             rule_id = "TR-05"
             evidence_kind = "item_score"
@@ -571,7 +585,7 @@ def draft(
                 "安排节点内另一题进行观察",
             ]
             evidence_ids = sorted({row["记录编号"] for row in partial_rows})
-            material_ids, source_locator = _mapped_resources(run, check)
+            material_ids, source_locator = _mapped_resources(run, check, resolved_node)
         if pending:
             observed_fact += f"另有 {len(pending)} 条待评分记录未纳入上述分数。"
             inference_limit += " 待评分记录不计入本次结论。"
@@ -620,7 +634,7 @@ def draft(
         evidence_ids = sorted(
             row["记录编号"] for row in scored if row["材料编号"] in full_item_ids
         )
-        material_ids, source_locator = _mapped_resources(run, check)
+        material_ids, source_locator = _mapped_resources(run, check, resolved_node)
         return finish()
 
     if len(full_item_ids) == 1:

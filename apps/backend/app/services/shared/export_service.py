@@ -85,6 +85,7 @@ def package(
                         plan
                         and latest_source
                         and latest_source["status"] == "verified"
+                        and not latest_source.get("stale", False)
                         and final.get("source_verification_versions", {}).get(
                             indicator_id
                         )
@@ -134,7 +135,9 @@ def package(
     verified_relations = [
         history[-1]
         for history in sources.values()
-        if history and history[-1]["status"] == "verified"
+        if history
+        and history[-1]["status"] == "verified"
+        and not history[-1].get("stale", False)
     ]
     confirmed_cases = []
     for student_id, history in cases.items():
@@ -161,6 +164,7 @@ def package(
                 or not match.get("structured_plan")
                 or not latest_source
                 or latest_source["status"] != "verified"
+                or latest_source.get("stale", False)
                 or match.get("source_verification_versions", {}).get(
                     ref["indicator_id"]
                 )

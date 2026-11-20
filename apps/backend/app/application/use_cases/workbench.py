@@ -68,15 +68,18 @@ class ListCases:
 
 
 class RuleDraft:
-    def __init__(self, current_run: CurrentRun):
+    def __init__(self, current_run: CurrentRun, stage2: Stage2Decisions):
         self.current_run = current_run
+        self.stage2 = stage2
 
     def execute(
         self, student_id: str, indicator_id: str, node_id: str | None = None
     ) -> dict:
         with self.current_run.uow_factory(immediate=False) as uow:
             run = uow.runs.current()
-            sources = uow.stage2.list_sources(run["run_id"])
+            sources = self.stage2.with_source_freshness(
+                run, uow.stage2.list_sources(run["run_id"])
+            )
         return draft(
             run,
             student_id,
@@ -87,8 +90,15 @@ class RuleDraft:
 
 
 class DeepSeekDraft:
-    def __init__(self, current_run: CurrentRun, config, client: LLMClient | None):
+    def __init__(
+        self,
+        current_run: CurrentRun,
+        stage2: Stage2Decisions,
+        config,
+        client: LLMClient | None,
+    ):
         self.current_run = current_run
+        self.stage2 = stage2
         self.config = config
         self.client = client
 
@@ -97,7 +107,9 @@ class DeepSeekDraft:
     ) -> dict:
         with self.current_run.uow_factory(immediate=False) as uow:
             run = uow.runs.current()
-            sources = uow.stage2.list_sources(run["run_id"])
+            sources = self.stage2.with_source_freshness(
+                run, uow.stage2.list_sources(run["run_id"])
+            )
         return deepseek_draft(
             run,
             student_id,
@@ -120,9 +132,10 @@ class ReadSourcePdf:
 
 
 class ExportPackage:
-    def __init__(self, uow_factory, current_run: CurrentRun):
+    def __init__(self, uow_factory, current_run: CurrentRun, stage2: Stage2Decisions):
         self.uow_factory = uow_factory
         self.current_run = current_run
+        self.stage2 = stage2
 
     def execute(self, case_ids: list[str]) -> bytes:
         with self.uow_factory(immediate=False) as uow:
@@ -131,6 +144,7 @@ class ExportPackage:
             sources = uow.stage2.list_sources(run["run_id"])
             cases = uow.stage2.list_cases(run["run_id"])
             teaching_adjustments = uow.teaching_adjustments.list()
+        sources = self.stage2.with_source_freshness(run, sources)
         return package(
             run,
             reviews,
@@ -174,11 +188,13 @@ class WorkbenchUseCases:
         self.import_folder = ImportFolder(import_service)
         self.list_reviews = ListReviews(uow_factory)
         self.save_review = save_review
-        self.stage2 = Stage2Decisions(uow_factory)
+        self.stage2 = Stage2Decisions(uow_factory, source_service)
         self.teaching_adjustments = TeachingAdjustments(uow_factory)
         self.list_cases = ListCases(self.current_run)
-        self.rule_draft = RuleDraft(self.current_run)
-        self.deepseek_draft = DeepSeekDraft(self.current_run, config, llm_client)
+        self.rule_draft = RuleDraft(self.current_run, self.stage2)
+        self.deepseek_draft = DeepSeekDraft(
+            self.current_run, self.stage2, config, llm_client
+        )
         self.read_source_pdf = ReadSourcePdf(self.current_run, source_service)
-        self.export_package = ExportPackage(uow_factory, self.current_run)
+        self.export_package = ExportPackage(uow_factory, self.current_run, self.stage2)
         self.evidence_bundle = GetEvidenceBundle(uow_factory)

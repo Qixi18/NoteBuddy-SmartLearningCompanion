@@ -1,7 +1,9 @@
 import io
 import json
 import zipfile
+from dataclasses import replace
 
+from app.config import settings
 from test_server import client_for
 
 
@@ -550,18 +552,31 @@ def test_source_signoff_roundtrips_verified_rubric_issue_mappings(tmp_path):
 
     tables = sample_tables()
     tables["题目与材料"][0]["评分点"] = "Q001P1 正确识别同类项 2分"
+    tables["题目与材料"].append(
+        {
+            "材料编号": "Q002",
+            "主题编号": "T01",
+            "指标编号": "T01I1",
+            "满分": "1",
+            "评分点": "Q002P1 解释步骤 1分",
+        }
+    )
     client = client_for(tmp_path, tables=tables)
     payload = {
         "indicator_id": "T01I1",
         "status": "verified",
         "curriculum_locator": "课标第62页",
         "textbook_locator": "教材第68页",
-        "material_ids": ["Q001"],
+        "material_ids": ["Q001", "Q002"],
         "knowledge_links": [],
         "rubric_mappings": [
             {
                 "issue_id": "combine_like_terms",
+                "label": "同类项识别有误",
                 "rubric_point_ids": ["Q001P1"],
+                "material_ids": ["Q001"],
+                "evidence": "两题评分点描述指向同一错误",
+                "reviewer": "数学教师甲",
                 "status": "verified",
             }
         ],
@@ -579,8 +594,21 @@ def test_source_signoff_roundtrips_verified_rubric_issue_mappings(tmp_path):
         {
             **payload,
             "rubric_mappings": [
+                {**payload["rubric_mappings"][0], "rubric_point_ids": ["Q002P1"]}
+            ],
+        },
+        {
+            **payload,
+            "rubric_mappings": [
                 payload["rubric_mappings"][0],
                 {**payload["rubric_mappings"][0], "issue_id": "duplicate_issue"},
+            ],
+        },
+        {
+            **payload,
+            "rubric_mappings": [
+                payload["rubric_mappings"][0],
+                {**payload["rubric_mappings"][0], "issue_id": "duplicate_point"},
             ],
         },
     )
@@ -595,4 +623,151 @@ def test_source_signoff_roundtrips_verified_rubric_issue_mappings(tmp_path):
     assert saved.json()["rubric_mappings"] == payload["rubric_mappings"]
     history = client.get("/api/source-verifications").json()["T01I1"]
     assert history[0]["rubric_mappings"] == payload["rubric_mappings"]
+    from app.services.task03.recommendation_service import _verified_indicator_check
+
+    rule_input = _verified_indicator_check({"items": []}, "T01I1", {"T01I1": history})
+    assert rule_input["rubric_mappings"] == payload["rubric_mappings"]
+    client.close()
+
+
+def test_resource_links_include_unscoped_textbook_and_card_with_server_metadata(
+    tmp_path,
+):
+    from test_core import sample_tables
+
+    tables = sample_tables()
+    supporting_ids = [
+        *(f"TB{index:02d}" for index in range(1, 9)),
+        *(f"LC{index:02d}" for index in range(1, 4)),
+    ]
+    tables["题目与材料"].extend(
+        {
+            "材料编号": material_id,
+            "指标编号": "",
+            "材料类型": "教材" if material_id.startswith("TB") else "学习卡",
+            "题干或内容": f"{material_id} 内容",
+        }
+        for material_id in supporting_ids
+    )
+    client = client_for(tmp_path, tables=tables)
+    payload = {
+        "indicator_id": "T01I1",
+        "status": "verified",
+        "curriculum_locator": "课标第 62 页",
+        "textbook_locator": "教材第 68 页",
+        "material_ids": ["Q001"],
+        "knowledge_links": [],
+        "rubric_mappings": [],
+        "resource_links": [
+            {
+                "material_id": material_id,
+                "purpose": purpose,
+                "indicator_ids": ["T01I1"],
+                "allowed_node_ids": ["N01"],
+                "source_locator": locator,
+                "evidence": evidence,
+                "status": "verified",
+                "resource_type": "caller-forged-type",
+                "content_hash": "caller-forged-hash",
+            }
+            for material_id in supporting_ids
+            for purpose, locator, evidence in (
+                (
+                    "再次讲解合并同类项"
+                    if material_id.startswith("TB")
+                    else "自主回忆",
+                    f"材料 {material_id} 定位",
+                    f"材料 {material_id} 与指标对应",
+                ),
+            )
+        ],
+        "reviewer": "数学教师甲",
+        "reason": "已核对来源",
+    }
+
+    invalid_links = (
+        {**payload["resource_links"][0], "material_id": "MISSING"},
+        {**payload["resource_links"][0], "indicator_ids": ["T99I9"]},
+        {**payload["resource_links"][0], "allowed_node_ids": ["N99"]},
+    )
+    for link in invalid_links:
+        rejected = client.post(
+            "/api/source-verification",
+            json={**payload, "resource_links": [link]},
+        )
+        assert rejected.status_code == 400
+    assert client.get("/api/source-verifications").json() == {}
+
+    saved = client.post("/api/source-verification", json=payload)
+
+    assert saved.status_code == 200, saved.text
+    links = saved.json()["resource_links"]
+    assert [link["resource_type"] for link in links] == [
+        *(["教材"] * 8),
+        *(["学习卡"] * 3),
+    ]
+    assert all(link["content_hash"] != "caller-forged-hash" for link in links)
+    assert all(len(link["content_hash"]) == 64 for link in links)
+    assert set(saved.json()["source_fingerprints"]) == {
+        "material:Q001",
+        *(f"material:{material_id}" for material_id in supporting_ids),
+    }
+    assert all(
+        saved.json()["source_fingerprints"][f"material:{link['material_id']}"]
+        == link["content_hash"]
+        for link in links
+    )
+    assert (
+        client.get("/api/source-verifications").json()["T01I1"][0]["resource_links"]
+        == links
+    )
+    draft = client.get(
+        "/api/draft", params={"student": "D02", "indicator": "T01I1", "node": "N01"}
+    )
+    assert draft.status_code == 200
+    assert set(draft.json()["material_ids"]) >= set(supporting_ids), draft.json()
+    client.close()
+
+
+def test_verified_source_becomes_stale_when_allowlisted_pdf_changes(tmp_path):
+    source_dir = tmp_path / "source_files"
+    source_dir.mkdir()
+    source_pdf = source_dir / "B05_相关资料切片.pdf"
+    source_pdf.write_bytes(b"synthetic pdf first version")
+    client = client_for(
+        tmp_path,
+        config=replace(settings, source_files_dir=source_dir),
+    )
+    payload = {
+        "indicator_id": "T01I1",
+        "status": "verified",
+        "curriculum_locator": "课标第 62 页",
+        "textbook_locator": "教材第 68 页",
+        "material_ids": ["Q001"],
+        "reviewer": "数学教师甲",
+        "reason": "已核对原页",
+    }
+
+    saved = client.post("/api/source-verification", json=payload)
+    assert saved.status_code == 200, saved.text
+    assert any(name.startswith("file:") for name in saved.json()["source_fingerprints"])
+    assert client.get("/api/source-verifications").json()["T01I1"][-1]["stale"] is False
+
+    source_pdf.write_bytes(b"synthetic pdf changed content")
+    latest = client.get("/api/source-verifications").json()["T01I1"][-1]
+    assert latest["stale"] is True
+    draft = client.get(
+        "/api/draft", params={"student": "D02", "indicator": "T01I1", "node": "N01"}
+    ).json()
+    assert draft["material_ids"] == []
+    export = client.get("/api/export", params={"cases": "D01,D02,D03"})
+    with zipfile.ZipFile(io.BytesIO(export.content)) as archive:
+        assert json.loads(archive.read("verified_source_relations.json")) == []
+    renewed = client.post(
+        "/api/source-verification",
+        json={**payload, "expected_version": latest["version"]},
+    )
+    assert renewed.status_code == 200, renewed.text
+    assert renewed.json()["version"] == latest["version"] + 1
+    assert renewed.json()["stale"] is False
     client.close()

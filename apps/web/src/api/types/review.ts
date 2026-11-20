@@ -34,11 +34,34 @@ export interface SourceVerification {
   textbook_locator: string;
   material_ids: string[];
   knowledge_links: Array<{ target_indicator_id: string; relation: string; evidence: string }>;
-  rubric_mappings?: Array<{ issue_id: string; rubric_point_ids: string[]; status: 'pending' | 'verified' }>;
+  rubric_mappings?: Array<{
+    issue_id: string;
+    label?: string;
+    rubric_point_ids: string[];
+    material_ids?: string[];
+    evidence?: string;
+    reviewer?: string;
+    status: 'pending' | 'verified';
+  }>;
+  resource_links?: Array<ResourceLink>;
+  source_fingerprints?: Record<string, string>;
+  stale?: boolean;
   reviewer: string;
   reason: string;
   version: number;
   reviewed_at: string;
+}
+
+export interface ResourceLink {
+  material_id: string;
+  purpose: string;
+  indicator_ids: string[];
+  allowed_node_ids: string[];
+  source_locator: string;
+  evidence: string;
+  status: 'pending' | 'verified';
+  resource_type?: string;
+  content_hash?: string;
 }
 
 export type SourceVerificationPayload = Omit<SourceVerification, 'run_id' | 'version' | 'reviewed_at'> & { expected_version?: number };

@@ -36,6 +36,9 @@ def test_shared_frontend_backend_contract_fixtures():
     source_verification = json.loads(
         (root / "contracts/api/source-verification.json").read_text(encoding="utf-8")
     )
+    source_mapping_v2 = json.loads(
+        (root / "contracts/source-mapping-v2.json").read_text(encoding="utf-8")
+    )
     evidence_bundle = json.loads(
         (root / "contracts/api/evidence-bundle.json").read_text(encoding="utf-8")
     )
@@ -57,6 +60,17 @@ def test_shared_frontend_backend_contract_fixtures():
     assert (
         SourceVerificationRequest.model_validate(source_verification).model_dump()
         == source_verification
+    )
+    assert (
+        SourceVerificationRequest.model_validate(
+            {
+                **source_verification,
+                **source_mapping_v2,
+            }
+        )
+        .resource_links[0]
+        .material_id
+        == "TB01"
     )
     assert source_verification["rubric_mappings"][0]["status"] == "verified"
     assert TeacherCaseRequest.model_validate(teacher_case).model_dump() == teacher_case
