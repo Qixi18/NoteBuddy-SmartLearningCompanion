@@ -1,4 +1,5 @@
 const { randomUUID } = require('node:crypto');
+const fs = require('node:fs');
 const { spawnSync } = require('node:child_process');
 const path = require('node:path');
 const { cleanupGeneratedPlaywrightData } = require('./playwright-cleanup.cjs');
@@ -10,6 +11,12 @@ const cleanupTests = spawnSync(process.execPath, ['--test', 'tests/playwright-cl
 });
 if (cleanupTests.status !== 0) process.exit(cleanupTests.status ?? 2);
 const env = { ...process.env };
+const backendPath = path.join(root, 'apps', 'backend');
+env.PYTHONPATH = [backendPath, env.PYTHONPATH].filter(Boolean).join(path.delimiter);
+const venvScripts = path.join(root, '.venv', 'Scripts');
+if (fs.existsSync(path.join(venvScripts, 'python.exe'))) {
+  env.PATH = [venvScripts, env.PATH].filter(Boolean).join(path.delimiter);
+}
 const generatedRunId = !env.PLAYWRIGHT_RUN_ID;
 const customPaths = Boolean(env.PLAYWRIGHT_DATABASE_PATH || env.PLAYWRIGHT_DATA_PATH);
 const runId = env.PLAYWRIGHT_RUN_ID || randomUUID();

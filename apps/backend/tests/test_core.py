@@ -3,15 +3,15 @@ import json
 import os
 import zipfile
 from pathlib import Path
-import pytest
 
+import pytest
 from app.application.ports.llm import LLMError
 from app.config import Settings
+from app.repositories.store import Store
 from app.services.analysis import analyze, read_bundle
+from app.services.cases import suggest_cases
 from app.services.exports import package
 from app.services.recommendations import deepseek_draft, draft
-from app.repositories.store import Store
-from app.services.cases import suggest_cases
 
 
 def make_store(path: Path) -> Store:
@@ -245,6 +245,7 @@ def test_source_index_keeps_unverified_indicator_mapping_pending(tmp_path: Path)
 
 def test_csv_multiline_source_line(tmp_path: Path):
     import csv
+
     from app.services.analysis import TABLES
 
     for name, headers in TABLES.items():
@@ -268,6 +269,7 @@ def test_csv_multiline_source_line(tmp_path: Path):
 
 def test_csv_requires_fields_consumed_by_statistics(tmp_path: Path):
     import csv
+
     from app.services.analysis import TABLES, read_bundle
 
     for name, required in TABLES.items():
@@ -286,6 +288,7 @@ def test_csv_requires_fields_consumed_by_statistics(tmp_path: Path):
 
 def test_csv_rejects_malformed_quoting_with_readable_error(tmp_path: Path):
     import csv
+
     from app.services.analysis import TABLES, read_bundle
 
     for name, required in TABLES.items():
@@ -307,6 +310,7 @@ def test_csv_rejects_malformed_quoting_with_readable_error(tmp_path: Path):
 
 def test_non_sample_bundle_import(tmp_path: Path):
     import csv
+
     from app.services.analysis import TABLES
 
     source = tmp_path / "input"
@@ -749,9 +753,7 @@ def test_model_prompt_uses_local_aliases_and_maps_citations_back():
 def test_export_pending_recommendations_only_include_selected_students():
     run = analyze(sample_tables(), {})
     run["students"].append({"学生编号": "D04", "模拟班级编号": "C2"})
-    archive = zipfile.ZipFile(
-        io.BytesIO(package(run, {}, ["D01", "D02", "D03"]))
-    )
+    archive = zipfile.ZipFile(io.BytesIO(package(run, {}, ["D01", "D02", "D03"])))
 
     pending = json.loads(archive.read("pending_review.json"))
 
