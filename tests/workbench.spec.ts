@@ -128,10 +128,20 @@ test('loads the local workbench and imports the sample bundle', async ({ page })
   for (const control of await scopeControls.all()) {
     expect((await control.boundingBox())?.width ?? 0).toBeGreaterThan(300);
   }
+  await expect(page.getByText('本机未配置模型，可使用规则草稿。')).toBeVisible();
+  await expect(page.getByRole('button', { name: '使用模型生成草稿' })).toBeDisabled();
+  await page.route('**/api/readiness', async route => {
+    const response = await route.fetch();
+    const data = await response.json();
+    await route.fulfill({ response, json: { ...data, model: { ...data.model, configured: true } } });
+  });
+  await page.getByRole('link', { name: '教学调整', exact: true }).click();
+  await page.getByRole('link', { name: '建议复核', exact: true }).click();
   await page.route('**/api/deepseek', route => route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ error: '模型服务调用失败', code: 'MODEL_SERVICE_ERROR' }) }));
   await page.getByRole('button', { name: '使用模型生成草稿' }).click();
   await expect(page.locator('#message')).toContainText('模型服务调用失败');
   await page.unroute('**/api/deepseek');
+  await page.unroute('**/api/readiness');
   await page.getByRole('button', { name: '生成规则草稿' }).click();
   await expect(page.getByRole('heading', { name: '教师复核内容' })).toBeVisible();
   await expect(page.getByText('未确认 · 请核对左侧证据和来源边界')).toBeVisible();
@@ -176,12 +186,12 @@ test('loads the local workbench and imports the sample bundle', async ({ page })
   await caseEditor.getByLabel(/T01I1 · 节点 N01 · 版本 1/).check();
   await page.getByRole('button', { name: '确认正式案例' }).click();
   await expect(caseEditor.getByRole('status')).toContainText('教师已确认');
-  await page.getByLabel('案例一').selectOption('D01');
-  await page.getByLabel('案例二').selectOption('D02');
-  await page.getByLabel('案例三').selectOption('D03');
+  await page.getByLabel('报告案例 1').selectOption('D01');
+  await page.getByLabel('报告案例 2').selectOption('D02');
+  await page.getByLabel('报告案例 3').selectOption('D03');
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    page.getByRole('button', { name: '下载成果包' }).click(),
+    page.getByRole('button', { name: '下载草稿成果包' }).click(),
   ]);
   expect(download.suggestedFilename()).toMatch(/\.zip$/);
   await expect(page.getByText(/不包含完整运行审计数据/)).toBeVisible();
@@ -370,14 +380,20 @@ test('confirms a teacher-reviewed no-response coverage case', async ({ page }) =
     await page.setViewportSize({ width, height: 1000 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   }
-  await page.emulateMedia({ media: 'print' });
-  expect(await page.locator('.sidebar').evaluate(element => getComputedStyle(element).display)).toBe('none');
-  expect(await caseReport.evaluate(element => getComputedStyle(element).breakAfter)).toBe('page');
-  await page.emulateMedia({ media: 'screen' });
+  await page.evaluate(() => { window.print = () => {}; });
+  for (const [selected, other, id] of [[caseReport, classReport, 'case-report'], [classReport, caseReport, 'class-report']] as const) {
+    await selected.getByRole('button', { name: '打印 / 保存为 PDF' }).click();
+    await expect(page.locator('body')).toHaveAttribute('data-print-report', id);
+    await page.emulateMedia({ media: 'print' });
+    await expect(selected).toBeVisible();
+    await expect(other).toBeHidden();
+    await expect(page.locator('.sidebar')).toBeHidden();
+    await expect(page.locator('.case-editor')).toBeHidden();
+    await page.emulateMedia({ media: 'screen' });
+    await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+  }
   const exportPanel = page.locator('.export-panel');
-  await exportPanel.getByLabel('案例一').selectOption('D01');
-  await exportPanel.getByLabel('案例二').selectOption('D02');
-  await exportPanel.getByLabel('案例三').selectOption('D03');
+  await expect(exportPanel.locator('.release-scope')).toContainText('D01、D02、D03');
   const preflight = exportPanel.getByLabel('正式提交发布预检');
   await expect(preflight.getByRole('status')).toContainText('机器检查通过');
   await expect(preflight.getByRole('status')).toContainText('未完成的人工验收项');
@@ -519,7 +535,7 @@ test('keyboard focus and accessible names are available across all routes', asyn
       if (await proposedActivity.count()) await proposedActivity.locator('summary').click();
       const structuredPlan = page.locator('.review-structured');
       await structuredPlan.locator('summary').click();
-      await structuredPlan.getByLabel('保存完整方案').check();
+      await structuredPlan.getByLabel('保存旧版结构化方案').check();
       const firstEvidence = page.locator('.review-record').first();
       if (await firstEvidence.count()) await firstEvidence.locator('summary').click();
     }
@@ -529,7 +545,7 @@ test('keyboard focus and accessible names are available across all routes', asyn
       await page.locator('details').filter({ hasText: '实施与复核历史' }).locator('summary').click();
     }
     if (route === '/plan/cases') {
-      await page.locator('.case-editor summary').filter({ hasText: '开始案例签核' }).click();
+      await page.locator('.case-editor').getByText(/^(开始|更新)案例签核$/).click();
     }
     await page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; animation: none !important; }' });
     const findings = await page.locator('body').evaluate((body) => {
@@ -775,10 +791,10 @@ test('export failure is announced without navigating away or claiming success', 
     await expect(page.locator('#message')).toContainText('数据已导入，当前运行已更新。');
   }
   await page.goto('/#/plan/cases');
-  await page.getByLabel('案例一').selectOption('D01');
-  await page.getByLabel('案例二').selectOption('D02');
-  await page.getByLabel('案例三').selectOption('D03');
-  await page.getByRole('button', { name: '下载成果包' }).click();
+  await page.getByLabel('报告案例 1').selectOption('D01');
+  await page.getByLabel('报告案例 2').selectOption('D02');
+  await page.getByLabel('报告案例 3').selectOption('D03');
+  await page.getByRole('button', { name: '下载草稿成果包' }).click();
   await expect(page.getByRole('alert')).toContainText('模拟导出服务错误');
   await expect(page).toHaveURL(/#\/plan\/cases$/);
 });
@@ -843,7 +859,7 @@ test('slow review requests reject stale drafts and keep generation and save sing
   await expect(page.locator('#message')).toContainText('复核已保存');
 });
 
-test('key pages fit and render at four desktop widths', async ({ page }, testInfo) => {
+test('key pages fit on desktop and mobile, with keyboard access to navigation', async ({ page }, testInfo) => {
   const pageErrors: string[] = [];
   page.on('pageerror', error => pageErrors.push(error.message));
   await page.goto('/#/home');
@@ -865,7 +881,7 @@ test('key pages fit and render at four desktop widths', async ({ page }, testInf
     ['/plan/reviews', '建议复核'],
     ['/plan/cases', '案例与导出'],
   ] as const;
-  for (const width of [1024, 1280, 1440, 1920]) {
+  for (const width of [390, 768, 1024, 1280, 1440, 1920]) {
     await page.setViewportSize({ width, height: 900 });
     for (const [route, title] of pages) {
       await page.goto(`/#${route}`);
@@ -885,6 +901,22 @@ test('key pages fit and render at four desktop widths', async ({ page }, testInf
       });
     }
   }
+  await page.setViewportSize({ width: 390, height: 900 });
+  const mobileMenu = page.getByRole('button', { name: '导航', exact: true });
+  const nav = page.getByRole('complementary', { name: '主导航' });
+  await expect(nav).toBeHidden();
+  await mobileMenu.focus();
+  await mobileMenu.press('Enter');
+  await expect(mobileMenu).toHaveAttribute('aria-expanded', 'true');
+  await expect(nav.getByRole('link', { name: '案例与导出', exact: true })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(nav).toBeHidden();
+  await expect(mobileMenu).toBeFocused();
+  await mobileMenu.press('Enter');
+  await nav.getByRole('link', { name: '数据质量', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '数据质量', level: 1 })).toBeFocused();
+  await expect(nav).toBeHidden();
+
   const screenshotScan = spawnSync(pythonExecutable, ['scan-artifacts.py', testInfo.outputDir], { cwd: repoRoot, env: pythonEnvironment, encoding: 'utf8' });
   expect(screenshotScan.status, screenshotScan.stdout + screenshotScan.stderr).toBe(0);
   expect(pageErrors).toEqual([]);

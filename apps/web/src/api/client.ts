@@ -1,4 +1,4 @@
-import type { AnalysisRun, CaseReports, CaseSuggestion, ClassInsights, CompetitionClassReport, Draft, EvidenceBundle, ImportResult, MaterialCatalog, ReleasePreflight, ReviewMap, ReviewPayload, ReviewStatus, SourceVerification, SourceVerificationPayload, StudentInsights, SubmissionExportPayload, TeacherCase, TeacherCasePayload, TeachingAdjustment, TeachingAdjustmentCreate, TeachingAdjustmentUpdate } from './types';
+import type { AnalysisRun, CaseReports, CaseSuggestion, ClassInsights, CompetitionClassReport, Draft, EvidenceBundle, ImportResult, MaterialCatalog, ReleasePreflight, ReviewMap, ReviewPayload, ReviewStatus, SourceVerification, SourceVerificationPayload, StudentInsights, SubmissionExportPayload, TeacherCase, TeacherCasePayload, TeachingAdjustment, TeachingAdjustmentCreate, TeachingAdjustmentUpdate, WorkbenchReadiness } from './types';
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init);
@@ -13,6 +13,7 @@ export const jsonRequest = (body: unknown): RequestInit => ({
 });
 
 export const learningApi = {
+  readiness: () => api<WorkbenchReadiness>('/api/readiness'),
   run: () => api<AnalysisRun>('/api/run'),
   reviews: () => api<ReviewMap>('/api/reviews'),
   cases: () => api<CaseSuggestion[]>('/api/cases'),

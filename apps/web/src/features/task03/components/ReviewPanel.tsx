@@ -85,7 +85,7 @@ function EvidenceContext({ run, student, indicator, node, draft }: { run?: Analy
   </aside>;
 }
 
-export function ReviewPanel({ run, student, indicator, node, review, draft, onDraft, onSave, initialFields, onFieldsChange }: { run?: AnalysisRun; student: string; indicator: string; node: string; review?: Review; draft: Draft | null; onDraft: (provider: 'rule' | 'deepseek', node: string) => Promise<void>; onSave: (payload: ReviewFields) => Promise<void>; initialFields?: ReviewFields; onFieldsChange?: (fields: ReviewFields) => void }) {
+export function ReviewPanel({ run, student, indicator, node, review, draft, modelConfigured, onDraft, onSave, initialFields, onFieldsChange }: { run?: AnalysisRun; student: string; indicator: string; node: string; review?: Review; draft: Draft | null; modelConfigured?: boolean; onDraft: (provider: 'rule' | 'deepseek', node: string) => Promise<void>; onSave: (payload: ReviewFields) => Promise<void>; initialFields?: ReviewFields; onFieldsChange?: (fields: ReviewFields) => void }) {
   const [fields, setFields] = useState<ReviewFields>(initialFields ?? emptyFields);
   const [verification, setVerification] = useState<SourceVerification | null>(null);
   const [source, setSource] = useState('');
@@ -183,7 +183,7 @@ export function ReviewPanel({ run, student, indicator, node, review, draft, onDr
 
   return <Panel title="生成与复核" className="review-panel">
     <div className="review-tool-intro"><p>选择规则或模型生成待复核草稿。系统提供依据，教师确认后才形成复核结论。</p><span className="draft-status">{review ? `已有复核版本 ${review.version}` : draft ? '待教师复核' : '尚未生成草稿'}</span></div>
-    <div className="review-generate-row"><div className="actions"><button disabled={drafting || saving || !node} onClick={() => void generate('rule')}>{drafting ? '正在生成草稿…' : '生成规则草稿'}</button><button className="secondary" disabled={drafting || saving || !node} onClick={() => void generate('deepseek')}>{drafting ? '正在生成草稿…' : '使用模型生成草稿'}</button></div>{source && <p className="review-source-note">{source}</p>}</div>
+    <div className="review-generate-row"><div className="actions"><button disabled={drafting || saving || !node} onClick={() => void generate('rule')}>{drafting ? '正在生成草稿…' : '生成规则草稿'}</button><button className="secondary" disabled={drafting || saving || !node || modelConfigured === false} aria-describedby={modelConfigured === false ? 'model-availability' : undefined} onClick={() => void generate('deepseek')}>{drafting ? '正在生成草稿…' : '使用模型生成草稿'}</button></div>{modelConfigured === false && <p id="model-availability" className="muted">本机未配置模型，可使用规则草稿。</p>}{source && <p className="review-source-note">{source}</p>}</div>
     {!node && <div className="review-empty"><strong>先选择一个测验节点</strong><p>建议只根据单一节点的可追溯记录生成；未选择时不会推断学习状态。</p></div>}
     {draft?.scope_required && <p className="scope-error" role="alert">范围错误：该指标在多个节点有记录，请明确选择单一测验节点后重新生成。当前草稿不可保存。</p>}
     {draft && !draft.scope_required && <div className="review-workspace">

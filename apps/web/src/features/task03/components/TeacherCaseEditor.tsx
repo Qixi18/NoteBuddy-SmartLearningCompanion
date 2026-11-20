@@ -3,7 +3,11 @@ import { learningApi } from '../../../api/client';
 import type { AnalysisRun, EvidenceBundle, EvidenceReference, Review, TeacherCase, TeacherCasePayload } from '../../../api/types';
 import { Panel } from '../../../components/Panel';
 
-export function TeacherCaseEditor({ run, reviews }: { run: AnalysisRun; reviews: Record<string, Review[]> }) {
+export function TeacherCaseEditor({ run, reviews, onSaved }: {
+  run: AnalysisRun;
+  reviews: Record<string, Review[]>;
+  onSaved: () => void;
+}) {
   const [student, setStudent] = useState(run.students[0]?.['学生编号'] ?? '');
   const [indicator, setIndicator] = useState(run.objectives[0]?.['指标编号'] ?? '');
   const [node, setNode] = useState(run.nodes[0]?.['节点编号'] ?? '');
@@ -42,11 +46,12 @@ export function TeacherCaseEditor({ run, reviews }: { run: AnalysisRun; reviews:
     try {
       const result = await learningApi.saveTeacherCase({ student_id: student, status, narrative, limitations, evidence_record_ids: evidenceIds, evidence_refs: coverageRef ? [coverageRef] : [], review_refs: reviewRefs, reviewer });
       setHistory(old => ({ ...old, [student]: [...(old[student] ?? []), result] }));
+      onSaved();
       setMessage(`已保存案例版本 ${result.version} · ${status === 'confirmed' ? '教师已确认' : status === 'draft' ? '待确认' : '已驳回'}。`);
     } catch (error) { setMessage(error instanceof Error ? error.message : String(error)); }
     finally { setSaving(false); }
   };
-  return <Panel title="教师案例确认" className="case-editor"><p className="muted">候选只供筛选；正式案例须核对原始记录、复核版本并写明样本限制。</p>
+  return <Panel id="teacher-cases" title="教师案例确认" className="case-editor"><p className="muted">候选只供筛选；正式案例须核对原始记录、复核版本并写明样本限制。</p>
     <div className="scope-fields"><label>案例学生<select value={student} onChange={event => { setStudent(event.target.value); setMessage(''); setReviewRefs([]); }}>{run.students.map(item => <option key={item['学生编号']} value={item['学生编号']}>{item['学生编号']} · {item['模拟班级编号']}</option>)}</select></label><label>覆盖指标<select value={indicator} onChange={event => { setIndicator(event.target.value); setReviewRefs([]); }}>{run.objectives.map(item => <option key={item['指标编号']} value={item['指标编号']}>{item['指标编号']} · {item['观察指标']}</option>)}</select></label><label>覆盖节点<select value={node} onChange={event => { setNode(event.target.value); setReviewRefs([]); }}>{run.nodes.map(item => <option key={item['节点编号']} value={item['节点编号']}>{item['节点编号']}</option>)}</select></label></div>
     {coverageRef && <p className="context-limit">覆盖状态：节点 {node} 共 {coverage?.coverage.expected_material_ids.length ?? 0} 道应测题，作答记录 0 条。确认案例时会附带此范围的服务端校验覆盖引用。</p>}
     <p>最新版本：{latest ? `${latest.version} · ${latest.status} · ${latest.reviewer || '未署名'}` : '尚无案例记录'}</p>

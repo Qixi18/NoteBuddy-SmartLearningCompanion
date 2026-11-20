@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import type { AnalysisRun, CaseSuggestion, Draft, EvidenceReference, Review, ReviewStatus, StructuredPlan, TeachingPlanV2 } from '../api/types';
+import { useEffect, useState } from 'react';
+import { learningApi } from '../api/client';
+import type { AnalysisRun, CaseSuggestion, Draft, EvidenceReference, Review, ReviewStatus, StructuredPlan, TeachingPlanV2, WorkbenchReadiness } from '../api/types';
 import { Panel } from '../components/Panel';
 import { ImportPanel } from '../features/import/ImportPanel';
 import { ObjectivesPanel } from '../features/task01/components/ObjectivesPanel';
@@ -13,7 +14,7 @@ import { TeachingAdjustmentsPanel } from '../features/task03/components/Teaching
 import { ExportPanel } from '../features/export/ExportPanel';
 import { CaseReport } from '../features/export/CaseReport';
 import { ClassReport } from '../features/export/ClassReport';
-import { routes, type RoutePath } from '../app/navigation';
+import type { RoutePath } from '../app/navigation';
 import { findingLabel, severityLabel } from '../features/task02/qualityLabels';
 import { NavIcon } from '../components/NavIcon';
 
@@ -51,19 +52,41 @@ function EmptyRun({ onImported, onMessage }: Pick<PageProps, 'onImported' | 'onM
   </div>;
 }
 
-function Overview({ run, onNavigate }: { run: AnalysisRun; onNavigate: (path: RoutePath) => void }) {
+function Overview({ run, readiness, onNavigate }: {
+  run: AnalysisRun;
+  readiness?: WorkbenchReadiness;
+  onNavigate: (path: RoutePath) => void;
+}) {
   const classCount = new Set(run.students.map(student => student['模拟班级编号'])).size;
   const summary = [
-    ['学生', run.students.length, '当前快照中的学生', 'blue'],
-    ['班级', classCount, '按班级编号统计', 'teal'],
-    ['作答记录', run.quality.raw_rows, '包含修订与待处理记录', 'amber'],
-    ['有效评分', run.quality.eligible_scored, '进入评分统计的记录', 'violet'],
+    ['学生', run.students.length, '当前批次'],
+    ['班级', classCount, '按班级编号统计'],
+    ['作答记录', run.quality.raw_rows, '含版本与待处理记录'],
+    ['有效评分', run.quality.eligible_scored, '计入得分统计'],
   ];
+  const tasks = [
+    { path: '/knowledge/indicators', title: '理解学科', icon: 'subject', description: '核对课程指标、关联题目和材料来源。' },
+    { path: '/insights/classes', title: '理解学生', icon: 'insights', description: '比较两个班的表现，查看学生的原始作答。' },
+    { path: '/plan/reviews', title: '理解教学', icon: 'teaching', description: '按作答证据生成草稿并完成教师复核。' },
+  ] as const;
   const attention = run.quality.findings.filter(item => item.severity === 'WARN' || item.severity === 'ERROR');
   const exposedFindings = attention.slice(0, 3);
   return <>
-    <section className="overview-intro" aria-label="当前批次概况"><div><h2>数据范围与证据状态</h2><p>先确认哪些记录进入了分析，再继续查看学科来源、班级表现和教学建议。</p></div><div className="overview-date"><span>生成时间</span><strong>{new Date(run.created_at).toLocaleString('zh-CN', { dateStyle: 'medium', timeStyle: 'short' })}</strong></div></section>
-    <section className="stat-grid" aria-label="当前运行摘要">{summary.map(([label, value, note, tone]) => <article className={`stat-block stat-${tone}`} key={label}><span className="stat-label">{label}</span><strong>{value}</strong><small>{note}</small></article>)}</section>
+    <section className="stat-grid" aria-label="当前运行摘要">
+      {summary.map(([label, value, note]) => <article className="stat-block" key={label}>
+        <span className="stat-label">{label}</span><strong>{value}</strong><small>{note}</small>
+      </article>)}
+    </section>
+    <section className="overview-routes" aria-labelledby="overview-routes-title">
+      <header className="section-heading"><h2 id="overview-routes-title">赛题任务</h2></header>
+      <div className="entry-list">{tasks.map(task =>
+        <button className="entry-link" key={task.path} onClick={() => onNavigate(task.path)}>
+          <span className="entry-icon"><NavIcon name={task.icon} /></span>
+          <span className="entry-copy"><strong>{task.title}</strong><span>{task.description}</span></span>
+          <span className="entry-arrow" aria-hidden="true" />
+        </button>
+      )}</div>
+    </section>
     <section className="overview-detail-grid">
       <article className="overview-panel attention-panel">
         <header className="overview-panel-header"><h2>需要留意</h2><span className={`attention-count${attention.length ? ' has-attention' : ''}`}>{attention.length ? `${attention.length} 项` : '无异常'}</span></header>
@@ -71,15 +94,14 @@ function Overview({ run, onNavigate }: { run: AnalysisRun; onNavigate: (path: Ro
         <button className="text-action" onClick={() => onNavigate('/insights/quality')}>查看详情 <span aria-hidden="true">↗</span></button>
       </article>
       <article className="overview-panel scope-panel">
-        <header className="overview-panel-header"><h2>这批数据能说明什么</h2><span className="scope-icon" aria-label={`${run.nodes.length} 个测验节点`}>{run.nodes.length}</span></header>
-        <p className="scope-highlight"><strong>{run.quality.eligible_scored}</strong><span>条有效评分记录</span></p>
-        <p>覆盖 {run.nodes.length} 个测验节点。统计只反映当前快照中通过质量校验的作答；没有有效记录的范围不代表学生未掌握。</p>
+        <header className="overview-panel-header"><h2>分析范围与来源</h2></header>
+        <p>覆盖 {run.nodes.length} 个测验节点。统计依据通过校验的作答；没有有效记录的范围不代表学生未掌握。</p>
+        {readiness && <div className={`source-status-row ${readiness.sources.status === 'missing' ? 'needs-source' : ''}`}>
+          <div><strong>来源 PDF</strong><span>{readiness.sources.status === 'missing' ? '当前未找到来源文件' : `找到 ${readiness.sources.pdf_count} 份，按指标核验`}</span></div>
+          <button className="text-action" onClick={() => onNavigate('/knowledge/indicators')}>查看来源 <span aria-hidden="true">↗</span></button>
+        </div>}
         <p className="scope-footnote">规则版本 {run.rule_version} · 原始行与事件按不同口径统计</p>
       </article>
-    </section>
-    <section className="overview-routes" aria-labelledby="overview-routes-title">
-      <header className="section-heading"><h2 id="overview-routes-title">接下来要查看</h2><p>从证据核对到教学复核，按需要进入对应步骤。</p></header>
-      <div className="entry-list">{routes.filter(route => ['/knowledge/indicators', '/insights/classes', '/plan/reviews'].includes(route.path)).map((route, index) => { const icon = ['subject', 'insights', 'teaching'][index] as 'subject' | 'insights' | 'teaching'; return <button className={`entry-link entry-link-${index + 1}`} key={route.path} onClick={() => onNavigate(route.path)}><span className="entry-icon"><NavIcon name={icon} /></span><span className="entry-copy"><strong>{route.section}</strong><span>{route.description}</span></span><span className="entry-arrow" aria-hidden="true" /></button>; })}</div>
     </section>
   </>;
 }
@@ -98,7 +120,7 @@ function CaseEvidence({ run, suggestions, reviews, draft, onOpenReview }: { run:
   const relatedReviews = selected ? Object.entries(reviews).flatMap(([key, history]) => history
     .filter(review => key.startsWith(`${selected.student_id}:`) && review.evidence_record_ids.some(id => selected.evidence_record_ids.includes(id)))
     .map(review => ({ key, review }))) : [];
-  return <Panel title="候选与证据范围"><p className="muted">系统候选只用于进一步核对，不代表典型性或代表性结论。没有证据的候选应作为待补证对象。</p>
+  return <Panel id="case-candidates" title="候选与证据范围"><p className="muted">系统候选只用于进一步核对，不代表典型性或代表性结论。没有证据的候选应作为待补证对象。</p>
     {suggestions.length ? <div className="case-candidates">{suggestions.map(item => <details className="case-candidate" key={`${item.type}:${item.student_id}`} open={active === `${item.type}:${item.student_id}`} onToggle={event => { const key = `${item.type}:${item.student_id}`; if ((event.currentTarget as HTMLDetailsElement).open) setActive(key); else if (active === key) setActive(''); }}><summary>{item.type} · {item.student_id}{item.class_id ? ` · ${item.class_id}` : ''}</summary><p>{item.reason}</p><p>证据记录：{item.evidence_record_ids.join('、') || '暂无证据，待补充核验'}</p>{item.evidence_record_ids.length > 0 && <button className="secondary" onClick={() => setActive(`${item.type}:${item.student_id}`)}>查看候选证据</button>}</details>)}</div> : <p className="muted">当前运行没有返回案例候选。</p>}
     {selected && <div className="case-detail"><h3>{selected.student_id} 的可追溯记录</h3>{evidence.length ? evidence.map((record, index) => {
       const item = run.items.find(value => value['材料编号'] === record['材料编号']);
@@ -115,6 +137,21 @@ function CaseEvidence({ run, suggestions, reviews, draft, onOpenReview }: { run:
 export function WorkbenchPage(props: PageProps) {
   const [reviewEdits, setReviewEdits] = useState<Record<string, ReviewFields>>({});
   const { path, run, onNavigate } = props;
+  const [caseIds, setCaseIds] = useState(['', '', '']);
+  const [caseRevision, setCaseRevision] = useState(0);
+  const [readiness, setReadiness] = useState<WorkbenchReadiness>();
+  const showReadiness = Boolean(run && (path === '/home' || path === '/plan/reviews'));
+  useEffect(() => {
+    if (!showReadiness) return;
+    let active = true;
+    learningApi.readiness().then(value => {
+      if (active) setReadiness(value?.sources && value?.model ? value : undefined);
+    }).catch(() => { if (active) setReadiness(undefined); });
+    return () => { active = false; };
+  }, [showReadiness, run?.run_id]);
+  const [selectedReportNode, setSelectedReportNode] = useState('');
+  const reportNode = run?.nodes.some(item => item['节点编号'] === selectedReportNode)
+    ? selectedReportNode : run?.nodes[0]?.['节点编号'] ?? '';
   if (!run) return <EmptyRun onImported={props.onImported} onMessage={props.onMessage} />;
   const reviewNodes = [...new Set(run.responses.filter(row => row['学生编号'] === props.student && run.items.some(item => item['材料编号'] === row['材料编号'] && item['指标编号'] === props.indicator)).map(row => row['节点编号']))];
   const reviewKey = `${props.student}:${props.indicator}`;
@@ -132,7 +169,7 @@ export function WorkbenchPage(props: PageProps) {
     evidence_refs: review.evidence_refs ?? [],
   } : undefined);
   switch (path) {
-    case '/home': return <Overview run={run} onNavigate={onNavigate} />;
+    case '/home': return <Overview run={run} readiness={readiness} onNavigate={onNavigate} />;
     case '/knowledge/indicators': return <KnowledgePage run={run} />;
     case '/insights/classes': return <ClassPanel run={run} node={props.node} onNode={props.onNode} onOpenStudent={studentId => { props.onStudent(studentId); onNavigate('/insights/students'); }} />;
     case '/insights/students': return <StudentPanel run={run} student={props.student} indicator={props.indicator} node={props.node} onNode={props.onNode} onStudent={props.onStudent} onIndicator={props.onIndicator} onOpenEvidence={(recordId, sourceLine) => { if (recordId && sourceLine) props.onEvidenceFocus?.(recordId, sourceLine); onNavigate('/insights/evidence'); }} />;
@@ -142,11 +179,30 @@ export function WorkbenchPage(props: PageProps) {
       <section className="card review-range"><h2>教学范围与证据</h2><div className="scope-fields"><label>学生<select value={props.student} onChange={event => props.onStudent(event.target.value)}>{run.students.map(item => <option key={item['学生编号']} value={item['学生编号']}>{item['学生编号']} · {item['模拟班级编号']}</option>)}</select></label><label>观察指标<select value={props.indicator} onChange={event => props.onIndicator(event.target.value)}>{run.objectives.map(item => <option key={item['指标编号']} value={item['指标编号']}>{item['指标编号']} · {item['观察指标']}</option>)}</select></label><label>测验节点<select value={props.node} onChange={event => props.onNode(event.target.value)}><option value="">请选择测验节点</option>{run.nodes.map(item => <option key={item['节点编号']} value={item['节点编号']}>{item['节点编号']}</option>)}</select></label></div>
         {props.node && (() => { const observation = run.observations.find(item => item.student_id === props.student && item.indicator_id === props.indicator && item.node_id === props.node); return <div className="review-range-stats"><span>选中事件 <strong>{observation?.selected_count ?? 0}</strong></span><span>有效评分 <strong>{observation?.scored_count ?? 0}</strong></span><span className="is-pending">待评分 <strong>{observation?.pending_count ?? 0}</strong></span><span>未作答 <strong>{observation?.unanswered_count ?? 0}</strong></span><span className="is-excluded">排除 <strong>{observation?.excluded_count ?? 0}</strong></span>{!observation && <p className="muted">当前范围无观察记录，不能据此判断未掌握。</p>}</div>; })()}{props.node && <button className="secondary review-evidence-link" onClick={() => onNavigate('/insights/evidence')}>查看此范围作答证据</button>}
       </section>
-      <ReviewPanel run={run} student={props.student} indicator={props.indicator} node={props.node} review={review} draft={props.draft} onDraft={props.onDraft} onSave={props.onSave} initialFields={initialReviewFields} onFieldsChange={fields => setReviewEdits(old => ({ ...old, [reviewScope]: fields }))} />
+      <ReviewPanel run={run} student={props.student} indicator={props.indicator} node={props.node} review={review} draft={props.draft} modelConfigured={readiness?.model.configured} onDraft={props.onDraft} onSave={props.onSave} initialFields={initialReviewFields} onFieldsChange={fields => setReviewEdits(old => ({ ...old, [reviewScope]: fields }))} />
       <details className="review-save-note"><summary>复核保存与导出说明</summary><p>复核版本保存诊断、建议、调整条件、结构化方案与证据引用。完整方案只在材料来源签核仍有效时进入导出。</p></details>
     </>;
     case '/plan/adjustments': return <TeachingAdjustmentsPanel run={run} reviews={props.reviews} />;
-    case '/plan/cases': return <div className="cases-layout"><CaseEvidence run={run} suggestions={props.suggestions} reviews={props.reviews} draft={props.draft} onOpenReview={(studentId, indicatorId, nodeId) => { props.onStudent(studentId); props.onIndicator(indicatorId); props.onNode(nodeId); onNavigate('/plan/reviews'); }} /><TeacherCaseEditor run={run} reviews={props.reviews} /><CaseReport run={run} /><ClassReport run={run} /><ExportPanel students={run.students} suggestions={props.suggestions} runId={run.run_id} nodes={run.nodes} onExport={props.onExport} /></div>;
-    default: return <Overview run={run} onNavigate={onNavigate} />;
+    case '/plan/cases': return <div className="cases-layout">
+      <nav className="case-workflow" aria-label="案例与导出页内导航">
+        <button className="text-action" onClick={() => document.getElementById('case-candidates')?.focus()}>候选与证据</button>
+        <button className="text-action" onClick={() => document.getElementById('teacher-cases')?.focus()}>教师案例确认</button>
+        <button className="text-action" onClick={() => document.getElementById('case-report')?.focus()}>三案例报告</button>
+        <button className="text-action" onClick={() => document.getElementById('class-report')?.focus()}>两班报告</button>
+        <button className="text-action" onClick={() => document.getElementById('release-checks')?.focus()}>成果包与预检</button>
+      </nav>
+      <CaseEvidence run={run} suggestions={props.suggestions} reviews={props.reviews} draft={props.draft} onOpenReview={(studentId, indicatorId, nodeId) => {
+        props.onStudent(studentId);
+        props.onIndicator(indicatorId);
+        props.onNode(nodeId);
+        onNavigate('/plan/reviews');
+      }} />
+      <TeacherCaseEditor run={run} reviews={props.reviews} onSaved={() => setCaseRevision(revision => revision + 1)} />
+      <CaseReport key={caseRevision} run={run} ids={caseIds} onSelect={setCaseIds} />
+      <ClassReport run={run} node={reportNode} onNode={setSelectedReportNode} />
+      <ExportPanel key={JSON.stringify([caseIds, reportNode, caseRevision])} students={run.students} runId={run.run_id}
+        ids={caseIds} node={reportNode} onNavigate={onNavigate} onExport={props.onExport} />
+    </div>;
+    default: return <Overview run={run} readiness={readiness} onNavigate={onNavigate} />;
   }
 }

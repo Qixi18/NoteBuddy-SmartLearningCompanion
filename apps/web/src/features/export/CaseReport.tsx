@@ -1,26 +1,31 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { AnalysisRun, CaseReports } from '../../api/types';
 import { learningApi } from '../../api/client';
 import { Panel } from '../../components/Panel';
+import { printReport } from './printReport';
 
-export function CaseReport({ run }: { run: AnalysisRun }) {
-  const [ids, setIds] = useState<string[]>(['', '', '']);
-  const [report, setReport] = useState<CaseReports | null>(null);
-  const [error, setError] = useState('');
-  const ready = ids.every(Boolean) && new Set(ids).size === 3;
-  const selected = useMemo(() => ids.filter(Boolean), [ids]);
+export function CaseReport({ run, ids, onSelect }: { run: AnalysisRun; ids: string[]; onSelect: (ids: string[]) => void }) {
+  const [result, setResult] = useState<{ ids: string[]; report?: CaseReports; error?: string }>();
+  const ready = ids.length === 3 && ids.every(Boolean) && new Set(ids).size === 3;
+  const current = result?.ids === ids ? result : undefined;
+  const report = current?.report?.run_id === run.run_id ? current.report : undefined;
+
   useEffect(() => {
+    if (!ready) return;
     let active = true;
-    if (!ready) { setReport(null); setError(''); return () => { active = false; }; }
-    setError('');
-    learningApi.caseReports(selected).then(value => { if (active) setReport(value); }).catch(reason => { if (active) setError(reason instanceof Error ? reason.message : String(reason)); });
+    learningApi.caseReports(ids).then(value => {
+      if (active) setResult(value.run_id === run.run_id ? { ids, report: value } : { ids, error: '当前数据批次已变化，请刷新后重试。' });
+    }).catch(reason => {
+      if (active) setResult({ ids, error: reason instanceof Error ? reason.message : String(reason) });
+    });
     return () => { active = false; };
-  }, [ready, selected.join('|')]);
-  const setStudent = (index: number, value: string) => setIds(current => current.map((id, position) => position === index ? value : id));
-  return <Panel title="三案例教师阅读报告" className="competition-case-report report-view">
-    <div className="report-toolbar"><p>只展示当前运行中教师已确认的版本。报告与成果包共用服务端快照数据。</p><button className="secondary" disabled={!report || report.status !== 'ready'} onClick={() => window.print()}>打印 / 保存为 PDF</button></div>
-    <div className="export-slots">{ids.map((id, index) => <label className="export-slot" key={index}>案例 {['一', '二', '三'][index]}<select aria-label={`报告案例 ${index + 1}`} value={id} onChange={event => setStudent(index, event.target.value)}><option value="">选择学生</option>{run.students.filter(student => !ids.includes(student['学生编号']) || id === student['学生编号']).map(student => <option value={student['学生编号']} key={student['学生编号']}>{student['学生编号']} · {student['模拟班级编号']}</option>)}</select></label>)}</div>
-    {error && <p role="alert" className="error">报告读取失败：{error}</p>}
+  }, [ready, ids, run.run_id]);
+
+  return <Panel id="case-report" title="三案例教师阅读报告" className="competition-case-report report-view">
+    <div className="report-toolbar"><p>只展示当前运行中教师已确认的版本。报告与成果包共用服务端快照数据。</p><button className="secondary" disabled={!report || report.status !== 'ready'} onClick={() => printReport('case-report')}>打印 / 保存为 PDF</button></div>
+    <div className="export-slots">{ids.map((id, index) => <label className="export-slot" key={index}>案例 {['一', '二', '三'][index]}<select aria-label={`报告案例 ${index + 1}`} value={id} onChange={event => onSelect(ids.map((value, position) => position === index ? event.target.value : value))}><option value="">选择学生</option>{run.students.filter(student => !ids.includes(student['学生编号']) || id === student['学生编号']).map(student => <option value={student['学生编号']} key={student['学生编号']}>{student['学生编号']} · {student['模拟班级编号']}</option>)}</select></label>)}</div>
+    {current?.error && <p role="alert" className="error">报告读取失败：{current.error}</p>}
+    {ready && !current && <p role="status" className="muted">正在读取所选学生的报告…</p>}
     {ready && report?.status === 'incomplete' && <p role="status" className="report-incomplete">三名案例尚未全部获得当前运行中的教师确认。各案例会明确标注缺项，不能作为已完成案例提交。</p>}
     {!ready && <p className="muted" role="status">选择三名不同学生后生成案例并排阅读报告。</p>}
     {report && <>

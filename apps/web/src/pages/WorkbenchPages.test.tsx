@@ -4,8 +4,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AnalysisRun, CaseSuggestion, Draft, Review } from '../api/types';
 import draftFixtureJson from '../../../../contracts/api/draft.json';
 import { WorkbenchPage } from './WorkbenchPages';
+import { learningApi } from '../api/client';
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 const draftFixture = draftFixtureJson as Draft;
 
@@ -46,6 +47,19 @@ describe('WorkbenchPage empty state', () => {
     expect(screen.getByLabelText('当前运行摘要').children).toHaveLength(4);
     expect(screen.getByRole('button', { name: '查看详情' })).not.toBeNull();
     expect(screen.queryByText(/方案 PDF/)).toBeNull();
+  });
+
+  it('shows source availability and explains when model drafting is unavailable', async () => {
+    vi.spyOn(learningApi, 'readiness').mockResolvedValue({
+      sources: { status: 'available_unverified', pdf_count: 9 },
+      model: { configured: false },
+    });
+    const { rerender } = render(<WorkbenchPage {...defaults} />);
+    expect(await screen.findByText('找到 9 份，按指标核验')).not.toBeNull();
+    rerender(<WorkbenchPage {...defaults} path="/plan/reviews" />);
+    expect(await screen.findByText('本机未配置模型，可使用规则草稿。')).not.toBeNull();
+    expect((screen.getByRole('button', { name: '使用模型生成草稿' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: '生成规则草稿' }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('does not turn an old snapshot without node metrics into a zero percent score', () => {
