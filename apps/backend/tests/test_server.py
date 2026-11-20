@@ -700,9 +700,7 @@ def test_import_files_rejects_invalid_container_and_content_types(tmp_path, payl
     assert client.get("/api/run").json()["run_id"] == before
 
 
-def test_deepseek_timeout_returns_safe_error_and_rule_draft_remains_available(
-    tmp_path: Path, monkeypatch
-):
+def test_deepseek_timeout_returns_rule_fallback(tmp_path: Path, monkeypatch):
     config = replace(settings, deepseek_api_key="test-only-key")
     clean_tables = sample_tables()
     clean_tables["作答记录"] = [
@@ -719,12 +717,13 @@ def test_deepseek_timeout_returns_safe_error_and_rule_draft_remains_available(
     monkeypatch.setattr(
         "app.infrastructure.llm.deepseek_client.urllib.request.urlopen", timeout
     )
-    failed = client.post(
+    fallback = client.post(
         "/api/deepseek", json={"student_id": "D01", "indicator_id": "T01I1"}
     )
-    assert failed.status_code == 502
-    assert failed.json()["code"] == "MODEL_SERVICE_ERROR"
-    assert "provider timeout" not in failed.text
+    assert fallback.status_code == 200
+    assert fallback.json()["source"] == "rule"
+    assert fallback.json()["status"] == "needs_review"
+    assert fallback.json()["model_fallback_reason"] == "provider_error"
     assert (
         client.get(
             "/api/draft", params={"student": "D01", "indicator": "T01I1"}
@@ -733,9 +732,7 @@ def test_deepseek_timeout_returns_safe_error_and_rule_draft_remains_available(
     )
 
 
-def test_malformed_deepseek_response_uses_model_error_contract(
-    tmp_path: Path, monkeypatch
-):
+def test_malformed_deepseek_response_returns_rule_fallback(tmp_path: Path, monkeypatch):
     config = replace(settings, deepseek_api_key="test-only-key")
     clean_tables = sample_tables()
     clean_tables["作答记录"] = [
@@ -760,11 +757,13 @@ def test_malformed_deepseek_response_uses_model_error_contract(
         "app.infrastructure.llm.deepseek_client.urllib.request.urlopen",
         lambda *args, **kwargs: FakeResponse(),
     )
-    failed = client.post(
+    fallback = client.post(
         "/api/deepseek", json={"student_id": "D01", "indicator_id": "T01I1"}
     )
-    assert failed.status_code == 502
-    assert failed.json()["code"] == "MODEL_SERVICE_ERROR"
+    assert fallback.status_code == 200
+    assert fallback.json()["source"] == "rule"
+    assert fallback.json()["status"] == "needs_review"
+    assert fallback.json()["model_fallback_reason"] == "invalid_response"
 
 
 def test_review_rejects_unhashable_original_draft_evidence(tmp_path: Path):

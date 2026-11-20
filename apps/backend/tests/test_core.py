@@ -5,7 +5,6 @@ import zipfile
 from pathlib import Path
 
 import pytest
-from app.application.ports.llm import LLMError
 from app.config import Settings
 from app.repositories.store import Store
 from app.services.analysis import analyze, read_bundle
@@ -641,7 +640,7 @@ def test_deepseek_does_not_call_model_without_valid_scored_evidence(response_sta
     }
 
 
-def test_deepseek_rejects_fabricated_evidence():
+def test_deepseek_falls_back_to_rule_draft_for_fabricated_evidence():
     run = _task03_run_without_unrelated_invalid_record()
 
     class FakeLLM:
@@ -661,15 +660,13 @@ def test_deepseek_rejects_fabricated_evidence():
                 ]
             }
 
-    try:
-        deepseek_draft(run, "D01", "T01I1", client=FakeLLM())
-    except LLMError as exc:
-        assert "无效证据" in str(exc)
-    else:
-        raise AssertionError("伪造证据应被拒绝")
+    result = deepseek_draft(run, "D01", "T01I1", client=FakeLLM())
+    assert result["source"] == "rule"
+    assert result["status"] == "needs_review"
+    assert result["model_fallback_reason"] == "invalid_output"
 
 
-def test_deepseek_rejects_duplicate_evidence_references():
+def test_deepseek_falls_back_for_duplicate_evidence_references():
     run = _task03_run_without_unrelated_invalid_record()
 
     class FakeLLM:
@@ -689,8 +686,37 @@ def test_deepseek_rejects_duplicate_evidence_references():
                 ]
             }
 
-    with pytest.raises(LLMError, match="证据引用"):
-        deepseek_draft(run, "D01", "T01I1", client=FakeLLM())
+    result = deepseek_draft(run, "D01", "T01I1", client=FakeLLM())
+    assert result["source"] == "rule"
+    assert result["model_fallback_reason"] == "invalid_output"
+
+
+@pytest.mark.parametrize(
+    "failure, expected_reason",
+    [(TimeoutError(), "provider_error"), ("not-json", "invalid_json")],
+)
+def test_deepseek_falls_back_for_provider_errors_and_invalid_json(
+    failure, expected_reason
+):
+    run = _task03_run_without_unrelated_invalid_record()
+
+    class FakeLLM:
+        def complete(self, _body):
+            if isinstance(failure, Exception):
+                raise failure
+            return {
+                "choices": [
+                    {
+                        "finish_reason": "stop",
+                        "message": {"content": failure},
+                    }
+                ]
+            }
+
+    result = deepseek_draft(run, "D01", "T01I1", client=FakeLLM())
+    assert result["source"] == "rule"
+    assert result["status"] == "needs_review"
+    assert result["model_fallback_reason"] == expected_reason
 
 
 def test_deepseek_accepts_valid_structured_draft():
