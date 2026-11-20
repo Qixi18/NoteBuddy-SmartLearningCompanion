@@ -7,6 +7,7 @@ from ...domain.assessment.evidence_bundle import AnalysisScope
 from ...services.cases import suggest_cases
 from ...services.exports import package
 from ...services.recommendations import deepseek_draft, draft
+from ...services.task01.material_catalog_service import build_material_catalog
 from ...services.task02.evidence_bundle_service import build_evidence_bundle
 from ..ports.llm import LLMClient
 from .stage2 import Stage2Decisions
@@ -131,6 +132,22 @@ class ReadSourcePdf:
         return self.source_service.read_pdf(self.current_run.execute(), name)
 
 
+class GetMaterialCatalog:
+    def __init__(
+        self, current_run: CurrentRun, stage2: Stage2Decisions, source_service
+    ):
+        self.current_run = current_run
+        self.stage2 = stage2
+        self.source_service = source_service
+
+    def execute(self) -> dict:
+        with self.current_run.uow_factory(immediate=False) as uow:
+            run = uow.runs.current()
+            histories = uow.stage2.list_sources(run["run_id"])
+        histories = self.stage2.with_source_freshness(run, histories)
+        return build_material_catalog(run, self.source_service, histories)
+
+
 class ExportPackage:
     def __init__(self, uow_factory, current_run: CurrentRun, stage2: Stage2Decisions):
         self.uow_factory = uow_factory
@@ -196,5 +213,8 @@ class WorkbenchUseCases:
             self.current_run, self.stage2, config, llm_client
         )
         self.read_source_pdf = ReadSourcePdf(self.current_run, source_service)
+        self.material_catalog = GetMaterialCatalog(
+            self.current_run, self.stage2, source_service
+        )
         self.export_package = ExportPackage(uow_factory, self.current_run, self.stage2)
         self.evidence_bundle = GetEvidenceBundle(uow_factory)

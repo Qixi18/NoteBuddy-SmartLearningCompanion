@@ -8,6 +8,7 @@ import { ObjectivesPanel } from './ObjectivesPanel';
 describe('ObjectivesPanel source checks', () => {
   beforeEach(() => {
     vi.spyOn(learningApi, 'sourceVerifications').mockResolvedValue({});
+    vi.spyOn(learningApi, 'materialCatalog').mockResolvedValue({ run_id: 'run-1', indicators: [] });
   });
 
   afterEach(() => vi.restoreAllMocks());
@@ -144,5 +145,37 @@ describe('ObjectivesPanel source checks', () => {
       expect(screen.getByRole('button', { name: /T01I1.*来源已变化，需重新核验/ })).toBeTruthy();
       expect(screen.getByText(/指标关系状态：来源已变化，需重新核验/)).toBeTruthy();
     });
+  });
+
+  it('shows page counts, fingerprints, review state and direct PDF page links', async () => {
+    vi.spyOn(learningApi, 'materialCatalog').mockResolvedValue({
+      run_id: 'run-1',
+      indicators: [{
+        indicator_id: 'T01I1', topic_id: 'T01', source_status: 'pending', source_stale: false,
+        curriculum_locator: '', textbook_locator: '',
+        documents: [{
+          name: '课程标准_2022.pdf', available: true, sha256: 'a'.repeat(64), bytes: 20,
+          page_count: 70, text_page_count: 0, text_pages: [], expected_file_page: 62,
+          body_page: 55, source_kind: 'curriculum', status: 'needs_manual_review',
+          url: '/api/source?file=课程标准_2022.pdf',
+        }],
+        materials: [{
+          material_id: 'TB01', resource_type: '教材', topic_id: 'T01', title: '教材例题',
+          source: '', source_locator: '教材第 68 页', purpose: '复习概念', verified: true,
+        }],
+      }],
+    });
+    const run = {
+      run_id: 'run-1',
+      objectives: [{ '指标编号': 'T01I1', '观察指标': '理解代数式', '主题编号': 'T01' }],
+      items: [], source_index: [{ indicator_id: 'T01I1', verification: 'pending' }],
+    } as unknown as AnalysisRun;
+
+    render(<ObjectivesPanel run={run} />);
+
+    expect(await screen.findByText(/SHA-256：a{12}/)).toBeTruthy();
+    expect(screen.getByText(/无文本层或扫描页，待人工核验/)).toBeTruthy();
+    expect(screen.getByText(/已核验用途：复习概念 · 教材第 68 页/)).toBeTruthy();
+    expect(screen.getByRole('link', { name: '打开第 62 页' }).getAttribute('href')).toContain('#page=62');
   });
 });

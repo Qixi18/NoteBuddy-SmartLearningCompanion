@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from ...application.use_cases.workbench import WorkbenchUseCases
 from ...repositories.stage2_repository import SourceVerificationVersionConflict
 from ...schemas.http import (
+    MaterialCatalogResponse,
     SourceVerificationRequest,
     SourceVerificationResponse,
     TeacherCaseRequest,
@@ -18,6 +19,15 @@ from ..dependencies import get_use_cases
 
 router = APIRouter()
 UseCases = Annotated[WorkbenchUseCases, Depends(get_use_cases)]
+
+
+@router.get(
+    "/api/material-catalog",
+    response_model=MaterialCatalogResponse,
+    tags=["sources"],
+)
+def material_catalog(use_cases: UseCases) -> dict:
+    return use_cases.material_catalog.execute()
 
 
 @router.get(

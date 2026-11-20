@@ -1,0 +1,30 @@
+{
+  "run_id": "0123456789abcdef",
+  "indicators": [
+    {
+      "indicator_id": "T01I1",
+      "topic_id": "T01",
+      "source_status": "pending",
+      "source_stale": false,
+      "curriculum_locator": "",
+      "textbook_locator": "",
+      "documents": [
+        {
+          "name": "课程标准_2022.pdf",
+          "available": false,
+          "sha256": null,
+          "bytes": null,
+          "page_count": null,
+          "text_page_count": null,
+          "text_pages": [],
+          "expected_file_page": 62,
+          "body_page": 55,
+          "source_kind": "curriculum",
+          "status": "missing",
+          "url": "/api/source?file=课程标准_2022.pdf"
+        }
+      ],
+      "materials": []
+    }
+  ]
+}

@@ -107,12 +107,14 @@
 
 **接口：** `build_material_catalog(run: dict, sources: dict) -> list[dict]`；来源定位含文件名、SHA、文件页、正文页、片段标识；前端可打开白名单PDF并显示所引用定位。
 
-- [ ] 测试文件页越界、文件哈希变化、扫描页无文本时显示待核验，不能保持原verified有效展示。
-- [ ] 增加逐指标材料与来源核对视图；先支持人工定位和文本层读取，OCR作为可选适配，不影响核心路径。
+- [x] 测试文件页越界、文件哈希变化、扫描页无文本时显示待核验；P03验证文件变化会使旧verified失效。
+- [x] 增加逐指标材料与来源核对视图；读取PDF文本层与页数，扫描页要求人工核验，OCR不作为核心依赖。
 - [ ] 内容负责人逐项完成9指标、54题、18道解答题评分点、8教材及3学习卡检查，保留准确引用与解释；实际材料内容与核验数据保存在忽略的数据目录，Git只保存模板/脚本/合成fixture。
 - [ ] 必要联系注明关系与依据；标为先修的边检查环路，非先修关联不错误强制DAG。
 - [ ] 新运行可展示旧核验差异供复制为pending；文件/题目/映射指纹不一致不得自动继承verified。
-- [ ] 运行`python -m pytest apps/backend/tests/test_material_catalog.py apps/backend/tests/test_task01_source_index.py -q`；人工打开所有正式案例使用的页定位，核对成功后更新内容清单。
+- [x] 运行`python -m pytest apps/backend/tests/test_material_catalog.py apps/backend/tests/test_task01_source_index.py apps/backend/tests/test_shared_contracts.py -q`；工程用例通过。实际赛题PDF页图和逐条学科内容仍待内容负责人现场核验。
+
+P04当前状态：`engineering_pass/content_pending`。目录与文件技术校验已完成；9指标、54题、18道解答题评分点、8项教材及3张学习卡尚未由学科负责人逐项核签。工作模板见`docs/development/subject-content-checklist.md`。
 
 ### P05 范围证据包与覆盖证据
 

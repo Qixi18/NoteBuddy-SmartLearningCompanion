@@ -8,6 +8,7 @@ import analysisRunFixture from '../../../../contracts/api/analysis-run.json';
 import sourceVerificationFixture from '../../../../contracts/api/source-verification.json';
 import evidenceBundleFixture from '../../../../contracts/api/evidence-bundle.json';
 import teacherCaseFixture from '../../../../contracts/api/teacher-case.json';
+import materialCatalogFixture from '../../../../contracts/api/material-catalog.json';
 import { api, jsonRequest, learningApi } from './client';
 import type { AnalysisRun, SourceVerificationPayload, TeacherCasePayload } from './types';
 
@@ -67,6 +68,15 @@ describe('shared API fixtures', () => {
     expect(sourcePayload.source_fingerprints).toEqual({});
     expect(sourcePayload.expected_version).toBe(0);
     expect(casePayload.review_refs[0]).toEqual({ indicator_id: 'T01I1', node_id: 'N01', version: 1 });
+  });
+
+  it('reads the shared material catalog contract', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(materialCatalogFixture), {
+      status: 200, headers: { 'content-type': 'application/json' },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(learningApi.materialCatalog()).resolves.toEqual(materialCatalogFixture);
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/material-catalog');
   });
 
   it('keeps coverage-only evidence bundles explicit and score-free', () => {

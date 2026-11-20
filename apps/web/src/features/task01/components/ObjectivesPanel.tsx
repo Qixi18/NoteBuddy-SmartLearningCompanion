@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { AnalysisRun, SourceVerification } from '../../../api/types';
+import type { AnalysisRun, IndicatorMaterialCatalog, SourceVerification } from '../../../api/types';
 import { learningApi } from '../../../api/client';
 import { Panel } from '../../../components/Panel';
 import { SourceVerificationEditor } from './SourceVerificationEditor';
@@ -14,14 +14,28 @@ function verificationLabel(status?: string, stale = false) {
   }
 }
 
+function documentStatusLabel(status: string) {
+  switch (status) {
+    case 'missing': return '来源文件缺失';
+    case 'unreadable': return 'PDF无法读取';
+    case 'page_out_of_range': return '文件页码越界';
+    case 'needs_manual_review': return '无文本层或扫描页，待人工核验';
+    case 'page_valid_text': return '目标页含可读取文本';
+    case 'locator_required': return '有文本层，需补充精确页码';
+    default: return '待核验';
+  }
+}
+
 export function ObjectivesPanel({ run }: { run: AnalysisRun }) {
   const [selectedId, setSelectedId] = useState(run.objectives[0]?.['指标编号'] ?? '');
   const [sourceHistory, setSourceHistory] = useState<Record<string, SourceVerification[]>>({});
+  const [catalog, setCatalog] = useState<IndicatorMaterialCatalog[]>([]);
   const [sourceHistoryLoaded, setSourceHistoryLoaded] = useState(false);
   const [sourceHistoryFailed, setSourceHistoryFailed] = useState(false);
   useEffect(() => {
     let active = true;
     setSourceHistory({});
+    setCatalog([]);
     setSourceHistoryLoaded(false);
     setSourceHistoryFailed(false);
     learningApi.sourceVerifications().then(history => {
@@ -32,6 +46,11 @@ export function ObjectivesPanel({ run }: { run: AnalysisRun }) {
       if (!active) return;
       setSourceHistoryFailed(true);
       setSourceHistoryLoaded(true);
+    });
+    learningApi.materialCatalog().then(result => {
+      if (active) setCatalog(result.indicators);
+    }).catch(() => {
+      if (active) setCatalog([]);
     });
     return () => { active = false; };
   }, [run.run_id]);
@@ -49,6 +68,7 @@ export function ObjectivesPanel({ run }: { run: AnalysisRun }) {
   const items = run.items.filter(item => item['指标编号'] === objective['指标编号']);
   const topicCheck = source?.source_check;
   const indicatorCheck = source?.indicator_check;
+  const catalogEntry = catalog.find(item => item.indicator_id === objective['指标编号']);
   const page = topicCheck?.curriculum_file_page;
   return <div className="knowledge-layout">
     <Panel title="主题与指标目录"><p className="muted">{topics.length} 个数据主题 · {run.objectives.length} 项指标</p>
@@ -59,6 +79,7 @@ export function ObjectivesPanel({ run }: { run: AnalysisRun }) {
       <section className="source-detail"><h3>关联题目 · {items.length} 道</h3>{items.length ? items.map(item => <div className="row" key={item['材料编号']}><strong>{item['材料编号']}</strong><p>{item['题干或内容'] || '未提供题干'}</p><small>指标与题目关系：{verificationText}</small></div>) : <p>当前快照没有关联题目；不能据此判断知识覆盖。</p>}</section>
       <section className="source-detail"><h3>课程标准</h3><p>导入定位：{objective['课标文件页／正文页'] || '待核验'}；指标级定位：{indicatorCheck?.curriculum_locator || '待核对'}</p><p>主题课标核验：{topicCheck?.curriculum_check || '待核对'}。{page && <a href={`${learningApi.sourceUrl('课程标准_2022.pdf')}#page=${page}`} target="_blank" rel="noopener noreferrer">打开原页（文件第 {page} 页）</a>}</p></section>
       <section className="source-detail"><h3>教材来源</h3><p>导入定位：{objective['教材正文页'] || '待核验'}；指标级定位：{indicatorCheck?.textbook_locator || '待核对'}</p><p>主题教材核验：{topicCheck?.textbook_check || '待核对'}</p>{topicCheck?.textbook_slices?.length ? <p>原页：{topicCheck.textbook_slices.map(name => <a key={name} href={learningApi.sourceUrl(name)} target="_blank" rel="noopener noreferrer">{name} </a>)}</p> : <p>当前运行没有教材原页链接。</p>}</section>
+      {catalogEntry && <section className="source-detail" aria-label="材料目录与来源文件核验"><h3>材料目录与来源文件核验</h3><p>签核状态：{catalogEntry.source_stale ? '来源已变化，需重新核验' : verificationLabel(catalogEntry.source_status)}</p><p>指标级定位：课标 {catalogEntry.curriculum_locator || '待补充'}；教材 {catalogEntry.textbook_locator || '待补充'}</p>{catalogEntry.documents.map(document => <div className="row" key={document.name}><strong>{document.name}</strong><p>状态：{documentStatusLabel(document.status)} · {document.page_count === null || document.page_count === undefined ? '页数未知' : `共 ${document.page_count} 页`}{document.expected_file_page ? ` · 赛题文件页 ${document.expected_file_page}` : ''}{document.body_page ? ` · 正文页 ${document.body_page}` : ''}</p><p>SHA-256：{document.sha256 || '文件缺失'}</p><a href={`${learningApi.sourceUrl(document.name)}${document.expected_file_page ? `#page=${document.expected_file_page}` : ''}`} target="_blank" rel="noopener noreferrer">{document.expected_file_page ? `打开第 ${document.expected_file_page} 页` : '打开来源文件'}</a></div>)}{catalogEntry.materials.filter(material => material.resource_type !== '题目').map(material => <div className="row" key={material.material_id}><strong>{material.material_id} · {material.resource_type}</strong><p>{material.title || material.source || '材料内容待核对'}</p><p>{material.verified ? `已核验用途：${material.purpose} · ${material.source_locator}` : '需完成指标级人工来源映射'}</p></div>)}</section>}
       <p className="warn">指标关系状态：{verificationText}。主题说明仅供定位；以指标级核验记录判断材料关系。</p>
       {source?.integrity_issues?.length ? <p className="warn">关系或定位问题：{source.integrity_issues.join('、')}</p> : null}
       <SourceVerificationEditor run={run} indicatorId={objective['指标编号']} />

@@ -1,4 +1,4 @@
-import type { AnalysisRun, CaseSuggestion, Draft, EvidenceBundle, ImportResult, ReviewMap, ReviewPayload, ReviewStatus, SourceVerification, SourceVerificationPayload, TeacherCase, TeacherCasePayload, TeachingAdjustment, TeachingAdjustmentCreate, TeachingAdjustmentUpdate } from './types';
+import type { AnalysisRun, CaseSuggestion, Draft, EvidenceBundle, ImportResult, MaterialCatalog, ReviewMap, ReviewPayload, ReviewStatus, SourceVerification, SourceVerificationPayload, TeacherCase, TeacherCasePayload, TeachingAdjustment, TeachingAdjustmentCreate, TeachingAdjustmentUpdate } from './types';
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init);
@@ -22,6 +22,7 @@ export const learningApi = {
   modelDraft: (student: string, indicator: string, node?: string) => api<Draft>('/api/deepseek', jsonRequest({ student_id: student, indicator_id: indicator, node_id: node ?? null })),
   saveReview: (payload: ReviewPayload) => api<ReviewMap[string][number]>('/api/review', jsonRequest(payload)),
   sourceVerifications: () => api<Record<string, SourceVerification[]>>('/api/source-verifications'),
+  materialCatalog: () => api<MaterialCatalog>('/api/material-catalog'),
   evidenceBundle: (student: string, indicator: string, node: string) => api<EvidenceBundle>(`/api/evidence-bundle?${new URLSearchParams({ student, indicator, node })}`),
   saveSourceVerification: (payload: SourceVerificationPayload) => api<SourceVerification>('/api/source-verification', jsonRequest(payload)),
   teacherCases: () => api<Record<string, TeacherCase[]>>('/api/teacher-cases'),

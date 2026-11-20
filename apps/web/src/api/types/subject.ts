@@ -47,3 +47,45 @@ export interface SourceIndexEntry {
   verification: string;
   integrity_issues?: string[];
 }
+
+export interface MaterialCatalogDocument {
+  name: string;
+  available: boolean;
+  sha256?: string | null;
+  bytes?: number | null;
+  page_count?: number | null;
+  text_page_count?: number | null;
+  text_pages: number[];
+  expected_file_page?: number | null;
+  body_page?: number | null;
+  source_kind: 'curriculum' | 'textbook';
+  status: 'missing' | 'unreadable' | 'page_out_of_range' | 'needs_manual_review' | 'page_valid_text' | 'locator_required';
+  url: string;
+}
+
+export interface CatalogMaterial {
+  material_id: string;
+  resource_type: string;
+  topic_id: string;
+  title: string;
+  source: string;
+  source_locator: string;
+  purpose: string;
+  verified: boolean;
+}
+
+export interface IndicatorMaterialCatalog {
+  indicator_id: string;
+  topic_id: string;
+  source_status: string;
+  source_stale: boolean;
+  curriculum_locator: string;
+  textbook_locator: string;
+  documents: MaterialCatalogDocument[];
+  materials: CatalogMaterial[];
+}
+
+export interface MaterialCatalog {
+  run_id: string;
+  indicators: IndicatorMaterialCatalog[];
+}

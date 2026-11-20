@@ -283,6 +283,55 @@ class SourceVerificationResponse(SourceVerificationRequest):
     stale: bool = False
 
 
+class MaterialCatalogDocument(BaseModel):
+    name: str
+    available: bool
+    sha256: str | None = None
+    bytes: int | None = None
+    page_count: int | None = None
+    text_page_count: int | None = None
+    text_pages: list[int] = Field(default_factory=list)
+    expected_file_page: int | None = None
+    body_page: int | None = None
+    source_kind: Literal["curriculum", "textbook"]
+    status: Literal[
+        "missing",
+        "unreadable",
+        "page_out_of_range",
+        "needs_manual_review",
+        "page_valid_text",
+        "locator_required",
+    ]
+    url: str
+
+
+class CatalogMaterial(BaseModel):
+    material_id: str
+    resource_type: str
+    topic_id: str = ""
+    title: str = ""
+    source: str = ""
+    source_locator: str = ""
+    purpose: str = ""
+    verified: bool = False
+
+
+class IndicatorMaterialCatalog(BaseModel):
+    indicator_id: str
+    topic_id: str
+    source_status: str
+    source_stale: bool = False
+    curriculum_locator: str = ""
+    textbook_locator: str = ""
+    documents: list[MaterialCatalogDocument] = Field(default_factory=list)
+    materials: list[CatalogMaterial] = Field(default_factory=list)
+
+
+class MaterialCatalogResponse(BaseModel):
+    run_id: str
+    indicators: list[IndicatorMaterialCatalog]
+
+
 class TeacherCaseResponse(TeacherCaseRequest):
     run_id: str
     version: int

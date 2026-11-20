@@ -1,6 +1,10 @@
 """Resolve allowlisted curriculum and textbook PDF sources."""
 
+from io import BytesIO
 from pathlib import Path
+
+from pypdf import PdfReader
+from pypdf.errors import PdfReadError, PdfStreamError
 
 from ...application.ports.file_storage import FileStorage
 from ...infrastructure.files.local_file_storage import LocalFileStorage
@@ -45,6 +49,35 @@ class SourceService:
         if path is None:
             raise FileNotFoundError("本机来源文件不存在")
         return self.storage.read_bytes(path)
+
+    def inspect_pdf(self, run: dict, name: str) -> dict:
+        """Return page and text-layer facts for an allowlisted PDF."""
+        path = self.resolve(run, name)
+        if path is None:
+            return {"available": False, "name": name}
+        content = self.storage.read_bytes(path)
+        result = {
+            "available": True,
+            "name": name,
+            "sha256": self.storage.sha256(path),
+            "bytes": len(content),
+        }
+        try:
+            reader = PdfReader(BytesIO(content), strict=False)
+            text_pages = [
+                bool((page.extract_text() or "").strip()) for page in reader.pages
+            ]
+        except (OSError, ValueError, PdfReadError, PdfStreamError):
+            return {**result, "status": "unreadable", "page_count": None}
+        return {
+            **result,
+            "status": "readable",
+            "page_count": len(text_pages),
+            "text_page_count": sum(text_pages),
+            "text_pages": [
+                index + 1 for index, has_text in enumerate(text_pages) if has_text
+            ],
+        }
 
     def fingerprints(self, run: dict) -> dict:
         results = {}
