@@ -744,3 +744,15 @@ def test_model_prompt_uses_local_aliases_and_maps_citations_back():
 
     result = deepseek_draft(run, "D01", "T01I1", client=FakeLLM())
     assert result["evidence_record_ids"] == ["R2"]
+
+
+def test_export_pending_recommendations_only_include_selected_students():
+    run = analyze(sample_tables(), {})
+    run["students"].append({"学生编号": "D04", "模拟班级编号": "C2"})
+    archive = zipfile.ZipFile(
+        io.BytesIO(package(run, {}, ["D01", "D02", "D03"]))
+    )
+
+    pending = json.loads(archive.read("pending_review.json"))
+
+    assert {item["student_id"] for item in pending} == {"D01", "D02", "D03"}

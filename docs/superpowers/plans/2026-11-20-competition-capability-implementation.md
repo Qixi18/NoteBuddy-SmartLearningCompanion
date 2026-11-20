@@ -1,0 +1,322 @@
+# 智慧学伴比赛能力优化 Implementation Plan
+
+> **For agentic workers:** 使用 `superpowers:executing-plans` 按工作包执行；仅在用户明确选择代理协作时再使用 `superpowers:subagent-driven-development`。复选框表示待完成工作，不表示已实现。
+
+**Goal:** 在保留可信统计与教师复核的基础上，交付有学科内容、具体教学行动和可独立核验比赛成果的本地智慧学伴。
+
+**Architecture:** 沿现有模块化单体扩展来源映射、范围证据包、学情洞察、材料筛选与发布检查。业务计算留在Services，事务由Application/UoW控制，Domain定义证据与方案契约。新增持久化只服务真实工作流，HTTP与ZIP保持向后兼容。
+
+**Tech Stack:** 现有Python/FastAPI/Pydantic/SQLAlchemy/Alembic/SQLite，React/TypeScript/Vite，pytest/Vitest/Playwright。首轮不引入新框架。
+
+**Spec:** [代码能力与比赛交付优化规划](../../development/2026-11-20-competition-capability-roadmap.md)。实现前同时阅读仓库`AGENTS.md`与当前代码；基线为`main@096bbe2`。
+
+## Global Constraints
+
+- 采用本地单用户、loopback、模块化单体和 SQLite 持久化。不要引入微服务、账户、队列、多 Agent 或新的 UI 框架。
+- 不修改赛事原始 CSV、正式 ID、评分规则或现有统计口径；不提交原始赛事资料、运行数据或密钥。
+- TASK 01 不依赖 TASK 02/03；TASK 02 可读取 TASK 01；TASK 03 可读取 TASK 01/02；禁止循环依赖。
+- SQLite schema 只通过 Alembic 升级；应用启动不得隐式建表或执行迁移。
+- TASK03确定性草稿保留TR-01..TR-08及其边界，不设固定得分率阈值或掌握标签；新增细分观察另用`observation_code`，不得偷改既有规则含义。
+- 旧HTTP请求、新增字段缺省、旧快照和既有ZIP成员保持兼容；新增字段同步Pydantic、TypeScript、共享fixture。
+- 原始数据与人工核验分离；所有verified/confirmed由人工提交，脚本不能代签。
+- 本计划只安排开发与交付，不授权远程推送、合并main、发布或自动更改日常数据库。
+
+## Review Focus
+
+1. 真正没有作答记录的学生如何完成正式案例而不虚构证据：P05/P11增加覆盖证据专项。
+2. 仅教材文件或映射版本变化，旧方案是否仍被误认为有效：P03/P04/P09/P13增加失效传播测试。
+3. 三人包里的嵌套建议、复核、调整或来源附件是否泄漏其他学生详情：P01/P13递归范围检查。
+4. 两班题目集合和可观察人数不同，聚合是否产生虚假优劣结论：P07增加不等覆盖反例。
+5. 模型返回真实ID但错误数学解释，是否被当成审核通过：P10/P14区分引用校验与语义评审，禁止自动签核。
+
+## 执行方式与任务边界
+
+下面P01–P16各自是可独立审阅的工作包。存在依赖时，先完成生产接口的一包，再实现消费接口的一包。每包执行顺序为：补失败用例→确认失败原因→实现→专项验证→兼容与相关回归→更新文档→本地提交。文档和纯人工核验不强行编造失败测试。
+
+新增路径是明确的规划目标，不表示文件已存在。未列出行号的修改按类/函数定位，避免代码变化后误用过时行号。业务变更时更新`rule_version`；新增推荐模板使用独立`template_version`；模型上下文使用独立`prompt_version`。
+
+## 一、统一新增契约
+
+以下字段在首次拥有它的任务中实现，后续任务复用，不另建同义结构。Domain使用dataclass或当前领域模式；HTTP用Pydantic模型适配；前端共享命名。
+
+| 类型及所有者 | 必需字段与语义 |
+|---|---|
+| `AnalysisScope`，P05 | run_id、student_id、indicator_id、node_id，均非空 |
+| `EvidenceRef`，P05 | kind=response/coverage；evidence_id；scope；response引用原记录与source_line，coverage引用服务端计算覆盖结果及其hash |
+| `EvidenceBundle`，P05 | scope、responses、items、rubric_definitions、coverage、source_versions、issues、fingerprint；source_versions为指标到版本映射 |
+| `ResourceLink`，P03 | material_id、purpose、indicator_ids、allowed_node_ids、source_locator、content_hash、status；类型从原材料读取，不由调用者随意覆盖 |
+| `RubricIssueMapping`，P03 | issue_id、label、rubric_point_ids、material_ids、evidence、status、reviewer；只引用当前材料内已定义评分点 |
+| `InsightClaim`，P06 | claim_id、kind=fact/rule_observation/hypothesis、text、evidence_refs、limitations、review_status；假设永远不能按fact输出 |
+| `ResourceSelection`，P08 | selected、excluded、reason_codes、source_versions；每个选中资源有目的、理由、适用范围 |
+| `TeachingPlanV2`，P09 | schema_version=2、scope、goal、material_ids、resource_reasons、steps、hints、observation_points、adjustment_conditions、evidence_refs、source_versions、template_version |
+| `ReleaseCheck`，P13 | check_id、status=pass/fail/not_checked、severity=blocking/warning、message、evidence_refs；not_checked不得折算pass |
+
+`TeachingPlanV2`以新增`teaching_plan_v2`字段传输/保存，旧`structured_plan`继续读取。若需生成兼容旧字段的投影，只能由服务端统一转换并测试，不能让前端维护两份独立方案。所有新证据hash由稳定规范化字段计算，排除生成时间；ID格式不包含个人信息或本机路径。
+
+## 二、实施工作包
+
+### P01 修复案例包范围与引用闭合
+
+**优先级/依赖：** P0；无。
+
+**修改：** `apps/backend/app/services/shared/export_service.py`的`package`；`apps/backend/tests/test_stage2_workflow.py`；`tests/workbench.spec.ts`导出断言。
+
+**接口：** 保持`package(run, reviews, case_ids, *, sources, cases, teaching_adjustments) -> bytes`；新增内部`validate_package_scope(files: dict, case_ids: set[str]) -> list[dict]`，检查所有学生级条目及嵌套引用，班级聚合按明确例外处理。
+
+- [ ] 增加`test_export_filters_pending_and_accepted_recommendations`：D01–D04，选择D01–D03，D04有待复核和已复核建议；所有建议及manifest计数仅来自选择集合。
+- [ ] 增加`test_export_nested_refs_are_closed`：检查建议、案例、历史、调整中的证据引用均可在包内对应范围解析；班级聚合可包含全班贡献但不夹带未选学生record_ids/event_ids明细。
+- [ ] 运行上述用例确认旧实现失败；注意现有class指标对象也携带record_ids，必须核查并采用明确聚合投影，不删除成员名。
+- [ ] 先统一筛选，再计算accepted/pending与manifest；对调整记录限定所选学生，过滤其历史嵌套对象；建立所有成员范围清单，防止只修一个JSON。
+- [ ] 运行`python -m pytest apps/backend/tests/test_stage2_workflow.py -q`和导出E2E；成功条件为未选学生ID及其明细引用不进入学生级文件，既有成员均保留。
+- [ ] 更新字段口径说明和导出兼容说明，形成独立本地提交。
+
+### P02 环境自检与数据库准备
+
+**优先级/依赖：** P0；无。
+
+**修改：** `apps/backend/app/cli.py`、`api/routes/health.py`、`schemas/http.py`、`tests/workbench.spec.ts`、`playwright.config.ts`、`README.md`。**新增：** `apps/backend/app/services/shared/readiness_service.py`、`apps/backend/tests/test_readiness.py`。
+
+**接口：** `inspect_readiness(config) -> dict`只读检查；CLI新增`doctor`；新增`GET /api/readiness`，保持`/api/health`兼容。报告schema_revision/head、资源可用性、前端构建和运行依赖，绝不返回密钥。
+
+- [ ] 测试旧库返回migration_required但不产生DDL，缺PDF不冒充文件已核验，未配置模型是可选状态而非核心不可用。
+- [ ] 修正E2E样本生成进程，使其使用显式Python解释器及绝对backend导入路径；从新终端运行而不依赖偶然继承PYTHONPATH。
+- [ ] 在临时库升级两次、备份、恢复新目标，校验版本与行数；检查升级失败保持可诊断状态。
+- [ ] 运行`python -m pytest apps/backend/tests/test_readiness.py apps/backend/tests/test_infrastructure_phase025.py -q`及根目录E2E。
+- [ ] README给出虚拟环境安装、doctor、备份、显式迁移、启动顺序；实现阶段再按该流程处理演示库副本，不在开发测试里动日常库。
+
+### P03 打通学科映射与资源契约
+
+**优先级/依赖：** P0；无，先冻结本包接口。
+
+**修改：** `schemas/http.py`、`application/use_cases/stage2.py`、`repositories/stage2_repository.py`、`services/task01/source_index_service.py`、`services/task03/recommendation_service.py`的`_verified_indicator_check`、`apps/web/src/api/types/subject.ts`、`SourceVerificationEditor.tsx`。**新增：** `apps/backend/app/domain/subject/source_mapping.py`、`apps/backend/tests/test_source_mapping_v2.py`。共享fixture放`contracts/source-mapping-v2.json`。
+
+**接口：** 原SourceVerificationRequest/Response新增`resource_links: list[ResourceLink]=[]`、`rubric_mappings: list[RubricIssueMapping]=[]`、`source_fingerprints: dict[str,str]={}`、`expected_version: int|None=None`；保留原material_ids与knowledge_links。
+
+- [ ] 写HTTP往返测试：两题评分点映射经人工提交后仍在响应、数据库读取和规则输入中；未知评分点、别题评分点、重复ID均拒绝。
+- [ ] 测试8项教材/3张学习卡可通过ResourceLink关联，不能因为缺单一指标编号被静默丢弃；旧请求不带新字段仍可保存。
+- [ ] 给当前UI提交增加expected_version，旧客户端省略时兼容但不宣称拥有防陈旧覆盖能力；冲突返回409，保留用户编辑。
+- [ ] 在现有payload_json保存新字段；仅在实际需要新增约束/索引时添加显式Alembic迁移，避免无用表。
+- [ ] 核验必须由用户操作提交，不根据“字段齐全”自动verified；已verified来源变更生成追加版本。
+- [ ] 运行`python -m pytest apps/backend/tests/test_source_mapping_v2.py apps/backend/tests/test_shared_contracts.py -q`、前端API合同与来源编辑测试，确认读写完整后提交。
+
+### P04 来源定位与学科内容交付
+
+**优先级/依赖：** P0；P03。
+
+**修改：** `services/task01/source_service.py`、`ObjectivesPanel.tsx`、`SourceVerificationEditor.tsx`。**新增：** `apps/backend/app/services/task01/material_catalog_service.py`、`apps/backend/tests/test_material_catalog.py`、`docs/development/subject-content-checklist.md`。
+
+**接口：** `build_material_catalog(run: dict, sources: dict) -> list[dict]`；来源定位含文件名、SHA、文件页、正文页、片段标识；前端可打开白名单PDF并显示所引用定位。
+
+- [ ] 测试文件页越界、文件哈希变化、扫描页无文本时显示待核验，不能保持原verified有效展示。
+- [ ] 增加逐指标材料与来源核对视图；先支持人工定位和文本层读取，OCR作为可选适配，不影响核心路径。
+- [ ] 内容负责人逐项完成9指标、54题、18道解答题评分点、8教材及3学习卡检查，保留准确引用与解释；实际材料内容与核验数据保存在忽略的数据目录，Git只保存模板/脚本/合成fixture。
+- [ ] 必要联系注明关系与依据；标为先修的边检查环路，非先修关联不错误强制DAG。
+- [ ] 新运行可展示旧核验差异供复制为pending；文件/题目/映射指纹不一致不得自动继承verified。
+- [ ] 运行`python -m pytest apps/backend/tests/test_material_catalog.py apps/backend/tests/test_task01_source_index.py -q`；人工打开所有正式案例使用的页定位，核对成功后更新内容清单。
+
+### P05 范围证据包与覆盖证据
+
+**优先级/依赖：** P0；P03。
+
+**新增：** `apps/backend/app/domain/assessment/evidence_bundle.py`、`services/task02/evidence_bundle_service.py`、`apps/backend/tests/test_evidence_bundle.py`。**修改：** `api/routes/analysis.py`、`schemas/http.py`、前端`api/client.ts`及`api/types/analysis.ts`。
+
+**接口：** `build_evidence_bundle(run: dict, scope: AnalysisScope, sources: dict) -> EvidenceBundle`；新增`GET /api/evidence-bundle?student=&indicator=&node=`，run由当前运行解析并返回，不接受前端伪造证据hash。
+
+- [ ] `test_bundle_isolates_scope`：相同记录ID跨run、同学生跨node、同材料跨学生不混入。
+- [ ] `test_no_record_has_coverage_evidence`：无记录返回稳定coverage引用、record_count=0及未知原因边界；不得产生response引用或零分。
+- [ ] `test_bundle_fingerprint_changes_with_sources`：来源版本/题干/评分点变化改变指纹；单纯生成时间不改变。
+- [ ] 组装完整题干、评分点定义与原始步骤；保留pending/unanswered/excluded的区别，明确它们不能计分。
+- [ ] 运行`python -m pytest apps/backend/tests/test_evidence_bundle.py -q`和共享合同测试，消费方统一改用该入口，不重复拼证据。
+
+### P06 个体可解释学情
+
+**优先级/依赖：** P1核心；P04、P05。
+
+**新增：** `apps/backend/app/services/task02/insight_service.py`、`apps/backend/tests/test_student_insights.py`、`apps/web/src/features/task02/components/InsightPanel.tsx`。**修改：** `StudentPanel.tsx`、`EvidencePanel.tsx`、`api/routes/analysis.py`及相应合同。
+
+**接口：** `build_student_insights(bundle: EvidenceBundle) -> list[InsightClaim]`；新增`GET /api/student-insights`，参数同证据包。
+
+- [ ] 测试单题评分点失分只产生局部事实；两题同类失分但未核验映射不产生“重复问题”；核验后生成规则观察并保留成功反例。
+- [ ] 测试总分与评分点冲突时保留总分处理口径并阻断步骤归因；无记录不出现“薄弱/不会”。
+- [ ] 输出事实、问题候选、已见成功表现与待观察环节，点击claim直接定位原始证据；不让模板把假设写成事实。
+- [ ] 先使用评分点定义和已核验映射生成中性描述；复杂语义解释交P10，不引入不透明自动能力标签。
+- [ ] 运行`python -m pytest apps/backend/tests/test_student_insights.py apps/backend/tests/test_task02_quality_metrics.py -q`及InsightPanel测试；学科人员检查三个主题的样本后提交。
+
+### P07 班级共性与公平口径比较
+
+**优先级/依赖：** P1核心；P06。
+
+**新增：** `apps/backend/app/services/task02/class_insight_service.py`、`apps/backend/tests/test_class_insights.py`。**修改：** `ClassPanel.tsx`、`api/routes/analysis.py`、统计响应与前端类型。
+
+**接口：** `build_class_insights(run: dict, node_id: str, sources: dict) -> dict`；新增`GET /api/class-insights?node=`，返回两班范围、问题计数、去重人数、可观察分母、共同题目对比和边界。
+
+- [ ] 构造同一学生三条同类错误，问题人数只能计1；无该类题的学生不得进入问题观察分母。
+- [ ] 构造两班不同试题集合，全部样本与共同题目口径均可复算，不输出能力排名或显著性结论；共同集合为空明确显示不可比较。
+- [ ] 班级共性逐层下钻到学生及证据；汇总展示数字来源和覆盖差异，不自动为班级给出掌握等级。
+- [ ] 运行`python -m pytest apps/backend/tests/test_class_insights.py -q`与班级面板测试；内容负责人写两班正式分析并核对支持证据。
+
+### P08 可解释资源选择
+
+**优先级/依赖：** P1核心；P04、P06。
+
+**新增：** `apps/backend/app/services/task03/resource_selection_service.py`、`apps/backend/tests/test_resource_selection.py`。**修改：** `recommendation_service.py`与DraftResponse/TypeScript新增选择解释字段。
+
+**接口：** `select_resources(bundle: EvidenceBundle, insights: list[InsightClaim], catalog: list[dict], purpose: str) -> ResourceSelection`；purpose为remediation/transfer/diagnostic之一。
+
+- [ ] 测试不适用节点、未核验材料、主题冲突、未知材料被过滤且有reason_code；一个候选也没有时返回blocked而非取第一题。
+- [ ] 测试相同输入稳定输出；重复做过题可用于反思，但迁移观察优先不同题且有明确理由。
+- [ ] 明确排序为目标问题匹配→目的匹配→已核验先后关系→不同表征/未见题→稳定材料ID；规则不伪装成数学能力分数。
+- [ ] 题目与教材/学习卡分开选择；节点允许题目列表仅约束练习题，教材是否可用依据人工核验范围，不能把所有教材误判节点外。
+- [ ] 运行`python -m pytest apps/backend/tests/test_resource_selection.py apps/backend/tests/test_task03_recommendations.py -q`，检查三类需求有不同选择理由。
+
+### P09 结构化方案与渐进提示
+
+**优先级/依赖：** P1核心；P08。
+
+**新增：** `apps/backend/app/domain/teaching/plan.py`、`services/task03/plan_service.py`、`apps/backend/tests/test_teaching_plan_v2.py`、`apps/web/src/features/task03/components/TeachingPlanEditor.tsx`。**修改：** `schemas/http.py`、`application/use_cases/save_review.py`、`ReviewPanel.tsx`、前端teaching/review类型与合同。
+
+**接口：** `build_teaching_plan(bundle, insights, selection, templates: dict) -> TeachingPlanV2`；模板按目的和核验问题组织，实际内容保存在可版本化的本地内容目录。`validate_plan(plan, bundle, latest_sources) -> list[dict]`用于保存及导出。
+
+- [ ] 测试方案包含具体材料、逐项选择理由、步骤、提示、观察与调整条件；空泛的占位文本不满足正式方案必填要求。
+- [ ] 测试来源版本撤销/材料删除后保存新方案被拒绝，旧方案仍可回看且明确过期。
+- [ ] 实现三类需求模板及方向→结构→局部检查的提示层级；提示与教师答案分字段，学生练习视图不读取答案字段。
+- [ ] 增加`teaching_plan_v2`保存、历史回看与兼容投影；旧structured_plan不强制升级或改写。
+- [ ] 运行`python -m pytest apps/backend/tests/test_teaching_plan_v2.py -q`与ReviewPanel/TeachingPlanEditor测试；教师对正式三案例所有提示核对后才使用。
+
+### P10 模型证据上下文与输出校验
+
+**优先级/依赖：** P1增强；P05、P06、P08。基础演示不得依赖本包联网成功。
+
+**新增：** `apps/backend/app/services/task03/model_context_service.py`、`model_validation_service.py`、`apps/backend/tests/test_model_grounding.py`。**修改：** `recommendation_service.py`的`deepseek_draft`及`infrastructure/llm/deepseek_client.py`必要接口适配。
+
+**接口：** `build_model_context(bundle, insights, selection, max_chars: int) -> dict`；`validate_model_output(candidate: dict, context: dict) -> dict`。显式记录上下文裁剪，别名映射覆盖题目、记录、评分点和资源；返回后还原本地引用。
+
+- [ ] Mock断言上下文包含题干、评分点文字、步骤与可选资源；无范围外学生/记录，超限时按完整证据单元裁剪，不截断公式。
+- [ ] 测试伪造引用、合法引用但编造分数、未知材料、模型自称verified、输入中包含忽略指令提示，均不产生已确认结果。
+- [ ] 模型只补充待核验claims/活动解释，数值来自规则；超时/错误JSON/引用不合法退回规则方案，保留用户已有编辑。
+- [ ] 真实模型输出归档到忽略目录，记录模型/提示/上下文指纹与人工评价；不得把Mock通过写成真实服务验收。
+- [ ] 运行`python -m pytest apps/backend/tests/test_model_grounding.py -q`；真实调用前完成资源使用和供应方数据边界确认，本任务不预先承诺任何模型语义正确率。
+
+### P11 无记录案例与教学调整闭环
+
+**优先级/依赖：** P0内容闭环；P05、P09。
+
+**修改：** `application/use_cases/stage2.py`的`save_case`、`teaching_adjustments.py`、`schemas/http.py`、`TeacherCaseEditor.tsx`、`TeachingAdjustmentsPanel.tsx`、现有导出服务。**新增测试：** `apps/backend/tests/test_coverage_cases.py`。
+
+**接口：** TeacherCaseRequest新增`evidence_refs`，保留`evidence_record_ids`；教学调整新增`origin_evidence_refs`及兼容缺省，coverage引用须由服务端重新计算验证。
+
+- [ ] 测试当前节点无作答的学生凭有效coverage、正式诊断方案、教师理由可确认“记录不足”案例；其他学生coverage、旧运行hash、伪造0记录被拒绝。
+- [ ] 保留已有response交集约束；仅对合法coverage分支允许无record_ids，不放开所有案例非空证据限制。
+- [ ] 支持覆盖证据起始的诊断活动记录；后续取得response证据时关联同一学生/指标，节点范围与可比性必须显式校验和说明。
+- [ ] 不因后续分数增加自动写干预有效；不把不同节点数据混入单节点草稿。
+- [ ] 运行`python -m pytest apps/backend/tests/test_coverage_cases.py apps/backend/tests/test_stage2_workflow.py -q`；新增“无记录→诊断方案→确认→导出”E2E。
+
+### P12 三案例阅读报告与两班报告
+
+**优先级/依赖：** P1核心；P07、P09、P11。
+
+**新增：** `apps/backend/app/services/shared/report_service.py`、`apps/backend/tests/test_case_reports.py`、`apps/web/src/features/export/CaseReport.tsx`、`ClassReport.tsx`。**修改：** `WorkbenchPages.tsx`只接入组件、`ExportPanel.tsx`、必要打印CSS。
+
+**接口：** `build_case_report(run, confirmed_case, reviews, sources) -> dict`、`build_class_report(run, node_id, insights) -> dict`；报告数据模型同时用于UI与正式导出。
+
+- [ ] 测试报告中的分数、材料和复核版本均来自存储快照；不存在确认案例时返回明确未完成，不自动把候选渲染成已确认。
+- [ ] 报告展示范围、事实、解释、活动、提示、调整及限制；教师阅读版保留证据入口，打印版含可读定位，不仅是不可用按钮。
+- [ ] 三案例并排展示需求与方案差异；两班报告列共性、差异与覆盖，避免只摆三张得分卡。
+- [ ] 浏览器检查打印分页、长公式、长作答、表格跨页、1024/1440宽度；PDF输出采用同一报告视图，不能另拼一套统计。
+- [ ] 运行报告单测与打印/案例E2E；让内容负责人逐页审阅，形成正式三案例及两班报告。
+
+### P13 发布检查与正式成果包
+
+**优先级/依赖：** P0交付；P01、P04、P12。
+
+**新增：** `apps/backend/app/services/shared/release_service.py`、`api/routes/release.py`、`apps/backend/tests/test_competition_release.py`。**修改：** `export_service.py`、`api/app.py`路由装配、`ExportPanel.tsx`及API合同。
+
+**接口：** `check_release(run, sources, cases, reviews, report_data) -> list[ReleaseCheck]`；新增`GET /api/release-checks`与`POST /api/export-submission`。正式导出请求携带case_ids、run_id与预检fingerprint，事务读取最新版本后重核对，防止预检后变更。
+
+- [ ] 测试三案例不完整、来源过期、缺班级报告、未审提示、未知引用时正式导出阻断；旧草稿导出仍可用且状态清楚。
+- [ ] 测试预检通过后撤销签核、切换运行或修改方案，不能导出旧“通过”结果。
+- [ ] 新增`release_checks.json`、报告JSON/HTML、输出schema、输入输出样例、使用说明和版本manifest；保留旧成员，manifest声明schema_version与package_type。
+- [ ] 实际解压校验引用闭合、三人范围、两班聚合、9指标成果、字段说明、文件哈希；schema描述新增输出字段，不能仅复制原始CSV字典。
+- [ ] 运行`python -m pytest apps/backend/tests/test_competition_release.py -q`与正式包E2E；机器检查与人工签核分栏，任何not_checked不得显示全部通过。
+
+### P14 冻结评测与质量比较
+
+**优先级/依赖：** 从M0开始；完整执行依赖P06–P13。
+
+**新增：** `scripts/evaluate_competition.py`、`tests/test_evaluation_contract.py`、`docs/development/evaluation-protocol.md`；合成fixture放`tests/fixtures/competition/`，赛事摘录与真实模型输出放忽略的数据目录。
+
+**接口：** CLI `python scripts/evaluate_competition.py --manifest <本地清单> --output <本地输出目录>`，输出逐案例结果、失败原因、输入/代码/规则版本；默认不联网。
+
+- [ ] 建至少36个范围案例和专项异常集；期望记录允许结论、禁止结论、合法材料、证据范围，不把一个固定建议顺序当唯一正确答案。
+- [ ] 独立复算脚本不能调用生产metrics函数来“证明自己正确”；验证官方处置计数与744/1304基线，清单绑定原件SHA。
+- [ ] 加入变形测试：打乱CSV行序统计不变、替换学生ID不改变规则结果、追加旧版本不改变当前计分、改动其他学生不影响目标学生事实。
+- [ ] 规则版与模型版在相同冻结输入上比较：统计正确、引用正确、数学解释、建议适切、提示边界、教师修改量；严重错误逐项列出。
+- [ ] 教师审核每个冻结案例的正式结论，模型不用于给自己打最终分；官方独立数据到达后单独出具验收报告。
+
+### P15 正式材料、发布冻结与演示演练
+
+**优先级/依赖：** P0交付；P13、P14、P16。
+
+**新增：** `docs/development/competition-release-checklist.md`、`docs/development/demo-runbook.md`、`docs/development/submission-storyboard.md`。正式PDF/MP4/PPTX和数据包保存到项目父目录的`参赛交付/<版本>/`，不把赛事原始内容加入Git。
+
+- [ ] 按目标规格的18页建议结构编写设计方案，覆盖需求、方案、三任务、验证、创新、边界、组件来源与数据使用。
+- [ ] 从同一release_id取截图、统计、案例及包，不引用旧演示数据；写清公开数据/自建测试/后续补充记录的来源区别。
+- [ ] 制作≤5分钟视频、10分钟讲解PPT与5分钟问答备稿；实际计时并逐项核对数字。
+- [ ] 在干净演示环境安装并用localhost启动，验证数据库、PDF来源、已确认案例、规则离线方案、正式包下载；准备录屏与成果文件回退。
+- [ ] 工程、数学内容、交付三角色分别记录验收结果；冻结代码SHA、schema头、输入SHA、规则/模板/模型版本和最终文件SHA。
+- [ ] 产出最终放行清单；本地提交与远程提交分开，未经用户明确指令不推送、不合并、不实际提交赛事系统。
+
+### P16 性能、可用性与维护性收尾
+
+**优先级/依赖：** P1；P07、P09完成后启动，P15之前完成。
+
+**修改：** 实测涉及的`useWorkbench.ts`、页面组件与服务查询；仅在确有性能问题时优化。**新增：** `tests/competition-journey.spec.ts`、`scripts/benchmark_competition.py`、`docs/development/performance-baseline.md`。
+
+- [ ] 在记录硬件的演示电脑运行1000行基线与5000行压力样本，分别测冷启动、导入、切页、证据展开、报告生成；记录5次中位数与最大值。
+- [ ] 必要时按范围惰性加载证据、减少重复派生、按明确缓存键缓存纯计算；缓存键必须含run与source版本，撤销签核不得读旧缓存。
+- [ ] 三名首次使用者执行导入→查看证据→编辑方案→确认案例→导出；记录任务完成、困惑及阻塞，不凭截图宣布易用性通过。
+- [ ] 检查键盘、焦点、表单错误、长内容、打印和浏览器刷新；复用现有组件，仅按实际需要拆分过大的ReviewPanel/WorkbenchPages。
+- [ ] 运行专项E2E与相关回归；性能不达内部目标时报告瓶颈与实测范围，不擅自修改统计口径换取速度。
+
+## 三、每阶段验收命令
+
+从仓库根目录先激活或显式指定已有虚拟环境，并确认安装项目及开发依赖。执行前检查现有工作区，保留无关改动。以下是实现阶段要执行的命令，不是本规划已经执行的结果。
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e ".[dev]"
+python -m pytest
+python -m ruff check apps/backend
+python -m ruff format --check apps/backend
+Push-Location apps/web
+npm ci
+npm run test
+npm run build
+Pop-Location
+npm run test:e2e
+git diff --check
+```
+
+对迁移、新脚本、正式包和真实模型另跑对应专项。官方数据回归通过环境变量指定只读原件；测试数据库一律使用隔离临时目录。Windows符号链接用例若跳过需准确列出，不视为已覆盖。不得重跑与变更无关的昂贵评测来制造“验证很多”的印象。
+
+## 四、阶段交付矩阵
+
+| 赛题要求 | 责任工作包 | 工程证据 | 内容/交付证据 |
+|---|---|---|---|
+| 三主题学习要求及必要联系 | P03/P04 | 映射契约、版本与定位测试 | 9指标卡、关系依据及教师核验 |
+| 课标、教材、题目对应 | P03/P04 | 白名单、页码、指纹、资源类型测试 | 54题及使用资源逐项核对 |
+| 缺失、异常、重复处理 | P01/P05/P14 | 处置守恒与独立复算 | 输入SHA、口径说明 |
+| 个体表现与步骤解释 | P05/P06/P10 | 证据隔离与claims校验 | 学科样例审核 |
+| 两班差异与共性问题 | P07/P12 | 去重分母、共同题目比较测试 | 两班报告与限制说明 |
+| 具体材料、理由、顺序 | P08/P09 | 选择约束与版本有效性测试 | 三套差异化教学方案 |
+| 分步提示与后续调整 | P09/P11 | 提示隔离、覆盖证据与调整测试 | 提示审核、教师观察记录 |
+| 三名正式案例 | P11/P12 | 确认与导出E2E | 代表性理由与三案例报告 |
+| 可机读成果与核对样例 | P01/P13/P14 | schema、范围、引用闭合 | JSON/CSV、说明与复算样例 |
+| PDF、MP4、PPT | P15 | 文件/版本清单与尺寸时长核验 | 实际可读PDF、可播视频、答辩演练 |
+| 新数据与独立评测 | P14/P16 | 变形测试、异常集与压力样本 | 官方独立数据到达后单独验收 |
+
+## 五、完成定义
+
+一个工作包只有在代码、测试、合同、说明及适用的人工内容全部完成时，才可标记完成。工程完成但待学科审核时写`engineering_pass/content_pending`；模型Mock通过但未实调写`mock_pass/live_not_run`；正式文件未生成时不能写“交付完成”。
+
+本阶段规划交付完成后，执行者按P01/P02启动M0，再进入P03学科契约与P05证据契约。需要缩减工期时，先延期整本PDF自动提取、模型增强、扩展学生视图和方案对比；不得削减范围隔离、学科核验、三案例、正式包及必交材料。

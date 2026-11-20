@@ -35,6 +35,8 @@ def package(
         raise ValueError("请选择三名不同的有效学生作为案例")
     accepted, pending = [], []
     for student in run["students"]:
+        if student["学生编号"] not in case_ids:
+            continue
         for objective in run["objectives"]:
             student_id, indicator_id = student["学生编号"], objective["指标编号"]
             baseline = draft(run, student_id, indicator_id)
