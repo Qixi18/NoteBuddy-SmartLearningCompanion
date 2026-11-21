@@ -7,7 +7,7 @@ export interface ImportResult {
   source_parsing?: {
     provider?: string;
     purpose?: string;
-    status?: 'complete' | 'partial' | 'failed' | 'no_sources';
+    status?: 'complete' | 'partial' | 'failed' | 'no_sources' | 'not_requested';
     file_count?: number;
     parsed_file_count?: number;
     files?: Record<string, { status?: string; page_count?: number; reason?: string }>;

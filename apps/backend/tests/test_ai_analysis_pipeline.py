@@ -227,6 +227,28 @@ def test_ai_output_rejects_unverified_fact_excerpt(run_snapshot):
         )
 
 
+def test_ai_output_blocks_personal_identifiers_and_demeaning_labels(run_snapshot):
+    packet = build_task_packets(run_snapshot, "task02", node_id="N01")[0]
+    for claim in ("请联系13812345678", "该学生是差生"):
+        with pytest.raises(ValueError, match="安全检查"):
+            validate_packet_output(
+                {
+                    "findings": [
+                        {
+                            "category": "student_work",
+                            "claim": claim,
+                            "interpretation": "可进一步观察。",
+                            "support_level": "unavailable",
+                            "limitations": "当前证据不足。",
+                            "next_step": "补充观察。",
+                            "evidence_refs": [],
+                        }
+                    ]
+                },
+                packet,
+            )
+
+
 def test_local_identifier_in_raw_text_is_redacted_and_alias_excerpt_validates(
     run_snapshot,
 ):

@@ -175,12 +175,14 @@ def package(
     case_ids: list[str] | None = None,
     *,
     sources: dict | None = None,
+    ai_mappings: dict | None = None,
     cases: dict | None = None,
     teaching_adjustments: list[dict] | None = None,
     submission: dict | None = None,
 ) -> bytes:
     case_ids = case_ids or []
     sources = sources or {}
+    ai_mappings = ai_mappings or {}
     cases = cases or {}
     teaching_adjustments = teaching_adjustments or []
     known_students = {s["学生编号"] for s in run["students"]}
@@ -296,6 +298,15 @@ def package(
         "case_ids": case_ids,
         "files": run["files"],
         "source_files": run.get("source_files", {}),
+        "ai_mapping_versions": {
+            indicator_id: {
+                "version": history[-1].get("version"),
+                "status": history[-1].get("status"),
+                "input_fingerprint": history[-1].get("input_fingerprint"),
+            }
+            for indicator_id, history in ai_mappings.items()
+            if history
+        },
         "reviewed_recommendations": len(accepted),
         "pending_recommendations": len(pending),
     }
@@ -605,6 +616,7 @@ def package(
         # Add structured mappings and node-scoped views without changing legacy members.
         "course_relations.json": course_relations,
         "source_verification_history.json": sources,
+        "ai_indicator_mappings.json": ai_mappings,
         "verified_source_relations.json": verified_relations,
         "teacher_cases_history.json": {
             student_id: cases.get(student_id, []) for student_id in case_ids

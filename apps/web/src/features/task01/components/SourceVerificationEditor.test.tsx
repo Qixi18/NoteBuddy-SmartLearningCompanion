@@ -56,11 +56,11 @@ describe('SourceVerificationEditor structured rows', () => {
     fireEvent.click(screen.getByRole('button', { name: '添加知识联系' }));
     fireEvent.change(screen.getAllByLabelText('关联指标')[0], { target: { value: 'I2' } });
     fireEvent.change(screen.getByLabelText('关系'), { target: { value: '前置知识' } });
-    fireEvent.change(screen.getByLabelText('关系依据'), { target: { value: '已核对课标' } });
+    fireEvent.change(screen.getByLabelText('核验依据'), { target: { value: '已核对课标' } });
     fireEvent.click(screen.getByRole('button', { name: '保存未确认修改' }));
 
     expect(await screen.findByText('来源已更新，请比较后重新保存。')).toBeTruthy();
-    expect((screen.getByLabelText('关系依据') as HTMLInputElement).value).toBe('已核对课标');
+    expect((screen.getByLabelText('核验依据') as HTMLInputElement).value).toBe('已核对课标');
     expect(save).toHaveBeenCalledTimes(1);
     const comparison = screen.getByRole('region', { name: '来源签核版本对比' });
     expect(comparison.textContent).toContain('第 10 页');

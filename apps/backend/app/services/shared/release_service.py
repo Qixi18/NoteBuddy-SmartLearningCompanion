@@ -31,6 +31,7 @@ def check_release(
     node_id: str,
     content_reviewed: bool = False,
     reviewer: str = "",
+    ai_mappings: dict[str, list[dict]] | None = None,
 ) -> list[dict]:
     students = {row.get("学生编号") for row in run.get("students", [])}
     valid_selection = (
@@ -253,6 +254,7 @@ def release_fingerprint(
     checks: list[dict],
     reviewer: str,
     content_reviewed: bool,
+    ai_mappings: dict[str, list[dict]] | None = None,
 ) -> str:
     payload = {
         "run_id": run.get("run_id"),
@@ -266,6 +268,7 @@ def release_fingerprint(
             if key.partition(":")[0] in case_ids
         },
         "sources": sources,
+        "ai_mappings": ai_mappings or {},
         "reports": reports,
         "checks": checks,
         "reviewer": reviewer.strip(),

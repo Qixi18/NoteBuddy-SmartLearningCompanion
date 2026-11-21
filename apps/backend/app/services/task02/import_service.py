@@ -41,11 +41,15 @@ class ImportService:
                 sort_keys=True,
             ).encode()
         ).hexdigest()[:16]
-        # OCR the curriculum and referenced textbook PDFs as part of each import.
-        # SourceService reuses hash-addressed results, so unchanged PDFs are not billed again.
-        result["source_parsing"] = self.sources.parse_registered_pdfs(
-            result, self.ocr_client
-        )
+        # Importing assessment data is local-only. OCR is an explicit operation.
+        result["source_parsing"] = {
+            "provider": "deepseek",
+            "purpose": "rich_layout_recognition",
+            "status": "not_requested",
+            "file_count": 0,
+            "parsed_file_count": 0,
+            "files": {},
+        }
         runs = self.runs
         if self.uow_factory is not None:
             with self.uow_factory(immediate=False) as uow:

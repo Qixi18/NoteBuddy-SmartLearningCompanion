@@ -1,8 +1,10 @@
 """Resolve allowlisted curriculum and textbook PDF sources."""
 
 import hashlib
+import io
 import json
 from pathlib import Path
+from pypdf import PdfReader
 
 from ...application.ports.file_storage import FileStorage
 from ...infrastructure.files.local_file_storage import LocalFileStorage
@@ -109,9 +111,15 @@ class SourceService:
                 if page_count > MAX_OCR_PAGES or len(result["pages"]) > MAX_OCR_PAGES:
                     raise ValueError("page_limit_exceeded")
                 pages = []
+                seen_indexes = set()
                 for page in result["pages"]:
-                    if not isinstance(page, dict) or not isinstance(page.get("index"), int):
+                    if not isinstance(page, dict) or not isinstance(
+                        page.get("index"), int
+                    ):
                         continue
+                    if page["index"] in seen_indexes or page["index"] < 0:
+                        raise ValueError("invalid_ocr_page_indexes")
+                    seen_indexes.add(page["index"])
                     text = page.get("text", "")
                     if not isinstance(text, str):
                         continue
@@ -124,11 +132,21 @@ class SourceService:
                     )
                 if not pages:
                     raise ValueError("empty_ocr_result")
+                if seen_indexes != set(range(page_count)):
+                    raise ValueError("incomplete_ocr_page_indexes")
+                try:
+                    local_page_count = len(PdfReader(io.BytesIO(content)).pages)
+                except Exception:  # noqa: BLE001 - OCR can still report the parse error
+                    local_page_count = None
+                if local_page_count is not None and local_page_count != page_count:
+                    raise ValueError("ocr_page_count_mismatch")
                 parsed = {
                     "sha256": fingerprint,
                     "bytes": len(content),
                     "page_count": page_count,
-                    "text_page_count": sum(bool(page["text"].strip()) for page in pages),
+                    "text_page_count": sum(
+                        bool(page["text"].strip()) for page in pages
+                    ),
                     "pages": pages,
                     "usage": result.get("usage", {}),
                     "ocr_id": result.get("id"),
@@ -173,6 +191,52 @@ class SourceService:
             "files": files,
         }
 
+    def preview_registered_pdfs(
+        self, run: dict, client: DeepSeekOCRAdapter | None
+    ) -> dict:
+        """Describe exactly which allowlisted PDFs would be sent to OCR."""
+        files = {}
+        for name in sorted(self.allowed_names(run)):
+            path = self.resolve(run, name)
+            if path is None:
+                files[name] = {"status": "missing", "will_send": False}
+                continue
+            content = self.storage.read_bytes(path)
+            fingerprint = hashlib.sha256(content).hexdigest()
+            cached = self._read_ocr_cache(fingerprint)
+            status = (
+                "cached"
+                if cached is not None
+                else "api_key_missing"
+                if client is None
+                else "ready"
+            )
+            files[name] = {
+                "status": status,
+                "will_send": status == "ready",
+                "bytes": len(content),
+                "sha256": fingerprint,
+                "page_count": cached.get("page_count") if cached else None,
+            }
+        send_count = sum(item["will_send"] for item in files.values())
+        cached_count = sum(item["status"] == "cached" for item in files.values())
+        return {
+            "provider": "deepseek",
+            "purpose": "rich_layout_recognition",
+            "status": (
+                "ready"
+                if send_count and client
+                else "api_key_missing"
+                if send_count
+                else "cached"
+                if cached_count
+                else "no_sources"
+            ),
+            "will_send_count": send_count,
+            "cached_count": cached_count,
+            "files": files,
+        }
+
     def _read_ocr_cache(self, fingerprint: str) -> dict | None:
         if self.ocr_cache_dir is None:
             return None
@@ -181,7 +245,11 @@ class SourceService:
             value = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             return None
-        return value if isinstance(value, dict) and value.get("sha256") == fingerprint else None
+        return (
+            value
+            if isinstance(value, dict) and value.get("sha256") == fingerprint
+            else None
+        )
 
     def _write_ocr_cache(self, fingerprint: str, value: dict) -> None:
         if self.ocr_cache_dir is None:
@@ -189,9 +257,7 @@ class SourceService:
         self.ocr_cache_dir.mkdir(parents=True, exist_ok=True)
         target = self.ocr_cache_dir / f"{fingerprint}.json"
         temporary = target.with_suffix(".tmp")
-        temporary.write_text(
-            json.dumps(value, ensure_ascii=False), encoding="utf-8"
-        )
+        temporary.write_text(json.dumps(value, ensure_ascii=False), encoding="utf-8")
         temporary.replace(target)
 
     def inspect_pdf(self, run: dict, name: str) -> dict:
@@ -201,12 +267,18 @@ class SourceService:
             return {"available": False, "name": name}
         content = self.storage.read_bytes(path)
         fingerprint = hashlib.sha256(content).hexdigest()
+        try:
+            local_page_count = len(PdfReader(io.BytesIO(content)).pages)
+        except Exception:  # noqa: BLE001 - damaged PDFs remain unavailable
+            local_page_count = None
         parsed = self._read_ocr_cache(fingerprint)
         if parsed is None:
             parsed = next(
                 (
                     value
-                    for key, value in run.get("source_parsing", {}).get("files", {}).items()
+                    for key, value in run.get("source_parsing", {})
+                    .get("files", {})
+                    .items()
                     if key == name and value.get("sha256") == fingerprint
                 ),
                 None,
@@ -218,7 +290,7 @@ class SourceService:
                 "sha256": fingerprint,
                 "bytes": len(content),
                 "status": "unparsed",
-                "page_count": None,
+                "page_count": local_page_count,
                 "text_page_count": 0,
                 "text_pages": [],
             }
@@ -232,9 +304,11 @@ class SourceService:
             if parsed.get("status") in {"complete", "cached", "partial"}
             else parsed.get("status"),
             "parse_status": parsed.get("parse_status", parsed.get("status")),
-            "page_count": parsed.get("page_count"),
+            "page_count": parsed.get("page_count") or local_page_count,
             "text_page_count": parsed.get("text_page_count", 0),
-            "text_pages": [page["index"] + 1 for page in pages if page.get("text", "").strip()],
+            "text_pages": [
+                page["index"] + 1 for page in pages if page.get("text", "").strip()
+            ],
         }
 
     def extract_pages(

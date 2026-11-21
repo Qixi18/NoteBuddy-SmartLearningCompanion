@@ -202,3 +202,20 @@ def test_unverified_or_missing_catalog_candidates_block_instead_of_guessing():
     assert result["practice_items"] == []
     assert result["learning_resources"] == []
     assert "no_verified_candidate" in result["reason_codes"]
+
+
+def test_current_usable_ai_mapping_can_supply_candidate_without_legacy_signoff():
+    bundle = _bundle()
+    bundle["source_context"].update(
+        status="pending",
+        material_ids=[],
+        resource_links=[],
+        ai_mappings={
+            "Q2": {"status": "usable", "relation": "assesses"},
+            "TB1": {"status": "usable", "relation": "supports"},
+        },
+    )
+    result = select_resources(bundle, [], _catalog(), "transfer")
+    assert [row["material_id"] for row in result["practice_items"]] == ["Q2"]
+    assert [row["material_id"] for row in result["learning_resources"]] == ["TB1"]
+    assert "ai_mapping_match" in result["practice_items"][0]["reason_codes"]

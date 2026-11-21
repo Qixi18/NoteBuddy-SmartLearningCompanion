@@ -147,10 +147,11 @@ class PlanResourceReasonPayload(BaseModel):
 
 class PlanEvidenceRefPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    kind: Literal["response", "coverage"] = "response"
     evidence_id: str = Field(min_length=1)
-    record_id: str = Field(min_length=1)
-    material_id: str = Field(min_length=1)
-    source_line: int = Field(ge=1)
+    record_id: str = ""
+    material_id: str = ""
+    source_line: int = Field(default=0, ge=0)
 
 
 class TeachingPlanV2Payload(BaseModel):
@@ -246,6 +247,12 @@ class ResourceLink(BaseModel):
     # from the immutable run material by the application use case.
     resource_type: str = ""
     content_hash: str = ""
+
+
+class IndicatorMappingRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    transmission_confirmed: Literal[True]
+    indicator_id: str | None = Field(default=None, min_length=1)
 
 
 class SourceVerificationRequest(BaseModel):

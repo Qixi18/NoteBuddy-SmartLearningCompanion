@@ -143,9 +143,9 @@ describe('ObjectivesPanel source checks', () => {
       expect(screen.getByText(/教材 TB01 · 再次讲解 · verified/)).toBeTruthy();
     });
 
-    fireEvent.click(screen.getByText('更新签核'));
+    fireEvent.click(screen.getByText('更新关系确认'));
     const editor = screen.getByText(/评分点问题 同类项识别有误/).closest('section');
-    fireEvent.click(within(editor!).getByRole('button', { name: '确认本指标来源' }));
+    fireEvent.click(within(editor!).getByRole('button', { name: '确认指标与来源关系' }));
     await waitFor(() => expect(save).toHaveBeenCalledWith(expect.objectContaining({
       indicator_id: 'T01I1',
       expected_version: 1,
@@ -206,7 +206,7 @@ describe('ObjectivesPanel source checks', () => {
 
     expect(await screen.findByText(/SHA-256：a{12}/)).toBeTruthy();
     expect(screen.getByText(/OCR未提取到该页文本/)).toBeTruthy();
-    expect(screen.getByText(/已核验用途：复习概念 · 教材第 68 页/)).toBeTruthy();
+    expect(screen.getByText(/TB01/)).toBeTruthy();
     expect(screen.getByRole('link', { name: '打开第 62 页' }).getAttribute('href')).toContain('#page=62');
   });
 

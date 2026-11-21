@@ -11,6 +11,7 @@ from ...domain.teaching.plan import (
     TeachingPlanScope,
     TeachingPlanV2,
 )
+from ..task02.evidence_reference_service import coverage_reference
 
 
 @lru_cache(maxsize=1)
@@ -45,8 +46,10 @@ def build_teaching_plan(
     material_ids = tuple(dict.fromkeys(row["material_id"] for row in selected))
     if not material_ids:
         raise ValueError("没有可使用的方案材料")
+    purpose = selection["purpose"]
     evidence_refs = tuple(
         PlanEvidenceRef(
+            kind="response",
             evidence_id=row["evidence_id"],
             record_id=row["record_id"],
             material_id=row["material_id"],
@@ -59,10 +62,17 @@ def build_teaching_plan(
         and row.get("record_id")
         and row.get("source_line")
     )
+    if not evidence_refs and purpose == "diagnostic":
+        coverage = coverage_reference(bundle)
+        evidence_refs = (
+            PlanEvidenceRef(
+                kind="coverage",
+                evidence_id=coverage["evidence_id"],
+            ),
+        )
     if not evidence_refs:
-        raise ValueError("当前范围没有有效评分证据，不能生成个体化教学方案")
+        raise ValueError("当前范围没有有效评分或覆盖证据，不能生成个体化教学方案")
     scope = bundle["scope"]
-    purpose = selection["purpose"]
     template_catalog = templates or _load_templates()
     template = template_catalog["purposes"][purpose]
     issue = next(
@@ -75,7 +85,10 @@ def build_teaching_plan(
         "",
     )
     materials_label = "、".join(material_ids)
-    evidence_label = "、".join(ref.record_id for ref in evidence_refs)
+    evidence_label = (
+        "、".join(ref.record_id for ref in evidence_refs)
+        or "当前节点无有效作答记录，依据覆盖情况安排补充观察"
+    )
     goal_subject = objective.strip() or scope["indicator_id"]
     goal = template["goal"].format(objective=goal_subject, materials=materials_label)
     if issue:
@@ -176,11 +189,25 @@ def validate_teaching_plan(
         for row in bundle.get("responses", [])
         if row.get("disposition") == "scored"
     }
-    if any(
-        (ref.evidence_id, ref.record_id, ref.material_id, ref.source_line)
-        not in available_evidence
-        for ref in plan.evidence_refs
-    ):
+    coverage = coverage_reference(bundle)
+    invalid_refs = []
+    for ref in plan.evidence_refs:
+        if ref.kind == "coverage":
+            if (
+                bundle.get("responses")
+                or ref.evidence_id != coverage.get("evidence_id")
+                or ref.record_id
+                or ref.material_id
+            ):
+                invalid_refs.append(ref)
+        elif (
+            ref.evidence_id,
+            ref.record_id,
+            ref.material_id,
+            ref.source_line,
+        ) not in available_evidence:
+            invalid_refs.append(ref)
+    if invalid_refs:
         errors.append(
             {
                 "code": "evidence_out_of_scope",

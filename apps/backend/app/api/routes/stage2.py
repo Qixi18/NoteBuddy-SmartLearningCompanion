@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from ...application.use_cases.workbench import WorkbenchUseCases
 from ...repositories.stage2_repository import SourceVerificationVersionConflict
 from ...schemas.http import (
+    IndicatorMappingRequest,
     MaterialCatalogResponse,
     SourceVerificationRequest,
     SourceVerificationResponse,
@@ -19,6 +20,18 @@ from ..dependencies import get_use_cases
 
 router = APIRouter()
 UseCases = Annotated[WorkbenchUseCases, Depends(get_use_cases)]
+
+
+@router.get("/api/ai-source-mappings", tags=["sources"])
+def ai_source_mappings(use_cases: UseCases) -> dict:
+    return use_cases.indicator_mappings.list()
+
+
+@router.post("/api/ai-source-mappings", tags=["sources"])
+def generate_ai_source_mappings(
+    payload: IndicatorMappingRequest, use_cases: UseCases
+) -> dict:
+    return use_cases.indicator_mappings.generate(payload.indicator_id)
 
 
 @router.get(

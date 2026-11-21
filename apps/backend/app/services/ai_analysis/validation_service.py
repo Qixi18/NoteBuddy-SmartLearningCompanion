@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from .evidence_pack_service import EvidencePacket
+from .safety_service import inspect_student_text
 
 _SUPPORT_LEVELS = {"supported", "limited", "conflicting", "unavailable"}
 _FINDING_FIELDS = {
@@ -54,22 +54,27 @@ def validate_packet_output(candidate: dict[str, Any], packet: EvidencePacket) ->
             raise TypeError("模型 evidence_refs 必须是列表")
         restored = []
         for ref in refs:
-            if not isinstance(ref, dict) or set(ref) - {"ref", "excerpt"} or "ref" not in ref:
+            if (
+                not isinstance(ref, dict)
+                or set(ref) - {"ref", "excerpt"}
+                or "ref" not in ref
+            ):
                 raise ValueError("模型 evidence_ref 结构无效")
             alias = ref.get("ref")
             excerpt = ref.get("excerpt")
             local = packet.reference_map.get(alias)
             if not local:
                 raise ValueError("模型引用了当前范围以外的证据")
-            if local.get("kind") == "response":
-                if (
-                    not isinstance(excerpt, str)
-                    or not excerpt.strip()
-                    or excerpt not in local.get("text", "")
-                ):
-                    excerpt = _source_excerpt(local)
-            elif not isinstance(excerpt, str) or excerpt not in local.get("text", ""):
+            if local.get("kind") == "metric":
+                # Metrics are structured values; render their trusted local
+                # representation instead of accepting model-authored quotes.
                 excerpt = _source_excerpt(local)
+            elif (
+                not isinstance(excerpt, str)
+                or not excerpt.strip()
+                or excerpt not in local.get("text", "")
+            ):
+                raise ValueError("模型 excerpt 与当前证据不匹配")
             restored.append(
                 {
                     **local,
@@ -82,6 +87,18 @@ def validate_packet_output(candidate: dict[str, Any], packet: EvidencePacket) ->
         next_step = finding.get("next_step", "")
         if not isinstance(next_step, str):
             raise TypeError("模型 next_step 必须是文本")
+        safety_text = (
+            "\n".join(
+                finding[field] for field in ("claim", "interpretation", "limitations")
+            )
+            + "\n"
+            + next_step
+        )
+        safety_issues = inspect_student_text(safety_text)
+        if safety_issues:
+            raise ValueError(
+                "模型输出未通过学生内容安全检查：" + ", ".join(safety_issues)
+            )
         validated.append(
             {
                 "finding_id": f"finding{index}",

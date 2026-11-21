@@ -201,6 +201,28 @@ class SourceVerificationRow(Base):
     )
 
 
+class AIIndicatorMappingRow(Base):
+    __tablename__ = "ai_indicator_mappings"
+    mapping_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    run_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    indicator_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    input_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[str] = mapped_column(String(64), nullable=False)
+    __table_args__ = (
+        UniqueConstraint(
+            "run_id", "indicator_id", "version", name="uq_ai_indicator_mapping_version"
+        ),
+        ForeignKeyConstraint(
+            ["run_id", "indicator_id"],
+            ["learning_objectives.run_id", "learning_objectives.indicator_id"],
+            ondelete="CASCADE",
+        ),
+    )
+
+
 class ConfirmedCaseRow(Base):
     __tablename__ = "teacher_cases"
     run_id: Mapped[str] = mapped_column(String(64), primary_key=True)

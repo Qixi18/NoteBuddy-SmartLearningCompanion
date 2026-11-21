@@ -52,3 +52,18 @@ def import_files(
 ) -> ImportResponse:
     result = use_cases.import_folder.execute_files(payload.files, payload.pdf_files)
     return _response(result)
+
+
+@router.get("/api/source-ocr/preview", tags=["sources"])
+def source_ocr_preview(
+    use_cases: WorkbenchUseCases = Depends(get_use_cases),
+) -> dict:
+    return use_cases.import_folder.preview_ocr()
+
+
+@router.post("/api/source-ocr", tags=["sources"])
+def source_ocr(
+    confirmed: bool = False,
+    use_cases: WorkbenchUseCases = Depends(get_use_cases),
+) -> dict:
+    return use_cases.import_folder.execute_ocr(confirmed)

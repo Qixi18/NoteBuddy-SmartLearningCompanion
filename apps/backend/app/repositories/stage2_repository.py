@@ -2,10 +2,15 @@
 
 import json
 from datetime import UTC, datetime
+from uuid import uuid4
 
 from sqlalchemy import select
 
-from ..infrastructure.database.models import ConfirmedCaseRow, SourceVerificationRow
+from ..infrastructure.database.models import (
+    AIIndicatorMappingRow,
+    ConfirmedCaseRow,
+    SourceVerificationRow,
+)
 from .base import SqlAlchemyRepository
 
 
@@ -33,6 +38,63 @@ class Stage2Repository(SqlAlchemyRepository):
                 record.setdefault("status", row.status)
                 result.setdefault(row.indicator_id, []).append(record)
             return result
+
+    def list_ai_mappings(self, run_id: str) -> dict[str, list[dict]]:
+        with self.session_scope() as session:
+            rows = session.scalars(
+                select(AIIndicatorMappingRow)
+                .where(AIIndicatorMappingRow.run_id == run_id)
+                .order_by(
+                    AIIndicatorMappingRow.indicator_id, AIIndicatorMappingRow.version
+                )
+            ).all()
+            result: dict[str, list[dict]] = {}
+            for row in rows:
+                payload = json.loads(row.payload_json)
+                payload.update(
+                    version=row.version,
+                    status=row.status,
+                    input_fingerprint=row.input_fingerprint,
+                )
+                result.setdefault(row.indicator_id, []).append(payload)
+            return result
+
+    def append_ai_mapping(
+        self, run_id: str, indicator_id: str, fingerprint: str, payload: dict
+    ) -> dict:
+        with self.session_scope(write=True) as session:
+            latest = session.scalars(
+                select(AIIndicatorMappingRow)
+                .where(
+                    AIIndicatorMappingRow.run_id == run_id,
+                    AIIndicatorMappingRow.indicator_id == indicator_id,
+                )
+                .order_by(AIIndicatorMappingRow.version.desc())
+                .limit(1)
+            ).first()
+            version = (latest.version + 1) if latest else 1
+            record = {
+                **payload,
+                "run_id": run_id,
+                "indicator_id": indicator_id,
+                "version": version,
+                "input_fingerprint": fingerprint,
+                "status": payload.get("status", "needs_resolution"),
+                "created_at": datetime.now(UTC).isoformat(),
+            }
+            session.add(
+                AIIndicatorMappingRow(
+                    mapping_id=uuid4().hex,
+                    run_id=run_id,
+                    indicator_id=indicator_id,
+                    version=version,
+                    input_fingerprint=fingerprint,
+                    status=record["status"],
+                    payload_json=json.dumps(record, ensure_ascii=False),
+                    created_at=record["created_at"],
+                )
+            )
+            return record
 
     def list_cases(self, run_id: str) -> dict[str, list[dict]]:
         with self.session_scope() as session:

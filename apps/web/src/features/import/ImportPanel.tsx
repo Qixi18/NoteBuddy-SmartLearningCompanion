@@ -22,6 +22,7 @@ export function ImportPanel({ onImported, onMessage }: { onImported: (id: string
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [failed, setFailed] = useState(false);
+  const [ocrBusy, setOcrBusy] = useState(false);
   const submit = async () => {
     const expected = ['课程要求.csv', '题目与材料.csv', '模拟学生.csv', '测验节点.csv', '作答记录.csv', '字段说明.csv'];
     const selected = new Map(files.map(file => [file.name, file]));
@@ -42,8 +43,8 @@ export function ImportPanel({ onImported, onMessage }: { onImported: (id: string
       const parsed = parsing?.parsed_file_count ?? 0;
       const total = parsing?.file_count ?? 0;
       const status = parsing?.status;
-      const summary = !parsing
-        ? '数据导入完成。'
+      const summary = !parsing || status === 'not_requested'
+        ? '数据导入完成。来源 PDF 尚未发送到 OCR。'
         : status === 'complete'
         ? `导入完成，DeepSeek 已解析 ${parsed}/${total} 份课程标准与教材 PDF。`
         : status === 'no_sources'
@@ -62,7 +63,24 @@ export function ImportPanel({ onImported, onMessage }: { onImported: (id: string
     catch (reason) { const text = reason instanceof Error ? reason.message : String(reason); setFeedback(text); setFailed(true); onMessage(text, true); }
     finally { setBusy(false); }
   };
-  return <Panel title="导入数据"><p className="muted">选择数据文件夹后，系统会在本机处理 CSV，并自动将文件夹中的课程标准与教材 PDF 上传至 DeepSeek OCR，提取逐页文字和版面信息。只有已登记的来源 PDF 会提交识别；识别成功页会按 DeepSeek 规则计费，相同文件会复用本地解析缓存。</p>
+  const recognizeSources = async () => {
+    setOcrBusy(true);
+    try {
+      const preview = await learningApi.sourceOcrPreview();
+      const names = Object.entries(preview.files).filter(([, item]) => item.will_send).map(([name]) => name);
+      if (!names.length && !preview.cached_count) {
+        onMessage(preview.status === 'api_key_missing' ? '未配置 OCR 服务密钥，未发送文件。' : '没有可识别的已登记来源 PDF。', preview.status === 'api_key_missing');
+        return;
+      }
+      const accepted = window.confirm(`OCR 服务：${preview.provider}\n将上传 ${names.length} 个文件：${names.join('、') || '无（仅使用缓存）'}\n已缓存 ${preview.cached_count} 个文件。服务按成功识别页计费。是否继续？`);
+      if (!accepted) return;
+      const result = await learningApi.sourceOcr();
+      onMessage(`来源 OCR 完成：${result.parsed_file_count}/${result.file_count} 份文件。`);
+    } catch (reason) {
+      onMessage(reason instanceof Error ? reason.message : String(reason), true);
+    } finally { setOcrBusy(false); }
+  };
+  return <Panel title="导入数据"><p className="muted">选择数据文件夹后，系统在本机处理 CSV 并保存已登记的来源 PDF。普通导入不会调用外部 OCR。识别来源 PDF 会把未缓存文件发送至 DeepSeek OCR，并按成功识别页计费；请先预览文件，再主动启动识别。</p>
     <form onSubmit={event => { event.preventDefault(); void submit(); }}>
       <input ref={picker} aria-label="选择 CSV 文件夹" type="file" hidden multiple {...{ webkitdirectory: '', directory: '' }} disabled={busy} onChange={event => { const selected = Array.from(event.target.files ?? []); setFiles(selected); setFolder(selected[0]?.webkitRelativePath.split('/')[0] ?? ''); setFeedback(selected.length ? `已选择 ${selected[0]?.webkitRelativePath.split('/')[0]} · ${selected.length} 个文件` : ''); setFailed(false); }} />
       <button type="button" className="secondary" disabled={busy} onClick={() => picker.current?.click()}>选择数据文件夹</button>
@@ -70,6 +88,7 @@ export function ImportPanel({ onImported, onMessage }: { onImported: (id: string
       <details className="required-files" open><summary>6 个必需 CSV 文件名</summary><ul>{['课程要求.csv', '题目与材料.csv', '模拟学生.csv', '测验节点.csv', '作答记录.csv', '字段说明.csv'].map(name => <li key={name}>{name}</li>)}</ul></details>
       <p className={failed ? 'error' : 'muted'} role={failed ? 'alert' : 'status'} aria-live={failed ? 'assertive' : 'polite'}>{busy ? '正在导入和分析（包含课程标准与教材 PDF 自动解析）…' : feedback}</p>
       <button type="submit" disabled={busy || files.length === 0}>{busy ? '正在导入…' : '检查文件并导入'}</button>
+      <button type="button" className="secondary" disabled={busy || ocrBusy} onClick={() => void recognizeSources()}>{ocrBusy ? '正在识别…' : '识别来源 PDF（按页计费）'}</button>
     </form>
   </Panel>;
 }

@@ -224,7 +224,7 @@ def test_json_source_backup_excludes_database_and_sidecars(tmp_path, monkeypatch
     database_backup = tmp_path / "sqlite-backup" / "smart_learning.db"
     database_info = backup_database(f"sqlite:///{database.as_posix()}", database_backup)
     assert database_info["integrity_check"] == ["ok"]
-    assert database_info["revision"] == "7f2c9a1d4e60"
+    assert database_info["revision"] == "8a1d3c5e7f90"
     assert "analysis_runs" in database_info["tables"]
 
     wal = Path(f"{database}-wal")
@@ -421,7 +421,7 @@ def test_alembic_empty_upgrade_repeat_and_consistent_restore(tmp_path, monkeypat
     backup_info = backup_database(url, backup)
     restore_info = restore_database(backup, restored)
     assert backup_info["revision"] == restore_info["revision"]
-    assert restore_info["revision"] == "7f2c9a1d4e60"
+    assert restore_info["revision"] == "8a1d3c5e7f90"
     assert restore_info["integrity_check"] == ["ok"]
     assert restore_info["foreign_key_violations"] == 0
     assert backup_info["tables"] == restore_info["tables"]
@@ -857,7 +857,7 @@ def test_cli_rejects_nonempty_target_without_opt_in_and_persists_report(
     report_path = next(backup_root.glob("*/migration-report.json"))
     report = json.loads(report_path.read_text(encoding="utf-8"))
     assert report["status"] == "failed"
-    assert report["database_preflight"]["revision"] == "7f2c9a1d4e60"
+    assert report["database_preflight"]["revision"] == "8a1d3c5e7f90"
     assert report["database_preflight"]["table_counts"]["analysis_runs"] == 1
     assert not (report_path.parent / "source").exists()
 
