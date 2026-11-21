@@ -167,6 +167,7 @@ test('loads the local workbench and imports the sample bundle', async ({ page })
   await structuredPlan.getByLabel('活动步骤（每行一步）').fill('独立重做原题\n解释关键步骤');
   await structuredPlan.getByLabel('练习（每行一项）').fill('Q001 同类型练习');
   await structuredPlan.getByLabel('观察点（每行一项）').fill('记录独立作答步骤');
+  await page.getByLabel('复核状态').selectOption('edited');
   await page.getByLabel('复核人').fill('测试教师');
   await page.getByLabel('复核理由').fill('核对当前节点的原始证据');
   await page.route('**/api/review', route => route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: '模拟复核保存失败', code: 'INTERNAL_ERROR' }) }));
@@ -176,6 +177,10 @@ test('loads the local workbench and imports the sample bundle', async ({ page })
   await page.unroute('**/api/review');
   await page.getByRole('button', { name: '保存复核' }).click();
   await expect(page.locator('#message')).toContainText('复核已保存');
+  await page.reload();
+  const savedReview = page.getByLabel('已保存建议状态');
+  await expect(savedReview).toContainText('已复核建议');
+  await expect(savedReview.locator('.saved-review-reader')).toContainText('独立重做原题');
   await page.getByRole('link', { name: '案例与交付', exact: true }).click();
   const candidate = page.locator('.case-candidate').filter({ hasText: 'D01' }).first();
   await candidate.locator('summary').click();

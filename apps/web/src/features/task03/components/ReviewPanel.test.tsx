@@ -92,6 +92,16 @@ describe('ReviewPanel', () => {
     expect(screen.getByText(/原始来源行：3/)).toBeTruthy();
   });
 
+  it('defaults inconclusive drafts to observation instead of acceptance', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', {
+      status: 200, headers: { 'content-type': 'application/json' },
+    })));
+    const inconclusiveDraft = { ...draftFixture, unknown_reason: 'evidence_conflict' } as Draft;
+    render(<ReviewPanel student="D01" indicator="T01I1" node="N01" draft={inconclusiveDraft} onDraft={vi.fn()} onSave={vi.fn()} />);
+    const status = await screen.findByLabelText('复核状态') as HTMLSelectElement;
+    expect(status.value).toBe('needs_observation');
+  });
+
   it('lets a teacher attach server-computed zero-response coverage to a review', async () => {
     const run = {
       run_id: 'RUN-1', items: [], responses: [], raw_responses: [], observations: [], source_index: [],

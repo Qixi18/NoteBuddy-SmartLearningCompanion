@@ -142,6 +142,7 @@ export function ReviewPanel({ run, student, indicator, node, review, draft, mode
       const planMatchesEvidence = Boolean(fields.teaching_plan_v2 && draft.teaching_plan_preview?.evidence_fingerprint === fields.teaching_plan_v2.evidence_fingerprint);
       const next = {
         ...fields,
+        status: draft.unknown_reason || draft.resource_selection?.status === 'blocked' ? 'needs_observation' : fields.status,
         diagnosis: draft.diagnosis,
         recommendation: draft.recommendation,
         adjustment_condition: draft.adjustment_condition,
@@ -158,7 +159,12 @@ export function ReviewPanel({ run, student, indicator, node, review, draft, mode
 
   useEffect(() => {
     if (initialFields) { setFields(initialFields); return; }
-    if (!review) { setFields(emptyFields); setSource(''); return; }
+    if (!review) {
+      const needsObservation = Boolean(draft?.unknown_reason || draft?.resource_selection?.status === 'blocked');
+      setFields({ ...emptyFields, status: needsObservation ? 'needs_observation' : emptyFields.status });
+      setSource('');
+      return;
+    }
     setFields({ status: review.status, diagnosis: review.diagnosis, recommendation: review.recommendation, adjustment_condition: review.adjustment_condition || '', reason: review.reason, reviewer: review.reviewer, structured_plan: review.teaching_plan_v2 ? null : review.structured_plan ?? null, teaching_plan_v2: review.teaching_plan_v2 ?? null, evidence_refs: review.evidence_refs ?? [] });
     setSource(`已载入复核版本 ${review.version}；可继续修改后保存新版本。`);
   }, [initialFields, review, student, indicator]);

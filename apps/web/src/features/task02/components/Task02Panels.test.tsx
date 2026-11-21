@@ -116,7 +116,8 @@ describe('TASK02 result panels', () => {
 
   it('lets the learner view select a node and labels unknown status explicitly', () => {
     render(<StudentPanel run={run} student="D01" indicator="I1" onStudent={() => {}} onIndicator={() => {}} onCreateRecommendation={() => {}} />);
-    expect(screen.getByText(/有效记录 1 条/)).toBeTruthy();
+    expect(screen.getByText(/本节点 1 条有效评分记录/)).toBeTruthy();
+    expect(screen.getByText(/查看跨节点汇总/).closest('details')?.open).toBe(false);
     fireEvent.change(screen.getByLabelText('测验节点'), { target: { value: 'N02' } });
     expect(screen.getByText(/暂无有效已评分记录/)).toBeTruthy();
   });

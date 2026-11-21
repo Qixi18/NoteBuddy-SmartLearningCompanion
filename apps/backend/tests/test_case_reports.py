@@ -91,7 +91,9 @@ def test_case_report_uses_confirmed_stored_evidence_and_review_snapshot(report_d
     assert report["reviews"][0]["source_verification_versions"] == {"I1": 1}
 
 
-def test_case_report_distinguishes_referenced_source_from_the_current_signoff(report_data):
+def test_case_report_distinguishes_referenced_source_from_the_current_signoff(
+    report_data,
+):
     run, case, _, reviews, sources = report_data
     sources["I1"].append({"version": 2, "status": "verified", "stale": False})
 

@@ -125,7 +125,10 @@ def build_case_report(
             current_source = source_history[-1] if source_history else None
             if source is None or current_source is None:
                 source_validity = "unknown"
-            elif current_source.get("stale") or current_source.get("version") != source_version:
+            elif (
+                current_source.get("stale")
+                or current_source.get("version") != source_version
+            ):
                 source_validity = "changed"
             elif current_source.get("status") != "verified":
                 source_validity = "unverified"
