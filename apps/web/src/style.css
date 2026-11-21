@@ -375,6 +375,23 @@ h3 { margin-top: 18px; font-size: 15px; font-weight: 700; }
 .verification-row:hover { background: #f2f7fd; }
 .verification-row > strong { flex-shrink: 0; }
 .verification-row > span { color: var(--muted); }
+.knowledge-chain p { margin: 4px 0; font-size: 13px; color: #43536b; }
+.knowledge-chain small { display: block; color: var(--muted); }
+.problem-cards { display: grid; gap: 10px; margin: 10px 0; }
+.problem-card { padding: 10px 12px; border: 1px solid #e3d9c3; border-left: 3px solid #d8a13a; background: #fdfaf3; font-size: 13px; color: #5a4a26; }
+.problem-card header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.problem-card header > span { color: #8a6d2f; font-size: 12px; white-space: nowrap; }
+.problem-card .secondary { margin: 4px 6px 0 0; font-size: 12px; }
+.problem-card .text-action { margin-top: 4px; }
+.problem-gate { padding: 10px 12px; border: 1px dashed #b9c8d8; background: #f7f9fc; font-size: 13px; color: #43536b; }
+.problem-gate .text-action { margin-top: 6px; }
+.adjustment-timeline { position: relative; display: grid; gap: 14px; margin: 10px 0 0; padding: 0 0 0 20px; list-style: none; border-left: 2px solid #d9e5ec; }
+.timeline-entry { position: relative; }
+.timeline-marker { position: absolute; left: -27px; top: 4px; width: 10px; height: 10px; border-radius: 999px; background: #345d91; border: 2px solid #f2f6fb; }
+.timeline-entry > div > strong { display: block; margin-bottom: 4px; font-size: 13px; }
+.timeline-entry p { margin: 2px 0; font-size: 12px; color: #465b73; }
+.submission-materials h4 { margin: 10px 0 4px; font-size: 13px; }
+.submission-materials ul, .submission-materials ol { display: grid; gap: 4px; margin: 0; padding-left: 18px; font-size: 12px; color: #465b73; }
 .overview-routes { margin: 0 0 16px; }
 .section-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 11px; }
 .section-heading > h2 { margin: 0; font-size: 18px; }

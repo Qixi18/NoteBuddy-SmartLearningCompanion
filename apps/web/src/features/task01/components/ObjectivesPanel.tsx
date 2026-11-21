@@ -176,6 +176,14 @@ export function ObjectivesPanel({ run, indicatorId, onIndicatorChange, onSaved, 
   const verificationRows = run.objectives.map(item => ({ item, latest: sourceHistory[item['指标编号']]?.at(-1) }));
   const verifiedCount = verificationRows.filter(row => row.latest?.status === 'verified' && !row.latest?.stale).length;
   const machineSignedCount = verificationRows.filter(row => row.latest?.verified_by === 'machine' && row.latest?.status === 'verified' && !row.latest?.stale).length;
+  const verifiedLinks = Object.entries(sourceHistory).flatMap(([fromId, records]) => {
+    const latest = records.at(-1);
+    if (!latest || latest.status !== 'verified' || latest.stale) return [];
+    return latest.knowledge_links.map(link => ({ from: fromId, ...link }));
+  });
+  const objectiveLabels = Object.fromEntries(run.objectives.map(item => [item['指标编号'], item['观察指标']]));
+  const prerequisites = verifiedLinks.filter(link => link.target_indicator_id === selectedId);
+  const successors = verifiedLinks.filter(link => link.from === selectedId);
   return <div className="knowledge-layout">
     <Panel title="主题与指标目录"><p className="muted">{topics.length} 个数据主题 · {run.objectives.length} 项指标</p>
       {topics.map(topic => <section className="topic-group" key={topic}><h3>{topic} <small>{run.objectives.filter(item => (item['主题'] || item['主题编号']) === topic).length} 项</small></h3>
@@ -191,6 +199,12 @@ export function ObjectivesPanel({ run, indicatorId, onIndicatorChange, onSaved, 
         {(showAllItems ? items : items.slice(0, 5)).map(item => <div className="row" key={item['材料编号']}><strong>{item['材料编号']}</strong><p>{item['题干或内容'] || '未提供题干'}</p><small>指标与题目关系：{verificationText}</small></div>)}
         {items.length > 5 && <button type="button" className="text-action" aria-expanded={showAllItems} onClick={() => setExpandedItemsFor(showAllItems ? '' : objective['指标编号'])}>{showAllItems ? '收起关联题目' : `查看全部关联题目（${items.length}）`}</button>}
       </> : <p>当前快照没有关联题目；不能据此判断知识覆盖。</p>}</section>
+      <section className="source-detail knowledge-chain" aria-label="已核验必要联系"><h3>已核验必要联系（学习顺序）</h3>
+        {prerequisites.length || successors.length ? <>
+          {prerequisites.map(link => <p key={`pre:${link.from}`}>前置 · {link.from} {objectiveLabels[link.from] ?? ''}（{link.relation}）<small>依据：{link.evidence}</small></p>)}
+          {successors.map(link => <p key={`suc:${link.target_indicator_id}`}>后继 · {link.target_indicator_id} {objectiveLabels[link.target_indicator_id] ?? ''}（{link.relation}）<small>依据：{link.evidence}</small></p>)}
+        </> : <p className="muted">尚无已核验的必要联系；教师判断确认或人工补充后会在这里显示学习顺序链。不自动生成——顺序来自数据事实或教师判断。</p>}
+      </section>
       <section className="source-detail"><h3>课程标准</h3><p>导入定位：{objective['课标文件页／正文页'] ? curriculumLocatorLabel(objective['课标文件页／正文页']) : '待核验'}；指标级定位：{indicatorCheck?.curriculum_locator || '待核对'}</p><p>主题课标核验：{topicCheck?.curriculum_check || '待核对'}。{page && <a href={`${learningApi.sourceUrl('课程标准_2022.pdf')}#page=${page}`} target="_blank" rel="noopener noreferrer">打开原页（文件第 {page} 页）</a>}</p><div className="machine-check-row"><button type="button" className="secondary" disabled={machineRunning} onClick={() => void runMachineCheck(selectedId)}>{machineRunning ? '正在匹配切片文本…' : '机器核验教材映射与定位'}</button>{machineMessage && <p role="status">{machineMessage}</p>}</div></section>
       <section className="source-detail"><h3>教材来源</h3><p>导入定位：{objective['教材正文页'] || '待核验'}；指标级定位：{indicatorCheck?.textbook_locator || '待核对'}</p><p>主题教材核验：{topicCheck?.textbook_check || '待核对'}</p>{topicCheck?.textbook_slices?.length ? <p>原页：{topicCheck.textbook_slices.map(name => <a key={name} href={learningApi.sourceUrl(name)} target="_blank" rel="noopener noreferrer">{name} </a>)}</p> : <p>当前运行没有教材原页链接。</p>}</section>
       {judgmentTarget && judgmentTarget.verified_by === 'machine' && judgmentTarget.status === 'verified' && !judgmentTarget.stale && <section className="source-detail teacher-judgment" aria-label="教师判断">

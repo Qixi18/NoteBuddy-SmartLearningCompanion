@@ -104,13 +104,17 @@ describe('TASK02 result panels', () => {
       limitations: ['不输出班级能力排名或显著性结论。'],
     });
     const onOpenStudent = vi.fn();
-    render(<ClassPanel run={run} node="N01" onOpenStudent={onOpenStudent} />);
+    const onNavigate = vi.fn();
+    render(<ClassPanel run={run} node="N01" onOpenStudent={onOpenStudent} onNavigate={onNavigate} />);
     expect(await screen.findByText('共同观察题目：Q001')).toBeTruthy();
-    expect(screen.getByText(/C1：1\/2 名可观察学生有跨题/)).toBeTruthy();
+    // 问题卡片：涉及学生汇总 + 佐证明细 + 去建议入口
+    expect(screen.getByText('1 名学生涉及')).toBeTruthy();
+    expect(screen.getByText(/佐证：C1 1\/2 名可观察学生 · 原始记录 1 条可点开/)).toBeTruthy();
     fireEvent.click(screen.getByText('查看原始记录来源（1）'));
     expect(screen.getByText(/C1 · R1 · Q001 · CSV第 2 行/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '查看 D01 证据' }));
     expect(onOpenStudent).toHaveBeenCalledWith('D01');
+    expect(screen.getByText(/为 D01 形成学习建议/)).toBeTruthy();
     expect(screen.getByText(/不输出班级能力排名/)).toBeTruthy();
   });
 

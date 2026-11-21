@@ -22,6 +22,41 @@ function CaseEvidence({ run, suggestions, reviews, draft, onOpenReview }: { run:
   </Panel>;
 }
 
+// 提交物素材汇总：只聚合系统内已有事实与静态素材清单，辅助制作设计方案/视频/成果包；
+// 不替代外部交付物，也不因此把提交物标记为完成。
+function SubmissionMaterials({ run, ids, node }: { run: AnalysisRun; ids: string[]; node: string }) {
+  const attention = run.quality.findings.filter(item => item.severity === 'WARN' || item.severity === 'ERROR');
+  const caseList = ids.filter(Boolean);
+  return <details className="submission-materials"><summary>提交物素材与视频分镜骨架（辅助制作，不替代正式交付物）</summary>
+    <h4>素材清单</h4>
+    <ul>
+      <li>三案例学生：{caseList.join('、') || '尚未选择'}（"阅读报告"视图可截图/打印）</li>
+      <li>班级报告节点：{node || '尚未选择'}（两班对照报告同视图）</li>
+      <li>数据处置摘要：作答记录 {run.quality.raw_rows} 条 · 有效评分 {run.quality.eligible_scored} 条 · 自动处置提示 {attention.length} 项（"已有表现 → 数据质量与处置"视图）</li>
+      <li>学习要求与来源核验：{run.objectives.length} 项指标（"学习要求"页核验进度可截图）</li>
+      <li>教师调整时间线：教学调整视图（如已登记后续记录）</li>
+    </ul>
+    <h4>可写入设计方案的创新点</h4>
+    <ul>
+      <li>证据链全可溯：AI 结论强制引用证据，摘录经可信本地还原与术语扫描，可跳转原始作答行与已核验 PDF 页</li>
+      <li>来源核验两层信任：机器核验（切片文本匹配，带置信度与摘录证据）+ 教师判断（学习顺序候选），署名在记录与导出中如实区分</li>
+      <li>教师调整跨运行可比：调整记录绑定后续运行证据与教师可比性判断</li>
+      <li>范围隔离导出：三人成果包递归过滤，防止未选学生明细泄漏</li>
+      <li>"缺少记录≠未掌握"：五态处置语义贯穿统计、界面与导出</li>
+    </ul>
+    <h4>视频分镜骨架（5 分钟）</h4>
+    <ol>
+      <li>0:00–0:40 导入数据：开始页 → 选择数据文件夹 → 批次摘要与处置口径脚注</li>
+      <li>0:40–1:30 学习要求：任一指标 → 机器核验按钮 → 核验进度报告与依据点开</li>
+      <li>1:30–2:30 已有表现：班级比较共同题目得分率 → 一名学生作答证据（原文 + 评分点）</li>
+      <li>2:30–3:30 学习建议：整体建议 → 教师复核保存 → 打印学习任务单</li>
+      <li>3:30–4:20 案例与交付：三案例阅读报告 → 交付检查预检 → 下载成果包</li>
+      <li>4:20–5:00 收尾：适用范围与限制（未作答≠未掌握、模拟数据不证明真实成效）</li>
+    </ol>
+    <p className="muted">正式提交物（设计方案 PDF ≤20 页、MP4 ≤5 分钟、成果包 ZIP）需在本系统外制作与审核；此处仅汇总素材。</p>
+  </details>;
+}
+
 export function CasesPage({ run, view = 'prepare', suggestions, reviews, draft, ids, onSelect, student, node, onNode, dataRevision = 0, onDataChanged, onDirtyChange, onBeforeScopeChange, onNavigate, onExport }: {
   run: AnalysisRun; view?: NavigationView; suggestions: CaseSuggestion[]; reviews: Record<string, Review[]>; draft: Draft | null; ids: string[]; onSelect: (ids: string[]) => void; student?: string; node: string; onNode: (node: string) => void; dataRevision?: number; onDataChanged?: () => void; onDirtyChange?: (dirty: boolean) => void; onBeforeScopeChange?: () => boolean; onNavigate: (path: string) => void; onExport: (ids: string[]) => void;
 }) {
@@ -31,6 +66,6 @@ export function CasesPage({ run, view = 'prepare', suggestions, reviews, draft, 
     <section hidden={view !== 'prepare'} aria-label="案例准备"><CaseEvidence run={run} suggestions={suggestions} reviews={reviews} draft={draft} onOpenReview={(studentId, indicatorId, nodeId) => onNavigate(`/recommendations?view=read&studentId=${encodeURIComponent(studentId)}&indicatorId=${encodeURIComponent(indicatorId)}&nodeId=${encodeURIComponent(nodeId)}`)} />
       <TeacherCaseEditor run={run} reviews={reviews} initialStudentId={student} onSaved={() => { setCaseRevision(revision => revision + 1); onDataChanged?.(); }} onDirtyChange={onDirtyChange} onBeforeScopeChange={onBeforeScopeChange} /></section>
     <section hidden={view !== 'report'} aria-label="阅读报告"><CaseReport key={`${caseRevision}:${dataRevision}`} run={run} ids={ids} onSelect={onSelect} /><ClassReport run={run} node={node} onNode={onNode} /></section>
-    <section hidden={view !== 'check'} aria-label="交付检查"><ExportPanel key={JSON.stringify([ids, node, caseRevision, dataRevision])} students={run.students} runId={run.run_id} ids={ids} node={node} onNavigate={onNavigate} onExport={onExport} /></section>
+    <section hidden={view !== 'check'} aria-label="交付检查"><ExportPanel key={JSON.stringify([ids, node, caseRevision, dataRevision])} students={run.students} runId={run.run_id} ids={ids} node={node} onNavigate={onNavigate} onExport={onExport} /><SubmissionMaterials run={run} ids={ids} node={node} /></section>
   </div>;
 }
