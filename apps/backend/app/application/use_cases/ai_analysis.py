@@ -229,6 +229,7 @@ class GenerateAIAnalysis:
                 self.client,
                 self.config.model_name,
                 PROMPT_VERSION,
+                provider=self.config.model_provider,
             )
             if action == "retry_failed":
                 old = previous
@@ -254,10 +255,13 @@ class GenerateAIAnalysis:
                         "raw_records_included", 0
                     ),
                     "packet_total": total,
+                    "failure_details": result["coverage"].get(
+                        "failure_details", []
+                    ),
                 }
                 result["findings"] = [*old.get("findings", []), *result["findings"]]
                 result["status"] = "partial" if remaining else "complete"
-        except Exception:  # noqa: BLE001 - persist a terminal failure state after reserving a generation
+        except Exception as exc:  # noqa: BLE001 - persist a terminal failure state after reserving a generation
             result = {
                 "status": "failed",
                 "task": task,
@@ -268,6 +272,9 @@ class GenerateAIAnalysis:
                     "packet_succeeded": 0,
                     "packet_failed": len(packets),
                     "failed_packet_ids": [packet["packet_id"] for packet in packets],
+                    "failure_details": [
+                        {"phase": "analysis", "reason": type(exc).__name__}
+                    ],
                 },
                 "model": self.config.model_name,
                 "prompt_version": PROMPT_VERSION,

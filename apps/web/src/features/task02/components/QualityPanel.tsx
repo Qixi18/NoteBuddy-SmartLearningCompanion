@@ -18,7 +18,7 @@ export function QualityPanel({ run, onOpenEvidence }: { run: AnalysisRun; onOpen
   const counts = Object.entries(quality.disposition_counts ?? {});
 
   return <Panel title="数据质量与处置">
-    <p className="muted">这里区分原始作答行、处理后的事件和最终用于评分的记录。待评分与旧修订属于处理状态；只有真实校验冲突需要人工核查。</p>
+    <p className="muted">这里区分原始作答行、处理后的事件和最终用于评分的记录。系统按校验规则自动排除无效记录；异常详情用于追溯，无需逐条人工核对。</p>
     <div className="quality-overview" aria-label="质量概况">
       <div className="quality-metric"><span>原始作答行</span><strong>{quality.raw_rows}</strong></div>
       <div className="quality-metric"><span>逻辑事件</span><strong>{quality.events}</strong></div>
@@ -33,7 +33,7 @@ export function QualityPanel({ run, onOpenEvidence }: { run: AnalysisRun; onOpen
     </section>
 
     <section className="quality-group" aria-labelledby="quality-action-title">
-      <h3 id="quality-action-title"><span className="severity-dot severity-error" aria-hidden="true" />需要核查 <span className="tag">{actionable.length}</span></h3>
+      <h3 id="quality-action-title"><span className="severity-dot severity-error" aria-hidden="true" />自动处置结果 <span className="tag">{actionable.length}</span></h3>
       {actionable.length ? actionable.map((finding, index) => {
         const scope = locateRecord(finding.record_id, finding.source_line);
         return <article className="quality-finding" key={`${finding.code}:${finding.record_id}:${finding.source_line}:${index}`}>
@@ -41,7 +41,7 @@ export function QualityPanel({ run, onOpenEvidence }: { run: AnalysisRun; onOpen
           <div><strong>{findingLabel(finding.code)}</strong><p>{finding.detail}</p><small>{finding.record_id ? `记录 ${finding.record_id} · ` : ''}{finding.event_id ? `事件 ${finding.event_id} · ` : ''}{finding.source_file || '作答记录.csv'} 第 {finding.source_line ?? '未知'} 行 · {severityLabel(finding.severity)}</small><div className="quality-raw">技术代码：{finding.code} · 处置：{dispositionLabel(finding.disposition)}</div></div>
           {scope && onOpenEvidence && <button className="secondary" onClick={() => onOpenEvidence(scope)}>查看作答</button>}
         </article>;
-      }) : <p className="empty-inline">当前快照没有需要人工处理的质量异常。</p>}
+      }) : <p className="empty-inline">当前快照没有需要自动处置的质量异常。</p>}
     </section>
 
     {informational.length > 0 && <section className="quality-group" aria-labelledby="quality-info-title">

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from .evidence_pack_service import EvidencePacket
@@ -16,6 +17,19 @@ _FINDING_FIELDS = {
     "next_step",
     "evidence_refs",
 }
+
+
+def _source_excerpt(local: dict[str, Any], limit: int = 240) -> str:
+    """Build a UI preview from trusted local evidence, never from a paraphrase."""
+    if local.get("kind") == "metric" and isinstance(local.get("value"), dict):
+        text = "；".join(
+            f"{key}：{value}"
+            for key, value in local["value"].items()
+            if key != "fact_id"
+        )
+    else:
+        text = str(local.get("text", "") or "")
+    return text.strip()[:limit]
 
 
 def validate_packet_output(candidate: dict[str, Any], packet: EvidencePacket) -> dict:
@@ -40,7 +54,7 @@ def validate_packet_output(candidate: dict[str, Any], packet: EvidencePacket) ->
             raise TypeError("模型 evidence_refs 必须是列表")
         restored = []
         for ref in refs:
-            if not isinstance(ref, dict) or set(ref) != {"ref", "excerpt"}:
+            if not isinstance(ref, dict) or set(ref) - {"ref", "excerpt"} or "ref" not in ref:
                 raise ValueError("模型 evidence_ref 结构无效")
             alias = ref.get("ref")
             excerpt = ref.get("excerpt")
@@ -53,13 +67,9 @@ def validate_packet_output(candidate: dict[str, Any], packet: EvidencePacket) ->
                     or not excerpt.strip()
                     or excerpt not in local.get("text", "")
                 ):
-                    raise ValueError("证据 excerpt 不存在于当前作答文本")
-            elif (
-                not isinstance(excerpt, str)
-                or len(excerpt.strip()) < 2
-                or excerpt not in local.get("text", "")
-            ):
-                raise ValueError("事实引用 excerpt 必须是当前事实中的精确摘录")
+                    excerpt = _source_excerpt(local)
+            elif not isinstance(excerpt, str) or excerpt not in local.get("text", ""):
+                excerpt = _source_excerpt(local)
             restored.append(
                 {
                     **local,

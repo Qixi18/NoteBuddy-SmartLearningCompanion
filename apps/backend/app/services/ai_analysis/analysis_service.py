@@ -64,8 +64,9 @@ def analyze_packets(
     model: str,
     prompt_version: str = "1",
     *,
+    provider: str | None = None,
     max_packets: int = 24,
-    max_chars: int = 100_000,
+    max_chars: int = 250_000,
 ) -> dict:
     """Analyze each packet once and report complete, partial, or failed coverage."""
     if not packets:
@@ -97,11 +98,12 @@ def analyze_packets(
 
     findings = []
     failed = []
+    failures = []
     for packet, content in zip(packets, serialized, strict=True):
         body = {
             "model": model,
             "response_format": {"type": "json_object"},
-            "max_tokens": 1400,
+            "max_tokens": 4096 if (provider or "").strip().lower() == "deepseek" else 1400,
             "messages": [
                 {
                     "role": "system",
@@ -110,19 +112,27 @@ def analyze_packets(
                 {"role": "user", "content": content},
             ],
         }
+        if (provider or "").strip().lower() == "deepseek":
+            # DeepSeek enables thinking by default; its reasoning tokens share
+            # max_tokens with the JSON body and can consume the entire budget.
+            body["thinking"] = {"type": "disabled"}
         try:
             response = client.complete(body)
-            candidate = _parse_response(response)
-            validated = validate_packet_output(candidate, packet)
-        except (
-            LLMError,
-            TimeoutError,
-            ConnectionError,
-            OSError,
-            TypeError,
-            ValueError,
-        ):
+        except (LLMError, TimeoutError, ConnectionError, OSError) as exc:
             failed.append(packet["packet_id"])
+            failures.append({"packet_id": packet["packet_id"], "reason": f"provider:{type(exc).__name__}"})
+            continue
+        try:
+            candidate = _parse_response(response)
+        except (TypeError, ValueError) as exc:
+            failed.append(packet["packet_id"])
+            failures.append({"packet_id": packet["packet_id"], "reason": f"response:{str(exc)}"})
+            continue
+        try:
+            validated = validate_packet_output(candidate, packet)
+        except (TypeError, ValueError) as exc:
+            failed.append(packet["packet_id"])
+            failures.append({"packet_id": packet["packet_id"], "reason": f"evidence:{str(exc)}"})
             continue
         for finding in validated["findings"]:
             finding["finding_id"] = f"{packet['packet_id']}:{finding['finding_id']}"
@@ -140,6 +150,7 @@ def analyze_packets(
             "packet_succeeded": succeeded,
             "packet_failed": len(failed),
             "failed_packet_ids": failed,
+            "failure_details": failures,
             "raw_records_total": packets[0]["coverage"]["raw_records_total"],
             "raw_records_included": sum(
                 packet["coverage"]["raw_records_included"] for packet in packets

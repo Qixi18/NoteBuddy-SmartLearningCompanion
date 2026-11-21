@@ -27,6 +27,7 @@ const findingLabels: Record<string, string> = {
   invalid_revision: '修订版本信息无效',
   revision_conflict: '无法唯一确定最新修订版本',
   event_identity_conflict: '同一事件的学生、材料或节点不一致',
+  rubric_conflict: '评分点与题目或总分不一致',
 };
 
 export function dispositionLabel(value: string | null | undefined): string {
@@ -38,7 +39,7 @@ export function findingLabel(value: string | null | undefined): string {
 }
 
 export function severityLabel(value: string | null | undefined): string {
-  if (value === 'ERROR') return '需要处理';
-  if (value === 'WARN') return '建议核对';
+  if (value === 'ERROR') return '已自动排除';
+  if (value === 'WARN') return '总分保留';
   return '信息';
 }
