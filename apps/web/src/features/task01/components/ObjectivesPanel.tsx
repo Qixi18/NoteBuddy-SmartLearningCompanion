@@ -42,6 +42,7 @@ export function ObjectivesPanel({ run, indicatorId, onIndicatorChange, onSaved, 
   const [expandedItemsFor, setExpandedItemsFor] = useState('');
   const [machineRunning, setMachineRunning] = useState(false);
   const [machineMessage, setMachineMessage] = useState('');
+  const [machineRefreshToken, setMachineRefreshToken] = useState(0);
   const runMachineCheck = async () => {
     setMachineRunning(true);
     setMachineMessage('');
@@ -54,6 +55,7 @@ export function ObjectivesPanel({ run, indicatorId, onIndicatorChange, onSaved, 
           : `机器核验未写入：${skipped?.reason ?? '证据不足'}。可人工核验后再确认。`,
       );
       if (result.verified.length) {
+        setMachineRefreshToken(token => token + 1);
         await refreshSourceData();
         onSaved?.();
       }
@@ -132,7 +134,7 @@ export function ObjectivesPanel({ run, indicatorId, onIndicatorChange, onSaved, 
       {catalogEntry && <section className="source-detail" aria-label="材料目录与来源文件核验"><h3>材料目录与来源文件核验</h3><p>签核状态：{catalogEntry.source_stale ? '来源已变化，需重新核验' : verificationLabel(catalogEntry.source_status)}</p><p>指标级定位：课标 {catalogEntry.curriculum_locator || '待补充'}；教材 {catalogEntry.textbook_locator || '待补充'}</p>{catalogEntry.documents.map(document => <div className="row" key={document.name}><strong>{document.name}</strong><p>状态：{documentStatusLabel(document.status)} · {document.page_count === null || document.page_count === undefined ? '页数未知' : `共 ${document.page_count} 页`}{document.expected_file_page ? ` · 赛题文件页 ${document.expected_file_page}` : ''}{document.body_page ? ` · 正文页 ${document.body_page}` : ''}</p><p>SHA-256：{document.sha256 || '文件缺失'}</p><a href={`${learningApi.sourceUrl(document.name)}${document.expected_file_page ? `#page=${document.expected_file_page}` : ''}`} target="_blank" rel="noopener noreferrer">{document.expected_file_page ? `打开第 ${document.expected_file_page} 页` : '打开来源文件'}</a></div>)}{catalogEntry.materials.filter(material => material.resource_type !== '题目').map(material => <div className="row" key={material.material_id}><strong>{material.material_id} · {material.resource_type}</strong><p>{material.title || material.source || '材料内容待核对'}</p><p>{material.verified ? `已核验用途：${material.purpose} · ${material.source_locator}` : '需完成指标级人工来源映射'}</p></div>)}</section>}
       <p className="warn">指标关系状态：{verificationText}。主题说明仅供定位；以指标级核验记录判断材料关系。</p>
       {source?.integrity_issues?.length ? <p className="warn">关系或定位问题：{source.integrity_issues.join('、')}</p> : null}
-      <SourceVerificationEditor run={run} indicatorId={objective['指标编号']} onSaved={() => { void refreshSourceData(); onSaved?.(); }} onDirtyChange={onDirtyChange} />
+      <SourceVerificationEditor run={run} indicatorId={objective['指标编号']} refreshToken={machineRefreshToken} onSaved={() => { void refreshSourceData(); onSaved?.(); }} onDirtyChange={onDirtyChange} />
     </Panel>
   </div>;
 }

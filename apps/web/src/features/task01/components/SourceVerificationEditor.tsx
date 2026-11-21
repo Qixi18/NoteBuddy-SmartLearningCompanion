@@ -11,7 +11,7 @@ const emptyKnowledgeLink = (): KnowledgeLinkRow => ({ target_indicator_id: '', r
 const emptyRubricMapping = (): RubricMappingRow => ({ issue_id: '', label: '', rubric_points: '', material_ids: [], evidence: '' });
 const emptyResourceLink = (): ResourceLinkRow => ({ material_id: '', purpose: '', indicator_ids: [], allowed_node_ids: [], source_locator: '', evidence: '' });
 
-export function SourceVerificationEditor({ run, indicatorId, onSaved, onDirtyChange }: { run: AnalysisRun; indicatorId: string; onSaved?: () => void; onDirtyChange?: (dirty: boolean) => void }) {
+export function SourceVerificationEditor({ run, indicatorId, onSaved, onDirtyChange, refreshToken = 0 }: { run: AnalysisRun; indicatorId: string; onSaved?: () => void; onDirtyChange?: (dirty: boolean) => void; refreshToken?: number }) {
   const linked = run.items.filter(item => item['指标编号'] === indicatorId);
   const resources = run.items.filter(item => item['材料类型'] && item['材料类型'] !== '题目');
   const [history, setHistory] = useState<SourceVerification[]>([]);
@@ -57,7 +57,8 @@ export function SourceVerificationEditor({ run, indicatorId, onSaved, onDirtyCha
       }
     }).catch(error => { if (alive) setMessage(`签核记录读取失败：${error instanceof Error ? error.message : String(error)}`); });
     return () => { alive = false; };
-  }, [run.run_id, indicatorId]);
+    // refreshToken 变化（如机器核验写入新记录后）触发重新拉取，状态原地更新。
+  }, [run.run_id, indicatorId, refreshToken]);
 
   const latest = history.at(-1);
   const save = async (status: SourceVerificationPayload['status']) => {
