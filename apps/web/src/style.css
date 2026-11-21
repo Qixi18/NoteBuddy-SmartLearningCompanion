@@ -569,6 +569,9 @@ h3 { margin-top: 18px; font-size: 15px; font-weight: 700; }
 .draft-evidence { border-color: #d8e9e3; background: #fff; }
 .review-save-note { margin-top: 15px; }
 .review-save-note summary { color: var(--primary); }
+.student-scope-drilldown { margin: 15px 0 22px; padding: 14px 0; border-top: 1px solid var(--border); }
+.student-scope-drilldown summary { color: var(--primary); font-weight: 700; cursor: pointer; }
+.student-scope-drilldown > p { max-width: 70ch; color: var(--muted); font-size: 13px; }
 
 .case-candidates { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 14px 0; }
 .case-candidate { min-width: 0; padding: 14px; border: 1px solid var(--border); border-radius: 11px; background: #fff; }

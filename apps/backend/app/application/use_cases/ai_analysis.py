@@ -21,6 +21,8 @@ def scope_key(
         return "run"
     if task == "task02":
         return f"node:{node_id}"
+    if task == "task03" and node_id is None:
+        return f"student:{student_id or ''}|indicator:{indicator_id or ''}|all-nodes"
     suffix = (
         f"|student:{student_id}|indicator:{indicator_id}"
         if student_id and indicator_id
@@ -37,14 +39,16 @@ class GenerateAIAnalysis:
         self.client = client
 
     def _load_scope(self, task, run_id, node_id, student_id, indicator_id):
-        if task in {"task02", "task03"} and not node_id:
-            raise ValueError("TASK 02/03 必须指定测验节点")
+        if task == "task02" and not node_id:
+            raise ValueError("TASK 02 必须指定测验节点")
+        if task == "task03" and not node_id and not student_id:
+            raise ValueError("整体学习建议必须指定学生")
         if task == "task01" and any((node_id, student_id, indicator_id)):
             raise ValueError("TASK 01 使用整次运行范围")
         key = scope_key(task, node_id, student_id, indicator_id)
         with self.uow_factory(immediate=False) as uow:
             run = uow.runs.current() if run_id is None else uow.runs.load(run_id)
-            if task in {"task02", "task03"} and node_id not in {
+            if task in {"task02", "task03"} and node_id and node_id not in {
                 item.get("节点编号") for item in run.get("nodes", [])
             }:
                 raise ValueError("测验节点不存在")

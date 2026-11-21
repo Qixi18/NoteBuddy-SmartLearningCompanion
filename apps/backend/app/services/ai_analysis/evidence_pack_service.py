@@ -152,15 +152,15 @@ def _task01_facts(
 def _task02_03_units(
     run: dict,
     task: str,
-    node_id: str,
+    node_id: str | None,
     student_id: str | None,
     indicator_id: str | None,
 ) -> tuple[list[dict], dict[str, dict]]:
     node = next(
         (item for item in run.get("nodes", []) if item.get("节点编号") == node_id),
         None,
-    )
-    if node is None:
+    ) if node_id else None
+    if node_id and node is None:
         raise ValueError("测验节点不存在")
     students = {
         row.get("学生编号"): row
@@ -182,6 +182,11 @@ def _task02_03_units(
             sorted({row.get("指标编号") for row in run.get("objectives", [])}), 1
         )
     }
+    node_aliases = {
+        node.get("节点编号"): f"测验节点{index}"
+        for index, node in enumerate(run.get("nodes", []), 1)
+        if node.get("节点编号")
+    }
     local_records = run.get("raw_responses") or run.get("responses", [])
     record_aliases = {
         row.get("记录编号"): f"证据{index}"
@@ -192,7 +197,7 @@ def _task02_03_units(
         current_student = row.get("学生编号")
         item = item_by_id.get(row.get("材料编号"), {})
         current_indicator = row.get("指标编号") or item.get("指标编号")
-        if row.get("节点编号") != node_id:
+        if node_id and row.get("节点编号") != node_id:
             continue
         if student_id and current_student != student_id:
             continue
@@ -215,6 +220,7 @@ def _task02_03_units(
                 "evidence_id": evidence_id,
                 "student": student_alias,
                 "indicator": indicator_aliases.get(current_indicator, "指标未知"),
+                "node": node_aliases.get(row.get("节点编号"), "测验节点未知"),
                 "item": {
                     "type": item.get("材料类型", item.get("题目类型", "")),
                     "topic": item.get("主题编号", ""),
@@ -235,7 +241,7 @@ def _task02_03_units(
             "record_id": row.get("记录编号"),
             "student_id": current_student,
             "indicator_id": current_indicator,
-            "node_id": node_id,
+            "node_id": row.get("节点编号"),
             "material_id": row.get("材料编号"),
             "source_line": row.get("_source_line"),
             "text": "\n".join(part for part in (response, text) if part),
@@ -256,8 +262,10 @@ def build_task_packets(
     """Build complete prompt packets; identifiers stay in local reference maps."""
     if task not in {"task01", "task02", "task03"}:
         raise ValueError("任务类型无效")
-    if task in {"task02", "task03"} and not node_id:
-        raise ValueError("该任务必须指定测验节点")
+    if task == "task02" and not node_id:
+        raise ValueError("TASK 02 必须指定测验节点")
+    if task == "task03" and not node_id and not student_id:
+        raise ValueError("整体学习建议必须指定学生")
     if max_chars < 1:
         raise ValueError("max_chars必须大于0")
 
@@ -268,7 +276,7 @@ def build_task_packets(
         total_records = 0
     else:
         units, reference_map = _task02_03_units(
-            run, task, str(node_id), student_id, indicator_id
+            run, task, node_id, student_id, indicator_id
         )
         scope = {
             "task": task,
@@ -289,7 +297,7 @@ def build_task_packets(
         scoped_rows = [
             row
             for row in (run.get("raw_responses") or run.get("responses", []))
-            if row.get("节点编号") == node_id
+            if (not node_id or row.get("节点编号") == node_id)
             and (not student_id or row.get("学生编号") == student_id)
             and (
                 not indicator_id

@@ -24,7 +24,7 @@ const statusText: Record<AIAnalysisResult['status'], string> = {
 const dataCategories: Record<AIAnalysisTask, string> = {
   task01: '课程指标与关联题目、评分点、已核验课程标准页文本（若可读取）',
   task02: '当前节点确定性统计、评分处置覆盖、去标识化作答与解题过程',
-  task03: '所选学生与指标的目标、评分点、作答证据及评分处置状态',
+  task03: '所选学生全部指标与测验节点的确定性统计、评分点和去标识化作答证据',
 };
 
 export function AIAnalysisPanel({ task, runId, node, student, indicator, onEvidence }: Props) {
@@ -67,6 +67,9 @@ export function AIAnalysisPanel({ task, runId, node, student, indicator, onEvide
   }
 
   const summary = preview?.input_summary;
+  const category = task === 'task03' && node
+    ? '所选学生在当前指标与测验节点的目标、评分点、作答证据及评分处置状态'
+    : dataCategories[task];
   const hasRetry = result && ['partial', 'failed'].includes(result.status)
     && Array.isArray(result.coverage.failed_packet_ids) && result.coverage.failed_packet_ids.length > 0;
 
@@ -76,7 +79,7 @@ export function AIAnalysisPanel({ task, runId, node, student, indicator, onEvide
       {result && <span className={`ai-status ai-status-${result.status}`}>{statusText[result.status]}</span>}
     </header>
     <p className="ai-description">系统先整理确定性统计、数据质量和可追溯证据，再由 AI 解释证据、归纳分析并起草建议。分析结果生成后直接呈现；每条结论都标明支持程度、限制和引用。</p>
-    <p className="ai-data-categories"><strong>本次数据类别：</strong>{dataCategories[task]}</p>
+    <p className="ai-data-categories"><strong>本次数据类别：</strong>{category}</p>
     {preview ? <div className="ai-preview" aria-label="发送范围摘要">
       <span>服务 <strong>{preview.provider || '未配置'}</strong></span><span>模型 <strong>{preview.model || '未配置'}</strong></span>
       <span>证据包 <strong>{summary?.packet_count ?? 0}</strong></span>

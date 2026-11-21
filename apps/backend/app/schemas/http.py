@@ -56,8 +56,12 @@ class AIAnalysisRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_scope(self):
-        if bool(self.student_id) != bool(self.indicator_id):
+        if bool(self.student_id) != bool(self.indicator_id) and not (
+            self.task == "task03" and self.student_id and not self.indicator_id
+        ):
             raise ValueError("student_id 与 indicator_id 必须同时提供")
+        if self.task == "task03" and not self.node_id and not self.student_id:
+            raise ValueError("整体学习建议必须指定学生")
         if self.action == "retry_failed" and not self.analysis_id:
             raise ValueError("retry_failed 必须指定上一条 analysis_id")
         if self.action != "retry_failed" and self.analysis_id:
