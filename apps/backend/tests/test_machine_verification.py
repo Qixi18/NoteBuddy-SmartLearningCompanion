@@ -144,6 +144,51 @@ def test_machine_verification_endpoint_writes_and_skips(tmp_path, monkeypatch):
     assert second.json()["skipped"][0]["reason"].startswith("已有未过期")
 
 
+def test_curriculum_ocr_match_confirms_locator(tmp_path):
+    class StubSourcesWithOCR(StubSources):
+        def ocr_pages(self, run, name):
+            if name == "课程标准_2022.pdf":
+                return [
+                    {"index": 61, "text": "Solve the equations by moving terms across the equals sign."}
+                ]
+            return None
+
+    run = sample_run()
+    payload = mvs.build_machine_verification(
+        run,
+        StubSourcesWithOCR(ENGLISH_PAGE),
+        "T01I1",
+        extract_page_texts=lambda path: ENGLISH_PAGE,
+    )
+
+    curriculum = [
+        entry
+        for entry in payload["machine_evidence"]
+        if entry["type"] == "curriculum_ocr_match"
+    ]
+    assert len(curriculum) == 1
+    # OCR 命中页（index 61 → 文件页 62）与课程要求 CSV 定位一致 → 定位确认。
+    assert curriculum[0]["page"] == 62
+    assert curriculum[0]["locator_confirmed"] is True
+    assert payload["confidence"] == 0.9  # 教材 1.0 × 课标确认折减 0.9
+
+
+def test_curriculum_ocr_skip_when_not_parsed(tmp_path):
+    run = sample_run()
+    # StubSources 无 ocr_pages → 课标侧跳过，教材侧照常核验。
+    payload = mvs.build_machine_verification(
+        run,
+        StubSources(ENGLISH_PAGE),
+        "T01I1",
+        extract_page_texts=lambda path: ENGLISH_PAGE,
+    )
+    assert payload is not None
+    assert all(
+        entry["type"] != "curriculum_ocr_match"
+        for entry in payload["machine_evidence"]
+    )
+
+
 def test_teacher_signoff_rejects_machine_signature_fields(tmp_path):
     client = TestClient(create_app(Store(tmp_path)))
     client.post("/api/import", json={"folder": "unused"})

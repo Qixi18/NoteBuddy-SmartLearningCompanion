@@ -5,7 +5,8 @@
 - 用观察指标关键词在 allowlist 切片文本层中定位页面，
   命中阈值（≥2 个关键词且覆盖率 ≥50%）的资源映射与教材定位
   以 verified_by="machine" 写入签核记录；
-- 扫描版课标不做 OCR，课标定位沿用 CSV 并在依据中注明待人工核验；
+- 课标侧：课标 OCR 文本可用时（远程 DeepSeek OCR 管道），对课标定位做内容匹配
+  并记录页码一致性证据；OCR 未解析时跳过课标侧，留给教师判断层；
 - 学习顺序（必要联系）与评分点问题命名属于教师判断层，本服务不生成。
 """
 
@@ -272,6 +273,51 @@ def build_machine_verification(
         "excerpt": best["excerpt"],
         "confidence": confidence,
     }
+    machine_evidence = [evidence]
+
+    # 课标侧：OCR 文本可用时，对课标定位做内容匹配（扫描件经 DeepSeek OCR 提取）。
+    # 命中页与课程要求 CSV 的文件页一致 → 定位确认；不一致 → 记录差异并降低置信度，
+    # 不自动通过定位；OCR 未解析时跳过课标侧，留给教师判断层。
+    curriculum_note = "课标定位沿用课程要求 CSV，课标 OCR 未解析，待人工或视觉核验"
+    try:
+        curriculum_pages = source_service.ocr_pages(run, "课程标准_2022.pdf") or []
+    except (AttributeError, PdfReadError, PdfStreamError, OSError, TypeError, ValueError):
+        curriculum_pages = []
+    if curriculum_pages:
+        curriculum_candidate = _slice_match(
+            [{"page": page.get("index", 0) + 1, "text": str(page.get("text", ""))} for page in curriculum_pages],
+            keywords,
+        )
+        if curriculum_candidate and len(curriculum_candidate["matched"]) >= _MATCH_MIN_KEYWORDS:
+            csv_file_page = None
+            locator = str(objective.get("课标文件页／正文页", ""))
+            locator_match = re.match(r"(\d+)", locator)
+            if locator_match:
+                csv_file_page = int(locator_match.group(1))
+            matched_page = curriculum_candidate["page"]
+            locator_confirmed = csv_file_page is not None and matched_page == csv_file_page
+            curriculum_confidence = round(
+                len(curriculum_candidate["matched"]) / len(keywords), 2
+            ) * (1.0 if locator_confirmed else 0.6)
+            curriculum_note = (
+                f"课标内容 OCR 命中于文件第 {matched_page} 页"
+                f"（CSV 定位文件页 {csv_file_page if csv_file_page is not None else '未知'}，"
+                f"{'一致' if locator_confirmed else '存在差异，待人工复核'}）"
+            )
+            machine_evidence.append(
+                {
+                    "type": "curriculum_ocr_match",
+                    "page": matched_page,
+                    "csv_file_page": csv_file_page,
+                    "locator_confirmed": locator_confirmed,
+                    "keywords_matched": curriculum_candidate["matched"],
+                    "keywords_total": len(keywords),
+                    "excerpt": curriculum_candidate["excerpt"],
+                    "confidence": round(curriculum_confidence, 2),
+                }
+            )
+            confidence = round(confidence * (0.9 if locator_confirmed else 0.6), 2)
+
     resource_link = {
         "material_id": material_id,
         "purpose": "讲解与观察指标相关的教材内容",
@@ -294,11 +340,11 @@ def build_machine_verification(
         "reason": (
             f"切片关键词自动匹配 {len(best['matched'])}/{len(keywords)} 个关键词"
             f"（阈值：≥{_MATCH_MIN_KEYWORDS} 个且覆盖率 ≥{_MATCH_MIN_RATIO:.0%}）；"
-            "课标定位沿用课程要求 CSV，扫描版原文待人工或视觉核验"
+            f"{curriculum_note}"
         ),
         "verified_by": "machine",
         "confidence": confidence,
-        "machine_evidence": [evidence],
+        "machine_evidence": machine_evidence,
     }
 
 

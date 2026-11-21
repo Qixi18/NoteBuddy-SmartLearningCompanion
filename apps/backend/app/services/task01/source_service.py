@@ -36,6 +36,26 @@ class SourceService:
             names.update(entry["source_check"].get("textbook_slices", []))
         return names
 
+    def ocr_pages(self, run: dict, name: str) -> list[dict] | None:
+        """Return OCR pages [{index, text}] for an allowlisted file, or None.
+
+        数据来自 OCR 缓存（按文件指纹）；未触发 OCR 解析或解析失败时返回 None。
+        """
+        path = self.resolve(run, name)
+        if path is None:
+            return None
+        try:
+            fingerprint = hashlib.sha256(self.storage.read_bytes(path)).hexdigest()
+        except (OSError, ValueError):
+            return None
+        parsed = self._read_ocr_cache(fingerprint)
+        if not isinstance(parsed, dict):
+            return None
+        pages = parsed.get("pages")
+        if not isinstance(pages, list) or not pages:
+            return None
+        return pages
+
     def resolve(self, run: dict, name: str) -> Path | None:
         if name not in self.allowed_names(run) or Path(name).name != name:
             raise ValueError("来源文件不在允许范围")
