@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { learningApi, isReviewStatus } from '../../../api/client';
 import type { AnalysisRun, Draft, EvidenceReference, Review, ReviewStatus, SourceVerification, StructuredPlan, TeachingPlanV2 } from '../../../api/types';
 import { Panel } from '../../../components/Panel';
 import { TeachingPlanEditor } from './TeachingPlanEditor';
 import { dispositionLabel } from '../../task02/qualityLabels';
+import { printReport } from '../../export/printReport';
 
 type ReviewFields = { status: ReviewStatus; diagnosis: string; recommendation: string; adjustment_condition: string; reason: string; reviewer: string; structured_plan: StructuredPlan | null; teaching_plan_v2: TeachingPlanV2 | null; evidence_refs?: EvidenceReference[] };
 const emptyFields: ReviewFields = { status: 'accepted', diagnosis: '', recommendation: '', adjustment_condition: '', reason: '', reviewer: '', structured_plan: null, teaching_plan_v2: null };
@@ -21,6 +23,23 @@ const selectionReasonLabels: Record<string, string> = {
 const hintLabels: Record<TeachingPlanV2['hints'][number]['level'], string> = {
   direction: '方向提示', structure: '结构提示', local_check: '局部检查提示',
 };
+
+// 学生讲义：只含学生可见字段（目标、步骤、材料、提示、观察点），
+// 不包含诊断、复核理由等教师内部信息；经 portal 打印后移除。
+function StudentHandout({ review, student, indicator, node }: { review: Review; student: string; indicator: string; node: string }) {
+  const plan = review.teaching_plan_v2;
+  const fallback = review.structured_plan;
+  return <div id="student-handout">
+    <h2>学习任务单</h2>
+    <p>{student || '本班学生'} · {indicator || '学习要求'}{node ? ` · ${node}` : ''}</p>
+    <h3>本次目标</h3><p>{plan?.goal || fallback?.activity || '完成当前学习要求对应的练习。'}</p>
+    {(plan?.steps.length || fallback?.steps.length) ? <><h3>学习步骤</h3><ol>{(plan?.steps.length ? plan!.steps : fallback!.steps).map((step, index) => <li key={`${index}:${step}`}>{step}</li>)}</ol></> : null}
+    {(plan?.material_ids.length || fallback?.material_ids.length) ? <><h3>使用材料</h3><p>{(plan?.material_ids.length ? plan!.material_ids : fallback!.material_ids).map(id => { const reason = plan?.resource_reasons.find(item => item.material_id === id); return `${id}${reason?.explanation ? `（${reason.explanation}）` : ''}`; }).join('；')}</p></> : null}
+    {plan?.hints.length ? <><h3>遇到困难时</h3><ul>{plan.hints.map((hint, index) => <li key={`${hint.level}:${index}`}><strong>{hintLabels[hint.level]}：</strong>{hint.student_prompt}</li>)}</ul></> : null}
+    {(plan?.observation_points.length || fallback?.observation_points.length) ? <><h3>完成后观察</h3><p>{(plan?.observation_points.length ? plan!.observation_points : fallback!.observation_points).join('；')}</p></> : null}
+    <p className="handout-footnote">本任务单由教师复核后的学习建议生成；只覆盖当前范围，不代表对整个学习水平的判断。</p>
+  </div>;
+}
 
 function ResourceSelectionPanel({ draft }: { draft: Draft }) {
   const selection = draft.resource_selection;
@@ -95,6 +114,20 @@ export function ReviewPanel({ run, student, indicator, node, review, draft, mode
   const [failure, setFailure] = useState('');
   const [drafting, setDrafting] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [handoutOpen, setHandoutOpen] = useState(false);
+
+  useEffect(() => {
+    if (!handoutOpen) return;
+    const cleanup = () => setHandoutOpen(false);
+    window.addEventListener('afterprint', cleanup);
+    try {
+      printReport('student-handout');
+    } catch {
+      // 打印失败时保留讲义挂载，教师可手动重试
+    }
+    if (!document.body.dataset.printReport) cleanup();
+    return () => window.removeEventListener('afterprint', cleanup);
+  }, [handoutOpen]);
 
   const set = (name: keyof ReviewFields, value: string) => {
     const next = { ...fields, [name]: value };
@@ -204,6 +237,7 @@ export function ReviewPanel({ run, student, indicator, node, review, draft, mode
         {review.teaching_plan_v2?.hints.length ? <ul>{review.teaching_plan_v2.hints.map((hint, index) => <li key={`${hint.level}:${index}`}><strong>{hintLabels[hint.level]}：</strong>{hint.student_prompt}</li>)}</ul> : null}
         {review.teaching_plan_v2?.observation_points.length ? <p><strong>完成后观察：</strong>{review.teaching_plan_v2.observation_points.join('；')}</p> : review.structured_plan?.observation_points.length ? <p><strong>完成后观察：</strong>{review.structured_plan.observation_points.join('；')}</p> : null}
         {review.adjustment_condition && <p><strong>调整条件：</strong>{review.adjustment_condition}</p>}
+        {(review.teaching_plan_v2 || review.structured_plan) && <button className="text-action" onClick={() => setHandoutOpen(true)}>打印学习任务单 ↗</button>}
       </div>
       {!draft && <p className="muted">当前页面以已保存版本为只读内容。编辑时请生成当前范围的新草稿，再保存为新版本；不会用空草稿覆盖历史依据。</p>}
     </section>}
@@ -256,5 +290,8 @@ export function ReviewPanel({ run, student, indicator, node, review, draft, mode
       </section>
     </div>}
     {history.length > 0 && <details className="review-history"><summary>查看复核历史（{history.length}）</summary>{history.map(item => <details className="row" key={`${item.version}:${item.updated_at}`}><summary>版本 {item.version} · 节点 {item.node_id ?? item.original_draft?.node_id ?? '范围未记录'} · {statusLabels[item.status]} · {item.updated_at}</summary><p>诊断：{item.diagnosis}</p><p>建议：{item.recommendation}</p><p>理由：{item.reason}</p>{item.teaching_plan_v2 && <section className="review-history-plan"><h4>v2 分层教学方案</h4><p>目标：{item.teaching_plan_v2.goal}</p><p>材料：{item.teaching_plan_v2.material_ids.join('、')} · 模板 {item.teaching_plan_v2.template_version}</p>{isTeachingPlanV2SourceCurrentlyVerified(item.teaching_plan_v2, indicator, verification) ? <p role="status">来源签核版本当前匹配；导出时会再次核验作答证据指纹。</p> : <p className="review-alert">来源签核已变化、撤销或无法核验；方案保留为历史版本，导出时不会作为有效方案。</p>}<ol>{item.teaching_plan_v2.steps.map((step, index) => <li key={`${index}:${step}`}>{step}</li>)}</ol><h5>分层提示（教师复核版）</h5>{item.teaching_plan_v2.hints.map(hint => <div key={hint.level}><strong>{hintLabels[hint.level]}</strong><p>学生提示：{hint.student_prompt}</p><p>教师说明：{hint.teacher_note}</p></div>)}<p>观察：{item.teaching_plan_v2.observation_points.join('；')}</p><p>调整：{item.teaching_plan_v2.adjustment_conditions.join('；')}</p><small>证据：{item.teaching_plan_v2.evidence_refs.map(ref => `${ref.record_id} · 第 ${ref.source_line} 行`).join('、')}</small></section>}{item.structured_plan && <section className="review-history-plan"><h4>已保存的完整教学方案</h4><p>活动：{item.structured_plan.activity}</p><p>材料：{item.structured_plan.material_ids.join('、') || '无'}{Object.entries(item.source_verification_versions ?? {}).map(([sourceIndicator, version]) => ` · 来源签核版本 ${version}（${sourceIndicator}）`)}</p>{isStructuredPlanCurrentlyVerified(item, indicator, verification) ? <p role="status">本方案来源签核仍有效（版本 {verification?.version}）</p> : <p className="review-alert">来源签核已变化、撤销或无法核验；该方案仅作历史记录，导出时不会作为有效方案。</p>}{item.structured_plan.steps.length > 0 && <><strong>活动步骤</strong><ol>{item.structured_plan.steps.map((step, index) => <li key={`${index}:${step}`}>{step}</li>)}</ol></>}{item.structured_plan.practice.length > 0 && <><strong>练习</strong><ul>{item.structured_plan.practice.map((practice, index) => <li key={`${index}:${practice}`}>{practice}</li>)}</ul></>}{item.structured_plan.observation_points.length > 0 && <><strong>观察点</strong><ul>{item.structured_plan.observation_points.map((point, index) => <li key={`${index}:${point}`}>{point}</li>)}</ul></>}</section>}<small>复核人：{item.reviewer || '未填写'} · 来源：{item.source === 'rule' ? '规则生成' : '模型辅助生成'} · 引用记录 {item.evidence_record_ids.join('、') || '无'}</small></details>)}</details>}
-  </Panel></div>;
+  </Panel>{handoutOpen && review && createPortal(
+    <StudentHandout review={review} student={student} indicator={indicator} node={node} />,
+    document.body,
+  )}</div>;
 }

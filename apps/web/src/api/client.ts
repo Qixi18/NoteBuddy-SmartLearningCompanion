@@ -41,6 +41,7 @@ export const learningApi = {
     return response.blob();
   },
   saveSourceVerification: (payload: SourceVerificationPayload) => api<SourceVerification>('/api/source-verification', jsonRequest(payload)),
+  runMachineVerification: (indicatorId?: string) => api<{ verified: SourceVerification[]; skipped: Array<{ indicator_id: string; reason: string }> }>('/api/source-machine-verification', jsonRequest({ indicator_id: indicatorId ?? null })),
   teacherCases: () => api<Record<string, TeacherCase[]>>('/api/teacher-cases'),
   saveTeacherCase: (payload: TeacherCasePayload) => api<TeacherCase>('/api/teacher-case', jsonRequest(payload)),
   teachingAdjustments: () => api<TeachingAdjustment[]>('/api/teaching-adjustments'),

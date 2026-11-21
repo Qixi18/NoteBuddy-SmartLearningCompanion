@@ -1,4 +1,4 @@
-export function printReport(id: 'case-report' | 'class-report') {
+export function printReport(id: 'case-report' | 'class-report' | 'student-handout') {
   const report = document.getElementById(id);
   if (!report || document.body.dataset.printReport) return;
 

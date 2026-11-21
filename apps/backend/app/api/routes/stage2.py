@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from ...application.use_cases.workbench import WorkbenchUseCases
 from ...repositories.stage2_repository import SourceVerificationVersionConflict
 from ...schemas.http import (
+    MachineVerificationRequest,
+    MachineVerificationResponse,
     MaterialCatalogResponse,
     SourceVerificationRequest,
     SourceVerificationResponse,
@@ -49,6 +51,21 @@ def verify_source(payload: SourceVerificationRequest, use_cases: UseCases) -> di
         return use_cases.stage2.verify_source(payload.model_dump())
     except SourceVerificationVersionConflict as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post(
+    "/api/source-machine-verification",
+    response_model=MachineVerificationResponse,
+    tags=["sources"],
+)
+def run_machine_verification(
+    payload: MachineVerificationRequest, use_cases: UseCases
+) -> dict:
+    """机器核验层：切片文本匹配自动写入机器署名的已核验记录。"""
+    try:
+        return use_cases.stage2.apply_machine_verification(payload.indicator_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get(

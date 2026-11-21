@@ -3,6 +3,9 @@
 import re
 
 from ...domain.subject.source_mapping import bind_resource_links, fingerprint_material
+from ...services.task01.machine_verification_service import (
+    build_machine_verification,
+)
 from ...services.task02.evidence_reference_service import (
     validate_evidence_references,
 )
@@ -67,6 +70,12 @@ class Stage2Decisions:
             return uow.stage2.list_cases(run["run_id"])
 
     def verify_source(self, payload: dict) -> dict:
+        if (
+            payload.get("verified_by")
+            or payload.get("confidence") is not None
+            or payload.get("machine_evidence")
+        ):
+            raise ValueError("教师签核不接受机器核验署名字段")
         with self.uow_factory() as uow:
             expected_version = payload.pop("expected_version", None)
             run = uow.runs.current()
@@ -182,6 +191,74 @@ class Stage2Decisions:
             return uow.stage2.append_source(
                 run["run_id"], indicator_id, payload, expected_version=expected_version
             )
+
+    def apply_machine_verification(self, indicator_id: str | None = None) -> dict:
+        """机器核验层：切片文本匹配自动写入 verified_by="machine" 的签核记录。
+
+        只对达到置信阈值的指标写入 verified 记录；未达阈值或切片不可读的指标
+        保持现状，留给教师判断层。已有未过期已核验记录的指标跳过，不重复写入。
+        """
+        with self.uow_factory(immediate=False) as uow:
+            run = uow.runs.current()
+            objectives = [row["指标编号"] for row in run["objectives"]]
+            if indicator_id is not None and indicator_id not in objectives:
+                raise ValueError("指标编号不存在")
+            targets = [indicator_id] if indicator_id else objectives
+            fresh = self.with_source_freshness(
+                run, uow.stage2.list_sources(run["run_id"])
+            )
+        verified: list[dict] = []
+        skipped: list[dict] = []
+        for target in targets:
+            latest = (fresh.get(target) or [None])[-1]
+            if (
+                latest
+                and latest.get("status") == "verified"
+                and not latest.get("stale")
+            ):
+                skipped.append(
+                    {
+                        "indicator_id": target,
+                        "reason": "已有未过期的已核验记录，未重复写入",
+                    }
+                )
+                continue
+            payload = build_machine_verification(run, self.source_service, target)
+            if payload is None:
+                skipped.append(
+                    {
+                        "indicator_id": target,
+                        "reason": "切片不可读或关键词命中低于阈值，留给教师判断层",
+                    }
+                )
+                continue
+            with self.uow_factory() as uow:
+                run = uow.runs.current()
+                materials = {
+                    str(row.get("材料编号", "")): row
+                    for row in run["items"]
+                    if row.get("材料编号")
+                }
+                objective_ids = {row["指标编号"] for row in run["objectives"]}
+                node_ids = {row["节点编号"] for row in run["nodes"]}
+                material_ids = set(payload["material_ids"])
+                resource_ids = {
+                    link["material_id"] for link in payload["resource_links"]
+                }
+                payload["resource_links"] = bind_resource_links(
+                    payload["resource_links"],
+                    materials,
+                    objective_ids,
+                    node_ids,
+                    target,
+                    "verified",
+                )
+                payload["source_fingerprints"] = self.current_source_fingerprints(
+                    run, material_ids | resource_ids
+                )
+                record = uow.stage2.append_source(run["run_id"], target, payload)
+            verified.append(record)
+        return {"verified": verified, "skipped": skipped}
 
     def save_case(self, payload: dict) -> dict:
         with self.uow_factory() as uow:

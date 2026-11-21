@@ -244,6 +244,11 @@ class SourceVerificationRequest(BaseModel):
     expected_version: int | None = Field(default=None, ge=0)
     reviewer: str = Field(default="", max_length=200)
     reason: str = Field(default="", max_length=4000)
+    # 契约 #5：机器核验层署名。教师签核接口不接受这些字段（见 verify_source 校验），
+    # 仅由机器核验管线的内部路径写入。
+    verified_by: str | None = Field(default=None, max_length=100)
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    machine_evidence: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class CaseReviewRef(BaseModel):
@@ -464,6 +469,24 @@ class SourceVerificationResponse(SourceVerificationRequest):
     version: int
     reviewed_at: str
     stale: bool = False
+
+
+class MachineVerificationRequest(BaseModel):
+    """机器核验层触发参数；不指定指标时对当前运行全部指标执行。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    indicator_id: str | None = Field(default=None, min_length=1)
+
+
+class MachineVerificationSkipped(BaseModel):
+    indicator_id: str
+    reason: str
+
+
+class MachineVerificationResponse(BaseModel):
+    verified: list[SourceVerificationResponse] = Field(default_factory=list)
+    skipped: list[MachineVerificationSkipped] = Field(default_factory=list)
 
 
 class MaterialCatalogDocument(BaseModel):

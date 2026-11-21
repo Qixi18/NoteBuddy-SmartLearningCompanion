@@ -770,6 +770,7 @@ summary { min-height: 28px; }
 @media print {
   @page { size: A4 landscape; margin: 12mm; }
   @page class-report-print { size: A4 portrait; margin: 12mm; }
+  @page student-handout-print { size: A4 portrait; margin: 14mm; }
   body { background: #fff; color: #152235; font-size: 10pt; }
   .sidebar, .topbar, .mobile-nav-backdrop, .report-toolbar, .report-view .export-slots, .report-reading-controls,
   .global-message, .retry-row, .case-workflow { display: none !important; }
@@ -778,10 +779,12 @@ summary { min-height: 28px; }
   body[data-print-report] .cases-layout > :not(.case-workflow):not([aria-label="阅读报告"]),
   body[data-print-report="case-report"] #class-report,
   body[data-print-report="class-report"] #case-report { display: none; }
+  body[data-print-report="student-handout"] > :not(#student-handout) { display: none !important; }
   body[data-print-report] .cases-layout > [aria-label="阅读报告"] { display: block !important; }
   .report-view { border: 0; box-shadow: none; padding: 0; margin: 0; }
   .report-view > h2 { margin-bottom: 4mm; font-size: 17pt; }
   body[data-print-report="class-report"] #class-report { page: class-report-print; }
+  body[data-print-report="student-handout"] #student-handout { display: block !important; page: student-handout-print; }
   .class-report-content { margin-top: 0; }
   .case-report-grid { grid-template-columns: 1fr; gap: 5mm; }
   .case-report-card.is-report-focus-hidden { display: block !important; }
@@ -796,3 +799,9 @@ summary { min-height: 28px; }
   .report-view summary { min-height: 0; }
   a { color: inherit; text-decoration: none; }
 }
+
+#student-handout { display: none; }
+#student-handout h2 { margin: 0 0 2mm; font-size: 18pt; }
+#student-handout h3 { margin: 6mm 0 2mm; font-size: 13pt; border-bottom: 1px solid #b8c8d8; padding-bottom: 1mm; }
+#student-handout p, #student-handout li { font-size: 11pt; line-height: 1.6; }
+#student-handout .handout-footnote { margin-top: 8mm; color: #6b7a8c; font-size: 9pt; }
