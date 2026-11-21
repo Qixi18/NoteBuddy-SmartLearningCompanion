@@ -16,7 +16,7 @@ def _blank_pdf(path: Path, pages: int = 1) -> None:
         writer.write(stream)
 
 
-def test_catalog_reports_hash_page_bounds_and_scanned_page_review(tmp_path):
+def test_catalog_reports_hash_page_bounds_and_scanned_page_ocr_state(tmp_path):
     source_dir = tmp_path / "sources"
     source_dir.mkdir()
     curriculum = source_dir / "课程标准_2022.pdf"
@@ -69,7 +69,7 @@ def test_catalog_reports_hash_page_bounds_and_scanned_page_review(tmp_path):
     assert curriculum_entry["page_count"] == 1
     assert curriculum_entry["expected_file_page"] == 2
     assert len(curriculum_entry["sha256"]) == 64
-    assert textbook_entry["status"] == "needs_manual_review"
+    assert textbook_entry["status"] == "page_text_unavailable"
     assert textbook_entry["page_count"] == 1
     assert {item["material_id"] for item in first["materials"]} == {"Q001"}
 

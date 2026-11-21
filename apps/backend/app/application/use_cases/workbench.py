@@ -482,7 +482,7 @@ class ExportSubmission:
         if blockers:
             raise ValueError("发布预检未通过：" + "、".join(blockers))
         if not payload["content_reviewed"] or not payload["reviewer"].strip():
-            raise ValueError("请由内容负责人逐页审阅报告并填写姓名")
+            raise ValueError("请由内容负责人完成重点风险复核并填写姓名")
         run, reviews, cases, sources, adjustments = current["_snapshot"]
         submission = {
             key: current[key]

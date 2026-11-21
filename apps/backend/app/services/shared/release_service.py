@@ -222,7 +222,7 @@ def check_release(
     checks.append(
         _check(
             "human_content_review",
-            "内容负责人逐页复核并签名",
+            "内容负责人重点风险复核并签名",
             "passed" if signoff else "not_checked",
             f"人工复核人：{reviewer.strip()}。"
             if signoff

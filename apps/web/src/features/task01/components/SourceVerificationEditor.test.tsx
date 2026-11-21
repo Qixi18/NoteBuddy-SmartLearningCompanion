@@ -25,7 +25,7 @@ describe('SourceVerificationEditor structured rows', () => {
       material_ids: [], knowledge_links: [], reviewer: '', reason: '', version: 1, reviewed_at: '',
     });
     render(<SourceVerificationEditor run={run} indicatorId="I1" />);
-    fireEvent.click(screen.getByText('开始逐项签核'));
+    fireEvent.click(screen.getByText('开始确认'));
 
     fireEvent.click(screen.getByRole('button', { name: '添加知识联系' }));
     fireEvent.click(screen.getByRole('button', { name: '添加资源映射' }));
@@ -51,16 +51,16 @@ describe('SourceVerificationEditor structured rows', () => {
     }] });
     const save = vi.spyOn(learningApi, 'saveSourceVerification').mockRejectedValue(new Error('来源签核已被其他编辑更新，请刷新记录后再保存'));
     render(<SourceVerificationEditor run={run} indicatorId="I1" />);
-    fireEvent.click(screen.getByText('开始逐项签核'));
-    fireEvent.change(screen.getByLabelText('课标原页与定位'), { target: { value: '本地修订第 12 页' } });
+    fireEvent.click(screen.getByText('开始确认'));
+    fireEvent.change(screen.getByLabelText('课标来源定位'), { target: { value: '本地修订第 12 页' } });
     fireEvent.click(screen.getByRole('button', { name: '添加知识联系' }));
     fireEvent.change(screen.getAllByLabelText('关联指标')[0], { target: { value: 'I2' } });
     fireEvent.change(screen.getByLabelText('关系'), { target: { value: '前置知识' } });
-    fireEvent.change(screen.getByLabelText('核验依据'), { target: { value: '已核对课标' } });
-    fireEvent.click(screen.getByRole('button', { name: '保存待核记录' }));
+    fireEvent.change(screen.getByLabelText('关系依据'), { target: { value: '已核对课标' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存未确认修改' }));
 
     expect(await screen.findByText('来源已更新，请比较后重新保存。')).toBeTruthy();
-    expect((screen.getByLabelText('核验依据') as HTMLInputElement).value).toBe('已核对课标');
+    expect((screen.getByLabelText('关系依据') as HTMLInputElement).value).toBe('已核对课标');
     expect(save).toHaveBeenCalledTimes(1);
     const comparison = screen.getByRole('region', { name: '来源签核版本对比' });
     expect(comparison.textContent).toContain('第 10 页');
@@ -79,8 +79,8 @@ describe('SourceVerificationEditor structured rows', () => {
       }] });
     vi.spyOn(learningApi, 'saveSourceVerification').mockRejectedValue(new Error('来源签核已被其他编辑更新，请刷新记录后再保存'));
     render(<SourceVerificationEditor run={run} indicatorId="I1" />);
-    fireEvent.click(screen.getByText('开始逐项签核'));
-    fireEvent.click(screen.getByRole('button', { name: '保存待核记录' }));
+    fireEvent.click(screen.getByText('开始确认'));
+    fireEvent.click(screen.getByRole('button', { name: '保存未确认修改' }));
 
     expect(await screen.findByRole('button', { name: '重试读取最新版本' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: '我已对比，保留本地修改并继续' })).toBeNull();
