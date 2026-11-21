@@ -1,11 +1,15 @@
 """Pydantic models for stable HTTP request and response contracts."""
 
 from pathlib import Path
+import base64
+import binascii
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 MAX_IMPORT_FILES_BYTES = 16 * 1024 * 1024
+MAX_IMPORT_PDF_BYTES = 250 * 1024 * 1024
+MAX_IMPORT_PDF_FILE_BYTES = 100 * 1024 * 1024
 
 
 class ImportRequest(BaseModel):
@@ -24,6 +28,7 @@ class ImportRequest(BaseModel):
 class ImportFilesRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     files: dict[str, str]
+    pdf_files: dict[str, str] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def csv_content_within_size_limit(self):
@@ -32,6 +37,19 @@ class ImportFilesRequest(BaseModel):
         )
         if total_bytes > MAX_IMPORT_FILES_BYTES:
             raise ValueError("上传 CSV 内容总大小不能超过 16 MiB")
+        total_pdf_bytes = 0
+        for name, encoded in self.pdf_files.items():
+            if Path(name).name != name or not name.lower().endswith(".pdf"):
+                raise ValueError("PDF 文件名无效")
+            try:
+                content = base64.b64decode(encoded, validate=True)
+            except (binascii.Error, ValueError) as exc:
+                raise ValueError(f"{name} 不是有效的 Base64 文件内容") from exc
+            if len(content) > MAX_IMPORT_PDF_FILE_BYTES:
+                raise ValueError(f"{name} 超过 100 MiB")
+            total_pdf_bytes += len(content)
+        if total_pdf_bytes > MAX_IMPORT_PDF_BYTES:
+            raise ValueError("PDF 文件总大小不能超过 250 MiB")
         return self
 
 
@@ -316,6 +334,7 @@ class TeachingAdjustmentUpdateRequest(BaseModel):
 class ImportResponse(BaseModel):
     run_id: str
     quality: dict[str, Any]
+    source_parsing: dict[str, Any] = Field(default_factory=dict)
 
 
 class QualityReportResponse(BaseModel):
@@ -619,4 +638,5 @@ class ReadinessResponse(BaseModel):
     frontend: dict[str, Any]
     runtime: dict[str, Any]
     model: dict[str, Any]
+    deepseek_ocr: dict[str, bool]
     checks: list[dict[str, str]]

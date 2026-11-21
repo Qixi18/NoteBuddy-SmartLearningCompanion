@@ -44,6 +44,9 @@ $env:MODEL_API_URL = "" # deepseek/openai 可留空；其他提供商填完整 H
 $env:MODEL_API_KEY = ""
 $env:MODEL_NAME = "deepseek-flash"
 $env:DEEPSEEK_TIMEOUT_SECONDS = "30"
+# 自动 PDF OCR 接口；默认使用 DeepSeek 官方 OCR 端点和 rich_layout_recognition。
+$env:DEEPSEEK_OCR_API_URL = "https://api.deepseek.com/v1/tools/ocr"
+$env:DEEPSEEK_OCR_TIMEOUT_SECONDS = "180"
 # 模型请求超时秒数；默认 30，须为正数。
 ```
 
@@ -97,9 +100,9 @@ python -m app.cli summary
 
 ## 可选模型服务
 
-模型 API Key 只配置在后端的 `.env` 或环境变量中；浏览器不会接触密钥。`MODEL_PROVIDER` 填 `deepseek` 或 `openai` 时可省略 `MODEL_API_URL`，程序会选择对应默认地址；其他提供商需填写完整的 HTTPS Chat Completions 接口地址。`MODEL_NAME` 填模型 ID。当前支持兼容 OpenAI Chat Completions 的接口及 JSON 对象响应；旧 `DEEPSEEK_API_KEY`、`DEEPSEEK_MODEL` 仍可用。调用前页面显示任务范围、数据类别、记录数、供应商和模型，并要求显式确认；发送前会替换本机学生/记录/材料编号为临时别名。调用会发送当前任务需要的统计事实、数据处置摘要、作答文本，以及符合条件的已核验课程标准页文本。模型分析生成后直接展示，不需要教师批准或复核才能查看；旧的教学建议复核、来源签核和导出规则仍是独立流程。所有结论须通过本地结构与引用原文校验，引用可跳转到原始作答行或 allowlist PDF。自动化测试使用 Mock，不发起真实付费调用。修改 `.env` 后须重启后端。
+模型 API Key 只配置在后端的 `.env` 或环境变量中；浏览器不会接触密钥。`MODEL_PROVIDER` 填 `deepseek` 或 `openai` 时可省略 `MODEL_API_URL`，程序会选择对应默认地址；其他提供商需填写完整的 HTTPS Chat Completions 接口地址。`MODEL_NAME` 填模型 ID。当前支持兼容 OpenAI Chat Completions 的接口及 JSON 对象响应；旧 `DEEPSEEK_API_KEY`、`DEEPSEEK_MODEL` 仍可用。导入数据时，系统会自动把导入文件夹中的课程标准和教材 PDF 上传到 DeepSeek OCR（`rich_layout_recognition`）做逐页识别与版面解析；每份文件最多 100 MiB、1,000 页，单次导入的 PDF 总量最多 250 MiB，识别成功页按 DeepSeek 价格计费。解析结果按文件 SHA-256 缓存在本地，未变化的文件重复导入时不重复上传。OCR 不再要求用户逐次确认，因此导入页会明确告知文件外发和计费。用户主动触发后续模型分析时，页面仍显示任务范围、数据类别、记录数、供应商和模型并要求确认；该请求发送脱敏统计、作答证据和符合条件的已核验课程标准/教材 OCR 文本。模型分析生成后直接展示，不需要教师批准或复核才能查看；旧的教学建议复核、来源签核和导出规则仍是独立流程。所有结论须通过本地结构与引用原文校验，引用可跳转到原始作答行或 allowlist PDF。自动化测试使用 Mock，不发起真实付费调用。修改 `.env` 后须重启后端。
 
-AI 分析由用户在学科知识、班级概览、学生分析或建议复核页主动触发，不随导入自动运行。结果按运行、任务和节点/学生范围保存；运行内容、来源签核或来源 PDF 指纹变化后，旧结果标记过期。分块失败会显示覆盖情况并支持重试失败分块。课程标准只提取已核验 locator 指向的可读 PDF 文本层；扫描 PDF 不做 OCR，不能读取的文档不会作为模型证据。结果中的支持程度、限制和证据引用需要结合原始数据理解，模拟数据也不等于真实教学效果。
+AI 结论分析仍由用户在学科知识、班级概览、学生分析或学习建议页主动触发，不随导入自动运行；PDF OCR 则在导入后自动执行。结果按运行、任务和节点/学生范围保存；运行内容、来源签核或来源 PDF 指纹变化后，旧结果标记过期。分块失败会显示覆盖情况并支持重试失败分块。只有来源关系已核验且 OCR 成功的页面会进入学科依据分析；OCR 失败或截断会显示在导入结果中，不能作为完整证据。结果中的支持程度、限制和证据引用需要结合原始数据理解，模拟数据也不等于真实教学效果。
 
 来源 PDF 按 `source_checks.json` 的 allowlist 查找。CLI 导入赛事材料包时可从原始材料目录读取；浏览器导入使用临时目录，如需查看 PDF，请通过 `SMART_LEARNING_SOURCE_FILES_DIR` 指向包含 allowlist 文件的本机目录。该目录与 `SMART_LEARNING_RESOURCES_DIR` 中的元数据目录分开配置。
 

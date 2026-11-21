@@ -20,12 +20,17 @@ class ImportService:
         self.runs = runs
         self.sources = sources
         self.uow_factory = uow_factory
+        self.ocr_client = None
 
-    def import_folder(self, folder: Path) -> dict:
+    def import_folder(
+        self, folder: Path, *, imported_source_dir: Path | None = None
+    ) -> dict:
         folder = Path(folder)
         tables, files = read_bundle(folder)
         result = analyze(tables, files, resources_dir=self.sources.resources_dir)
         result["source_root"] = str(folder.resolve().parents[1])
+        if imported_source_dir is not None:
+            result["imported_source_dir"] = str(imported_source_dir.resolve())
         result["source_files"] = self.sources.fingerprints(result)
         result["run_id"] = hashlib.sha256(
             json.dumps(
@@ -36,6 +41,11 @@ class ImportService:
                 sort_keys=True,
             ).encode()
         ).hexdigest()[:16]
+        # OCR the curriculum and referenced textbook PDFs as part of each import.
+        # SourceService reuses hash-addressed results, so unchanged PDFs are not billed again.
+        result["source_parsing"] = self.sources.parse_registered_pdfs(
+            result, self.ocr_client
+        )
         runs = self.runs
         if self.uow_factory is not None:
             with self.uow_factory(immediate=False) as uow:

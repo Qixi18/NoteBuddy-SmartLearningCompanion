@@ -2,6 +2,9 @@
 
 import re
 import tempfile
+import base64
+import hashlib
+import json
 from pathlib import Path
 
 from ...domain.assessment.evidence_bundle import AnalysisScope
@@ -114,7 +117,9 @@ class ImportFolder:
     def execute(self, folder: Path) -> dict:
         return self.import_service.import_folder(folder)
 
-    def execute_files(self, files: dict[str, str]) -> dict:
+    def execute_files(
+        self, files: dict[str, str], pdf_files: dict[str, str] | None = None
+    ) -> dict:
         expected = {
             "课程要求.csv",
             "题目与材料.csv",
@@ -126,11 +131,37 @@ class ImportFolder:
         if set(files) != expected:
             missing = sorted(expected - set(files))
             raise ValueError(f"所选文件不完整，缺少：{'、'.join(missing)}")
+        pdf_bytes = {
+            name: base64.b64decode(content, validate=True)
+            for name, content in (pdf_files or {}).items()
+        }
+        source_hash = hashlib.sha256(
+            json.dumps(
+                {
+                    name: hashlib.sha256(content).hexdigest()
+                    for name, content in sorted(pdf_bytes.items())
+                },
+                sort_keys=True,
+            ).encode()
+        ).hexdigest()
+        source_dir = (
+            self.import_service.sources.ocr_cache_dir.parent
+            / "imported_sources"
+            / source_hash
+            if pdf_bytes and self.import_service.sources.ocr_cache_dir
+            else None
+        )
+        if source_dir is not None:
+            source_dir.mkdir(parents=True, exist_ok=True)
+            for name, content in pdf_bytes.items():
+                (source_dir / name).write_bytes(content)
         with tempfile.TemporaryDirectory(prefix="smart-learning-import-") as temporary:
             folder = Path(temporary)
             for name, content in files.items():
                 (folder / name).write_text(content, encoding="utf-8-sig", newline="")
-            return self.import_service.import_folder(folder)
+            return self.import_service.import_folder(
+                folder, imported_source_dir=source_dir
+            )
 
 
 class ListReviews:

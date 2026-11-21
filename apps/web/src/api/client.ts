@@ -20,7 +20,7 @@ export const learningApi = {
   reviews: () => api<ReviewMap>('/api/reviews'),
   cases: () => api<CaseSuggestion[]>('/api/cases'),
   importFolder: (folder: string) => api<ImportResult>('/api/import', jsonRequest({ folder })),
-  importFiles: (files: Record<string, string>) => api<ImportResult>('/api/import-files', jsonRequest({ files })),
+  importFiles: (files: Record<string, string>, pdfFiles: Record<string, string> = {}) => api<ImportResult>('/api/import-files', jsonRequest({ files, pdf_files: pdfFiles })),
   ruleDraft: (student: string, indicator: string, node?: string) => api<Draft>(`/api/draft?student=${encodeURIComponent(student)}&indicator=${encodeURIComponent(indicator)}${node ? `&node=${encodeURIComponent(node)}` : ''}`),
   modelDraft: (student: string, indicator: string, node?: string) => api<Draft>('/api/deepseek', jsonRequest({ student_id: student, indicator_id: indicator, node_id: node ?? null })),
   saveReview: (payload: ReviewPayload) => api<ReviewMap[string][number]>('/api/review', jsonRequest(payload)),
