@@ -3,6 +3,9 @@
 import re
 
 from ...domain.subject.source_mapping import bind_resource_links, fingerprint_material
+from ...services.task01.knowledge_link_service import (
+    build_knowledge_link_candidates,
+)
 from ...services.task01.machine_verification_service import (
     build_machine_verification,
 )
@@ -64,18 +67,21 @@ class Stage2Decisions:
             histories = uow.stage2.list_sources(run["run_id"])
         return self.with_source_freshness(run, histories)
 
+    def knowledge_link_candidates(self, indicator_id: str) -> dict:
+        """教师判断层：学习顺序候选（可解释，不自动写入）。"""
+        with self.uow_factory(immediate=False) as uow:
+            run = uow.runs.current()
+        return {"candidates": build_knowledge_link_candidates(run, indicator_id)}
+
     def cases(self) -> dict:
         with self.uow_factory(immediate=False) as uow:
             run = uow.runs.current()
             return uow.stage2.list_cases(run["run_id"])
 
     def verify_source(self, payload: dict) -> dict:
-        if (
-            payload.get("verified_by")
-            or payload.get("confidence") is not None
-            or payload.get("machine_evidence")
-        ):
-            raise ValueError("教师签核不接受机器核验署名字段")
+        signature = payload.get("verified_by")
+        if signature and signature != "teacher":
+            raise ValueError("教师签核署名只能标注为教师本人；机器核验走专用管线")
         with self.uow_factory() as uow:
             expected_version = payload.pop("expected_version", None)
             run = uow.runs.current()

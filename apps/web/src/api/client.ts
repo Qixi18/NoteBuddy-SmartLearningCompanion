@@ -42,6 +42,7 @@ export const learningApi = {
   },
   saveSourceVerification: (payload: SourceVerificationPayload) => api<SourceVerification>('/api/source-verification', jsonRequest(payload)),
   runMachineVerification: (indicatorId?: string) => api<{ verified: SourceVerification[]; skipped: Array<{ indicator_id: string; reason: string }> }>('/api/source-machine-verification', jsonRequest({ indicator_id: indicatorId ?? null })),
+  knowledgeLinkCandidates: (indicatorId: string) => api<{ candidates: Array<{ target_indicator_id: string; target_label: string; relation: string; evidence: string; rule: string }> }>(`/api/knowledge-link-candidates?indicator_id=${encodeURIComponent(indicatorId)}`),
   teacherCases: () => api<Record<string, TeacherCase[]>>('/api/teacher-cases'),
   saveTeacherCase: (payload: TeacherCasePayload) => api<TeacherCase>('/api/teacher-case', jsonRequest(payload)),
   teachingAdjustments: () => api<TeachingAdjustment[]>('/api/teaching-adjustments'),

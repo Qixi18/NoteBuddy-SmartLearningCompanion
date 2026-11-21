@@ -29,10 +29,13 @@ def sample_run(**overrides):
     run["objectives"][0]["观察指标"] = overrides.get(
         "indicator_text", "solve equations by moving terms"
     )
+    run["objectives"][0]["课标文件页／正文页"] = "62／55"
+    run["objectives"][0]["教材正文页"] = "上册68—109"
     run["items"].append(
         {
             "材料编号": "B01",
             "材料类型": "教材",
+            "指标编号": "",
             "来源或资料文件": "5_课程标准及相关教学资源/B01_相关资料切片.pdf",
         }
     )
@@ -154,3 +157,86 @@ def test_teacher_signoff_rejects_machine_signature_fields(tmp_path):
     }
     response = client.post("/api/source-verification", json=signoff)
     assert response.status_code == 400
+
+
+def test_knowledge_link_candidates_same_topic_and_cross_topic():
+    from app.services.task01.knowledge_link_service import (
+        build_knowledge_link_candidates,
+    )
+
+    run = {
+        "objectives": [
+            {"指标编号": "A1", "观察指标": "认识整式", "主题编号": "T1"},
+            {"指标编号": "A2", "观察指标": "整式加减", "主题编号": "T1"},
+            {"指标编号": "B1", "观察指标": "解一元一次方程", "主题编号": "T2"},
+        ],
+        "nodes": [
+            {"节点编号": "N01", "模拟测验日期": "2026-01-20", "已教及测量主题": "T1"},
+            {"节点编号": "N02", "模拟测验日期": "2026-06-17", "已教及测量主题": "T1、T2"},
+        ],
+    }
+
+    assert build_knowledge_link_candidates(run, "A1") == []
+
+    same_topic = build_knowledge_link_candidates(run, "A2")
+    assert [(c["target_indicator_id"], c["relation"], c["rule"]) for c in same_topic] == [
+        ("A1", "前置知识", "same_topic_previous")
+    ]
+
+    cross_topic = build_knowledge_link_candidates(run, "B1")
+    assert [c["target_indicator_id"] for c in cross_topic] == ["A2"]
+    assert cross_topic[0]["rule"] == "topic_teaching_order"
+    assert "N02" in cross_topic[0]["evidence"]
+    assert "2026-06-17" in cross_topic[0]["evidence"]
+
+    with pytest.raises(ValueError):
+        build_knowledge_link_candidates(run, "NOPE")
+
+
+def test_teacher_confirmation_flow_after_machine_verification(tmp_path, monkeypatch):
+    pdf_root = tmp_path / "pdfs"
+    pdf_root.mkdir()
+    (pdf_root / "B01_相关资料切片.pdf").write_bytes(b"%PDF-1.4 stub")
+    config = replace(settings, source_files_dir=pdf_root)
+    run = sample_run()
+    store = Store(tmp_path / "state", config=config)
+    store.database.create_schema_for_tests()
+    with store.uow_factory() as uow:
+        uow.runs.save(run)
+    monkeypatch.setattr(mvs, "_page_texts", lambda path: ENGLISH_PAGE)
+    client = TestClient(create_app(store, config))
+
+    confirmed = client.post("/api/source-machine-verification", json={})
+    assert confirmed.status_code == 200
+    assert confirmed.json()["verified"][0]["verified_by"] == "machine"
+
+    candidates = client.get(
+        "/api/knowledge-link-candidates", params={"indicator_id": "T01I1"}
+    )
+    assert candidates.status_code == 200
+    # 样例运行只有一个指标：T01I1 是首位，无系统候选，教师可直接确认。
+    assert candidates.json()["candidates"] == []
+
+    machine_record = confirmed.json()["verified"][0]
+    judgment = {
+        "indicator_id": "T01I1",
+        "status": "verified",
+        "curriculum_locator": machine_record["curriculum_locator"],
+        "textbook_locator": machine_record["textbook_locator"],
+        "material_ids": machine_record["material_ids"],
+        "knowledge_links": [],
+        "resource_links": machine_record["resource_links"],
+        "source_fingerprints": machine_record["source_fingerprints"],
+        "expected_version": 1,
+        "reviewer": "数学教师甲",
+        "reason": "确认机器核验结果并补充学习顺序判断",
+        "verified_by": "teacher",
+    }
+    saved = client.post("/api/source-verification", json=judgment)
+    assert saved.status_code == 200
+    assert saved.json()["version"] == 2
+    assert saved.json()["verified_by"] == "teacher"
+
+    listed = client.get("/api/source-verifications").json()["T01I1"]
+    assert listed[-1]["verified_by"] == "teacher"
+    assert listed[-2]["verified_by"] == "machine"

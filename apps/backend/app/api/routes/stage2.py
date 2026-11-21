@@ -41,6 +41,21 @@ def source_verifications(use_cases: UseCases) -> dict:
     return use_cases.stage2.sources()
 
 
+@router.get(
+    "/api/knowledge-link-candidates",
+    response_model=dict,
+    tags=["stage2"],
+)
+def knowledge_link_candidates(
+    use_cases: UseCases, indicator_id: str
+) -> dict:
+    """教师判断层：学习顺序候选（可解释，不自动写入）。"""
+    try:
+        return use_cases.stage2.knowledge_link_candidates(indicator_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.post(
     "/api/source-verification",
     response_model=SourceVerificationResponse,

@@ -43,6 +43,59 @@ export function ObjectivesPanel({ run, indicatorId, onIndicatorChange, onSaved, 
   const [machineRunning, setMachineRunning] = useState(false);
   const [machineMessage, setMachineMessage] = useState('');
   const [machineRefreshToken, setMachineRefreshToken] = useState(0);
+  const [candidates, setCandidates] = useState<Array<{ target_indicator_id: string; target_label: string; relation: string; evidence: string; rule: string }>>([]);
+  const [selectedCandidates, setSelectedCandidates] = useState<string[]>([]);
+  const [judgmentReviewer, setJudgmentReviewer] = useState('');
+  const [judgmentNote, setJudgmentNote] = useState('');
+  const [judgmentMessage, setJudgmentMessage] = useState('');
+  const [judgmentSaving, setJudgmentSaving] = useState(false);
+  const judgmentTarget = sourceHistory[selectedId]?.at(-1);
+  useEffect(() => {
+    let alive = true;
+    setCandidates([]);
+    setSelectedCandidates([]);
+    setJudgmentMessage('');
+    setJudgmentNote('');
+    learningApi.knowledgeLinkCandidates(selectedId).then(result => {
+      if (alive) setCandidates(result.candidates);
+    }).catch(() => { if (alive) setCandidates([]); });
+    return () => { alive = false; };
+  }, [selectedId, machineRefreshToken]);
+  const toggleCandidate = (target: string) => {
+    setSelectedCandidates(old => old.includes(target) ? old.filter(id => id !== target) : [...old, target]);
+  };
+  const saveTeacherJudgment = async () => {
+    if (!judgmentTarget) return;
+    setJudgmentSaving(true);
+    setJudgmentMessage('');
+    try {
+      await learningApi.saveSourceVerification({
+        indicator_id: selectedId,
+        status: 'verified',
+        curriculum_locator: judgmentTarget.curriculum_locator,
+        textbook_locator: judgmentTarget.textbook_locator,
+        material_ids: judgmentTarget.material_ids,
+        knowledge_links: candidates
+          .filter(candidate => selectedCandidates.includes(candidate.target_indicator_id))
+          .map(candidate => ({ target_indicator_id: candidate.target_indicator_id, relation: candidate.relation, evidence: candidate.evidence })),
+        rubric_mappings: judgmentTarget.rubric_mappings ?? [],
+        resource_links: judgmentTarget.resource_links ?? [],
+        source_fingerprints: judgmentTarget.source_fingerprints ?? {},
+        expected_version: judgmentTarget.version,
+        reviewer: judgmentReviewer.trim(),
+        reason: judgmentNote.trim() || '确认机器核验的教材映射与定位，并补充学习顺序判断',
+        verified_by: 'teacher',
+      });
+      setJudgmentMessage(`已以教师署名保存第 ${judgmentTarget.version + 1} 版：机器核验结果与学习顺序判断均已确认。`);
+      setMachineRefreshToken(token => token + 1);
+      await refreshSourceData();
+      onSaved?.();
+    } catch (error) {
+      setJudgmentMessage(`保存失败：${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setJudgmentSaving(false);
+    }
+  };
   const runMachineCheck = async (targetId?: string) => {
     setMachineRunning(true);
     setMachineMessage('');
@@ -140,6 +193,15 @@ export function ObjectivesPanel({ run, indicatorId, onIndicatorChange, onSaved, 
       </> : <p>当前快照没有关联题目；不能据此判断知识覆盖。</p>}</section>
       <section className="source-detail"><h3>课程标准</h3><p>导入定位：{objective['课标文件页／正文页'] ? curriculumLocatorLabel(objective['课标文件页／正文页']) : '待核验'}；指标级定位：{indicatorCheck?.curriculum_locator || '待核对'}</p><p>主题课标核验：{topicCheck?.curriculum_check || '待核对'}。{page && <a href={`${learningApi.sourceUrl('课程标准_2022.pdf')}#page=${page}`} target="_blank" rel="noopener noreferrer">打开原页（文件第 {page} 页）</a>}</p><div className="machine-check-row"><button type="button" className="secondary" disabled={machineRunning} onClick={() => void runMachineCheck(selectedId)}>{machineRunning ? '正在匹配切片文本…' : '机器核验教材映射与定位'}</button>{machineMessage && <p role="status">{machineMessage}</p>}</div></section>
       <section className="source-detail"><h3>教材来源</h3><p>导入定位：{objective['教材正文页'] || '待核验'}；指标级定位：{indicatorCheck?.textbook_locator || '待核对'}</p><p>主题教材核验：{topicCheck?.textbook_check || '待核对'}</p>{topicCheck?.textbook_slices?.length ? <p>原页：{topicCheck.textbook_slices.map(name => <a key={name} href={learningApi.sourceUrl(name)} target="_blank" rel="noopener noreferrer">{name} </a>)}</p> : <p>当前运行没有教材原页链接。</p>}</section>
+      {judgmentTarget && judgmentTarget.verified_by === 'machine' && judgmentTarget.status === 'verified' && !judgmentTarget.stale && <section className="source-detail teacher-judgment" aria-label="教师判断">
+        <h3>教师判断（学习顺序）</h3>
+        <p>机器已核验本指标的教材映射与定位{judgmentTarget.confidence != null ? `（置信度 ${Math.round(judgmentTarget.confidence * 100)}%）` : ''}。以下学习顺序为系统候选，勾选你认可的必要联系后，将以教师署名保存新版本；不勾选、直接确认也可以。</p>
+        {candidates.length ? candidates.map(candidate => <label className="check-row" key={candidate.target_indicator_id}><input type="checkbox" checked={selectedCandidates.includes(candidate.target_indicator_id)} onChange={() => toggleCandidate(candidate.target_indicator_id)} /><span><strong>{candidate.target_indicator_id} · {candidate.target_label}</strong><small>{candidate.relation} · {candidate.evidence}</small></span></label>) : <p className="muted">当前指标没有系统候选；可在下方签核编辑器手工补充必要联系。</p>}
+        <div className="scope-fields"><label>核验人<input value={judgmentReviewer} onChange={event => setJudgmentReviewer(event.target.value)} placeholder="填写教师姓名" /></label><label>确认说明<input value={judgmentNote} onChange={event => setJudgmentNote(event.target.value)} placeholder="默认：确认机器核验结果并补充学习顺序判断" /></label></div>
+        <button type="button" className="secondary" disabled={judgmentSaving || !judgmentReviewer.trim()} onClick={() => void saveTeacherJudgment()}>{judgmentSaving ? '正在保存…' : '以教师署名确认'}</button>
+        {judgmentMessage && <p role="status">{judgmentMessage}</p>}
+      </section>}
+      {judgmentTarget && judgmentTarget.verified_by === 'teacher' && judgmentTarget.status === 'verified' && !judgmentTarget.stale && <p className="muted">本指标的机器核验与教师判断均已完成（版本 {judgmentTarget.version} · 教师 {judgmentTarget.reviewer || '未署名'}）。</p>}
       {catalogFailed && <p className="warn" role="alert">材料目录暂不可用；来源签核历史已单独读取。<button type="button" className="text-action" onClick={() => void refreshSourceData()}>重试加载材料目录</button></p>}
       {catalogEntry && <section className="source-detail" aria-label="材料目录与来源文件核验"><h3>材料目录与来源文件核验</h3><p>签核状态：{catalogEntry.source_stale ? '来源已变化，需重新核验' : verificationLabel(catalogEntry.source_status)}</p><p>指标级定位：课标 {catalogEntry.curriculum_locator || '待补充'}；教材 {catalogEntry.textbook_locator || '待补充'}</p>{catalogEntry.documents.map(document => <div className="row" key={document.name}><strong>{document.name}</strong><p>状态：{documentStatusLabel(document.status)} · {document.page_count === null || document.page_count === undefined ? '页数未知' : `共 ${document.page_count} 页`}{document.expected_file_page ? ` · 赛题文件页 ${document.expected_file_page}` : ''}{document.body_page ? ` · 正文页 ${document.body_page}` : ''}</p><p>SHA-256：{document.sha256 || '文件缺失'}</p><a href={`${learningApi.sourceUrl(document.name)}${document.expected_file_page ? `#page=${document.expected_file_page}` : ''}`} target="_blank" rel="noopener noreferrer">{document.expected_file_page ? `打开第 ${document.expected_file_page} 页` : '打开来源文件'}</a></div>)}{catalogEntry.materials.filter(material => material.resource_type !== '题目').map(material => <div className="row" key={material.material_id}><strong>{material.material_id} · {material.resource_type}</strong><p>{material.title || material.source || '材料内容待核对'}</p><p>{material.verified ? `已核验用途：${material.purpose} · ${material.source_locator}` : '需完成指标级人工来源映射'}</p></div>)}</section>}
       <p className="warn">指标关系状态：{verificationText}。主题说明仅供定位；以指标级核验记录判断材料关系。</p>
