@@ -216,7 +216,8 @@ def validate_packet_output(candidate: dict[str, Any], packet: EvidencePacket) ->
                 or not excerpt.strip()
                 or excerpt not in local.get("text", "")
             ):
-                raise ValueError("模型 excerpt 与当前证据不匹配")
+                # 模型改写的摘录一律替换为可信本地证据摘录，不拒绝整包。
+                excerpt = _source_excerpt(local)
             restored.append(
                 {
                     **local,

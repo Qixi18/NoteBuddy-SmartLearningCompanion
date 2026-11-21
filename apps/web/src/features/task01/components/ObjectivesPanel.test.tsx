@@ -137,10 +137,10 @@ describe('ObjectivesPanel source checks', () => {
     render(<ObjectivesPanel run={run} />);
 
     await waitFor(() => {
-      // 目录条目与核验进度行都可能包含"T01I1 · 已核验"，此处限定目录区域。
+      // 目录条目与核验进度行都可能包含"T01I1 · 关系已确认"，此处限定目录区域。
       const directory = document.querySelector('.topic-group') as HTMLElement;
-      expect(within(directory).getByRole('button', { name: /T01I1.*已核验/ })).toBeTruthy();
-      expect(screen.getByText('指标关系状态：已核验。主题说明仅供定位；以指标级核验记录判断材料关系。')).toBeTruthy();
+      expect(within(directory).getByRole('button', { name: /T01I1.*关系已确认/ })).toBeTruthy();
+      expect(screen.getByText('指标关系状态：关系已确认。OCR负责提取来源文本；指标、题目和材料的关系须单独确认。')).toBeTruthy();
       expect(screen.getByText(/评分点问题 同类项识别有误 · Q001P1 · Q001 · verified/)).toBeTruthy();
       expect(screen.getByText(/教材 TB01 · 再次讲解 · verified/)).toBeTruthy();
     });
@@ -176,8 +176,8 @@ describe('ObjectivesPanel source checks', () => {
 
     await waitFor(() => {
       const directory = document.querySelector('.topic-group') as HTMLElement;
-      expect(within(directory).getByRole('button', { name: /T01I1.*来源已变化，需重新核验/ })).toBeTruthy();
-      expect(screen.getByText(/指标关系状态：来源已变化，需重新核验/)).toBeTruthy();
+      expect(within(directory).getByRole('button', { name: /T01I1.*来源已变化，需重新确认/ })).toBeTruthy();
+      expect(screen.getByText(/指标关系状态：来源已变化，需重新确认/)).toBeTruthy();
     });
   });
 
