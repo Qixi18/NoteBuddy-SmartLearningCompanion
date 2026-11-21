@@ -108,7 +108,7 @@ export function SourceVerificationEditor({ run, indicatorId, onSaved, onDirtyCha
       const record = await learningApi.saveSourceVerification(payload);
       setHistory(old => [...old, record]);
       setExpectedVersion(record.version);
-      setMessage(`已保存第 ${record.version} 版：${status === 'verified' ? '人工核验通过' : status === 'rejected' ? '驳回' : '待核验'}。`);
+      setMessage(`已保存第 ${record.version} 版：${status === 'verified' ? '关系已确认' : status === 'rejected' ? '已驳回' : '关系待确认'}。`);
       onDirtyChange?.(false);
       onSaved?.();
     } catch (error) {
@@ -164,13 +164,13 @@ export function SourceVerificationEditor({ run, indicatorId, onSaved, onDirtyCha
     ['必要知识联系', (conflictRemote?.knowledge_links ?? []).map(row => `${row.target_indicator_id} · ${row.relation} · ${row.evidence}`), knowledgeLinks.map(row => `${row.target_indicator_id} · ${row.relation} · ${row.evidence}`)],
     ['评分点问题', (conflictRemote?.rubric_mappings ?? []).map(row => `${row.label || row.issue_id} · ${row.rubric_point_ids.join('、')} · ${(row.material_ids ?? []).join('、')} · ${row.evidence}`), rubricMappings.map(row => `${row.label || row.issue_id} · ${row.rubric_points} · ${row.material_ids.join('、')} · ${row.evidence}`)],
     ['资源映射', (conflictRemote?.resource_links ?? []).map(row => `${row.material_id} · ${row.purpose} · ${row.indicator_ids.join('、')} · ${row.allowed_node_ids.join('、')} · ${row.source_locator} · ${row.evidence}`), resourceLinks.map(row => `${row.material_id} · ${row.purpose} · ${row.indicator_ids.join('、')} · ${row.allowed_node_ids.join('、')} · ${row.source_locator} · ${row.evidence}`)],
-    ['核验人', conflictRemote?.reviewer, reviewer],
-    ['核验依据与限制', conflictRemote?.reason, reason],
+    ['确认人', conflictRemote?.reviewer, reviewer],
+    ['确认依据与限制', conflictRemote?.reason, reason],
   ] as const;
 
-  return <section className="source-detail" aria-label="指标来源签核" onChange={() => onDirtyChange?.(true)} onClick={event => { if ((event.target as HTMLElement).closest('button')) onDirtyChange?.(true); }}><h3>来源签核</h3><p>状态：<strong>{latest?.stale ? '来源已变化，需重新核验' : latest?.status === 'verified' ? '已确认' : latest?.status === 'rejected' ? '已驳回' : '待核验'}</strong> · {latest ? `版本 ${latest.version} · ${latest.reviewer || '未署名'} · ${latest.reviewed_at}` : '尚无记录'}</p>
-    <details className="editor-disclosure"><summary>{latest ? '更新签核' : '开始逐项签核'}</summary><p className="muted">查验原页与关联题目；确认时须选择全部当前关联题目，必要联系只录入已核对关系。</p>
-    <div className="scope-fields"><label>课标原页与定位<input value={curriculum} onChange={event => setCurriculum(event.target.value)} placeholder="文件页／正文页与条款" /></label><label>教材原页与定位<input value={textbook} onChange={event => setTextbook(event.target.value)} placeholder="册次、页码与内容" /></label><label>核验人<input value={reviewer} onChange={event => setReviewer(event.target.value)} /></label></div>
+  return <section className="source-detail" aria-label="指标关系确认" onChange={() => onDirtyChange?.(true)} onClick={event => { if ((event.target as HTMLElement).closest('button')) onDirtyChange?.(true); }}><h3>指标关系确认</h3><p>状态：<strong>{latest?.stale ? '来源已变化，需重新确认' : latest?.status === 'verified' ? '关系已确认' : latest?.status === 'rejected' ? '已驳回' : '关系待确认'}</strong> · {latest ? `版本 ${latest.version} · ${latest.reviewer || '未署名'} · ${latest.reviewed_at}` : '尚无记录'}</p>
+    <details className="editor-disclosure"><summary>{latest ? '更新关系确认' : '开始确认'}</summary><p className="muted">来源页文本由 OCR 自动提取，本处不要求逐页核验；请确认当前指标与关联题目、教材及必要知识联系是否匹配。OCR 识别不自动代表关系已确认。</p>
+    <div className="scope-fields"><label>课标来源定位<input value={curriculum} onChange={event => setCurriculum(event.target.value)} placeholder="文件页／正文页与条款" /></label><label>教材来源定位<input value={textbook} onChange={event => setTextbook(event.target.value)} placeholder="册次、页码与内容" /></label><label>确认人<input value={reviewer} onChange={event => setReviewer(event.target.value)} /></label></div>
     <fieldset><legend>逐项核对题目关联</legend>{linked.map(item => <label className="check-row" key={item['材料编号']}><input type="checkbox" checked={selected.includes(item['材料编号'])} onChange={event => setSelected(old => event.target.checked ? [...old, item['材料编号']] : old.filter(id => id !== item['材料编号']))} />{item['材料编号']} · {item['题干或内容'] || '未提供题干'}</label>)}</fieldset>
     <fieldset><legend>可映射教材与学习卡（{resources.length} 项）</legend>{resources.length ? resources.map(item => <p className="muted" key={item['材料编号']}><strong>{item['材料编号']}</strong> · {item['材料类型']} · {item['来源或资料文件'] || item['题干或内容'] || '未提供来源说明'}</p>) : <p className="muted">当前运行没有教材或学习卡条目。</p>}</fieldset>
 
@@ -203,9 +203,9 @@ export function SourceVerificationEditor({ run, indicatorId, onSaved, onDirtyCha
       {row.error && <p className="field-error" role="alert">{row.error}</p>}
     </div>)}<button type="button" className="secondary" onClick={() => setResourceLinks(old => [...old, emptyResourceLink()])}>添加资源映射</button></fieldset>
 
-    <label>核验依据与限制<textarea value={reason} onChange={event => setReason(event.target.value)} /></label>
+    <label>确认依据与限制<textarea value={reason} onChange={event => setReason(event.target.value)} /></label>
     {conflict && <div className="version-conflict" role="alert"><p>{message}</p><p>远端当前版本：{conflictVersion}。本地编辑仍保留；逐项对照后再确认继续。</p>{conflictRemote ? <><section className="version-conflict-comparison" aria-label="来源签核版本对比"><h4>最新版本与本地输入</h4><dl>{conflictRows.map(([label, remote, local]) => <div key={label}><dt>{label}</dt><dd><strong>最新版本</strong><span>{displayValue(remote ?? '')}</span></dd><dd><strong>本地输入</strong><span>{displayValue(local)}</span></dd></div>)}</dl></section><button type="button" className="secondary" onClick={compareLatest}>我已对比，保留本地修改并继续</button></> : <button type="button" className="secondary" onClick={() => void refreshConflict()}>重试读取最新版本</button>}</div>}
-    <div className="actions"><button disabled={saving || conflict} onClick={() => void save('verified')}>确认本指标来源</button><button className="secondary" disabled={saving || conflict} onClick={() => void save('pending')}>保存待核记录</button><button className="secondary" disabled={saving || conflict} onClick={() => void save('rejected')}>驳回当前关系</button></div>
+    <div className="actions"><button disabled={saving || conflict} onClick={() => void save('verified')}>确认指标与来源关系</button><button className="secondary" disabled={saving || conflict} onClick={() => void save('pending')}>保存未确认修改</button><button className="secondary" disabled={saving || conflict} onClick={() => void save('rejected')}>驳回当前关系</button></div>
     {message && !conflict && <p role="status">{message}</p>}
     </details>
     {history.length > 0 && <details><summary>查看签核历史（{history.length}）</summary>{history.map(item => <div key={item.version}><p>版本 {item.version} · {item.status} · {item.reviewer || '未署名'} · {item.reason}</p>{(item.rubric_mappings ?? []).map(mapping => <p key={`${item.version}-${mapping.issue_id}`}>评分点问题 {mapping.label || mapping.issue_id} · {mapping.rubric_point_ids.join('、')} · {mapping.material_ids?.join('、') || '未关联材料'} · {mapping.status}</p>)}{(item.resource_links ?? []).map(link => <p key={`${item.version}-${link.material_id}`}>{link.resource_type || '资源'} {link.material_id} · {link.purpose} · {link.status} · 指纹 {link.content_hash?.slice(0, 12) || '无'}</p>)}</div>)}</details>}

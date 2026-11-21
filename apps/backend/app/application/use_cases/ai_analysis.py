@@ -48,9 +48,12 @@ class GenerateAIAnalysis:
         key = scope_key(task, node_id, student_id, indicator_id)
         with self.uow_factory(immediate=False) as uow:
             run = uow.runs.current() if run_id is None else uow.runs.load(run_id)
-            if task in {"task02", "task03"} and node_id and node_id not in {
-                item.get("节点编号") for item in run.get("nodes", [])
-            }:
+            if (
+                task in {"task02", "task03"}
+                and node_id
+                and node_id
+                not in {item.get("节点编号") for item in run.get("nodes", [])}
+            ):
                 raise ValueError("测验节点不存在")
             if student_id and student_id not in {
                 item.get("学生编号") for item in run.get("students", [])
@@ -67,10 +70,18 @@ class GenerateAIAnalysis:
                 if history
             }
         sources = {"verifications": latest, "pdf_pages": []}
-        if task == "task01":
+        if task in {"task01", "task02", "task03"}:
+            seen_pdf_pages = set()
+            requested_indicator = indicator_id
             for entry in run.get("source_index", []):
-                indicator_id = entry.get("indicator_id")
-                verification = latest.get(indicator_id, {})
+                source_indicator_id = entry.get("indicator_id")
+                if (
+                    task == "task03"
+                    and requested_indicator
+                    and source_indicator_id != requested_indicator
+                ):
+                    continue
+                verification = latest.get(source_indicator_id, {})
                 if verification.get("status") != "verified" or verification.get(
                     "stale"
                 ):
@@ -79,17 +90,42 @@ class GenerateAIAnalysis:
                 try:
                     page_number = int(page)
                 except (TypeError, ValueError):
-                    continue
-                if not 1 <= page_number <= 10000:
-                    continue
-                try:
-                    sources["pdf_pages"].extend(
-                        self.source_service.extract_pages(
-                            run, "课程标准_2022.pdf", [page_number]
-                        )
+                    page_number = None
+                if page_number is None or not 1 <= page_number <= 10000:
+                    page_number = None
+                selected = {}
+                if page_number is not None:
+                    selected.setdefault("课程标准_2022.pdf", set()).add(page_number)
+                for name in entry.get("source_check", {}).get("textbook_slices", []):
+                    parsed = (
+                        run.get("source_parsing", {}).get("files", {}).get(name, {})
                     )
-                except (FileNotFoundError, OSError, ValueError):
-                    continue
+                    pages = parsed.get("pages", [])
+                    selected[name] = {
+                        page.get("index", -1) + 1
+                        for page in pages[:20]
+                        if isinstance(page, dict) and isinstance(page.get("index"), int)
+                    }
+                for name, page_numbers in selected.items():
+                    valid_numbers = sorted(
+                        number for number in page_numbers if number > 0
+                    )[:20]
+                    if not valid_numbers:
+                        continue
+                    try:
+                        extracted = self.source_service.extract_pages(
+                            run, name, valid_numbers
+                        )
+                    except (FileNotFoundError, OSError, ValueError):
+                        continue
+                    for page in extracted:
+                        dedupe_key = (source_indicator_id, page["name"], page["page"])
+                        if dedupe_key in seen_pdf_pages:
+                            continue
+                        seen_pdf_pages.add(dedupe_key)
+                        sources["pdf_pages"].append(
+                            {**page, "indicator_id": source_indicator_id}
+                        )
         pdf_fingerprints = self.source_service.fingerprints(run)
         fingerprint_data = {
             "run_id": run["run_id"],
@@ -259,9 +295,7 @@ class GenerateAIAnalysis:
                         "raw_records_included", 0
                     ),
                     "packet_total": total,
-                    "failure_details": result["coverage"].get(
-                        "failure_details", []
-                    ),
+                    "failure_details": result["coverage"].get("failure_details", []),
                 }
                 result["findings"] = [*old.get("findings", []), *result["findings"]]
                 result["status"] = "partial" if remaining else "complete"

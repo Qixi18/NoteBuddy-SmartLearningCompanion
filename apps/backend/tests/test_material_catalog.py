@@ -16,7 +16,7 @@ def _blank_pdf(path: Path, pages: int = 1) -> None:
         writer.write(stream)
 
 
-def test_catalog_reports_hash_page_bounds_and_scanned_page_review(tmp_path):
+def test_catalog_reports_hash_page_bounds_and_scanned_page_ocr_state(tmp_path):
     source_dir = tmp_path / "sources"
     source_dir.mkdir()
     curriculum = source_dir / "课程标准_2022.pdf"
@@ -69,7 +69,7 @@ def test_catalog_reports_hash_page_bounds_and_scanned_page_review(tmp_path):
     assert curriculum_entry["page_count"] == 1
     assert curriculum_entry["expected_file_page"] == 2
     assert len(curriculum_entry["sha256"]) == 64
-    assert textbook_entry["status"] == "needs_manual_review"
+    assert textbook_entry["status"] == "ocr_pending"
     assert textbook_entry["page_count"] == 1
     assert {item["material_id"] for item in first["materials"]} == {"Q001"}
 
@@ -106,6 +106,59 @@ def test_source_text_extraction_is_allowlisted_bounded_and_skips_scans(tmp_path)
 
     curriculum.write_bytes(b"not a PDF")
     assert sources.extract_pages(run, curriculum.name, [1]) == []
+
+
+def test_ocr_preview_only_marks_uncached_sources_for_explicit_send(tmp_path):
+    source_dir = tmp_path / "sources"
+    source_dir.mkdir()
+    curriculum = source_dir / "课程标准_2022.pdf"
+    _blank_pdf(curriculum, pages=2)
+    cache = tmp_path / "cache"
+    sources = SourceService(
+        tmp_path / "resources", source_files_dir=source_dir, ocr_cache_dir=cache
+    )
+    run = {"source_index": []}
+    client = Mock()
+
+    preview = sources.preview_registered_pdfs(run, client)
+
+    assert preview["will_send_count"] == 1
+    assert preview["files"][curriculum.name]["will_send"] is True
+    assert len(preview["fingerprint"]) == 64
+    fingerprint = preview["files"][curriculum.name]["sha256"]
+    sources._write_ocr_cache(
+        fingerprint,
+        {"sha256": fingerprint, "status": "complete", "page_count": 2, "pages": []},
+    )
+    cached = sources.preview_registered_pdfs(run, client)
+    assert cached["will_send_count"] == 0
+    assert cached["cached_count"] == 1
+    assert cached["fingerprint"] != preview["fingerprint"]
+    curriculum.write_bytes(curriculum.read_bytes() + b"changed")
+    changed = sources.preview_registered_pdfs(run, client)
+    assert changed["fingerprint"] != cached["fingerprint"]
+
+
+def test_ocr_result_rejects_missing_or_duplicate_page_indexes(tmp_path):
+    source_dir = tmp_path / "sources"
+    source_dir.mkdir()
+    curriculum = source_dir / "课程标准_2022.pdf"
+    _blank_pdf(curriculum, pages=2)
+    cache = tmp_path / "cache"
+    sources = SourceService(
+        tmp_path / "resources", source_files_dir=source_dir, ocr_cache_dir=cache
+    )
+    run = {"source_index": []}
+    client = Mock()
+    client.recognize.return_value = {
+        "page_count": 2,
+        "pages": [{"index": 0, "text": "only first page", "finish_reason": "stop"}],
+    }
+
+    result = sources.parse_registered_pdfs(run, client)
+
+    assert result["status"] == "failed"
+    assert result["files"][curriculum.name]["reason"] == "incomplete_ocr_page_indexes"
 
 
 def test_catalog_includes_unscoped_material_only_after_verified_mapping(tmp_path):

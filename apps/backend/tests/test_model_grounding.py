@@ -98,6 +98,9 @@ def test_context_truncates_only_complete_evidence_units():
         ({"verified": True}, "禁止的确认"),
         ({"status": "verified"}, "禁止的确认"),
         ({"material_ids": ["Q999"]}, "禁止的确认"),
+        ({"diagnosis": "该生很笨，学不会这类内容。"}, "安全检查"),
+        ({"recommendation": "正确答案是 5，直接记住即可。"}, "安全检查"),
+        ({"adjustment_condition": "联系家长，电话 13800138000。"}, "安全检查"),
     ],
 )
 def test_output_rejects_forged_references_scores_and_self_verification(

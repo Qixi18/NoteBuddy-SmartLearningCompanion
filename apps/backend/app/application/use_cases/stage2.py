@@ -340,14 +340,23 @@ class Stage2Decisions:
                     raise ValueError("覆盖证据与作答记录不能混作同一案例证据")
                 if len(coverage_refs) != len(evidence_refs):
                     raise ValueError("覆盖证据案例不能混入作答引用")
+                if coverage_refs[0].get("scope", {}).get("student_id") != student_id:
+                    raise ValueError("覆盖证据不属于所选案例学生")
                 evidence_refs = coverage_refs
             response_ref_ids = {
                 reference["record_id"]
                 for reference in evidence_refs
                 if reference["kind"] == "response"
             }
-            if response_ref_ids and response_ref_ids != set(evidence_ids):
-                raise ValueError("案例作答引用与记录编号不一致")
+            if response_ref_ids != set(evidence_ids):
+                raise ValueError("案例证据引用与记录编号不一致")
+            if any(
+                reference.get("scope", {}).get("student_id") != student_id
+                or reference.get("scope", {}).get("run_id") != run["run_id"]
+                for reference in evidence_refs
+                if reference["kind"] == "response"
+            ):
+                raise ValueError("作答证据不属于所选案例学生与当前运行")
             history = uow.reviews.list(run["run_id"])
             source_history = uow.stage2.list_sources(run["run_id"])
             for ref in payload["review_refs"]:
@@ -415,6 +424,8 @@ class Stage2Decisions:
             if payload["status"] == "confirmed" and not all(
                 (
                     payload["reviewer"].strip(),
+                    payload.get("need_type"),
+                    payload.get("selection_reason", "").strip(),
                     payload["narrative"].strip(),
                     payload["limitations"].strip(),
                     evidence_ids or coverage_refs,

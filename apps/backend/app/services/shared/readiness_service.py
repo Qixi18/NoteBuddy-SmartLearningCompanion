@@ -17,7 +17,7 @@ from ...infrastructure.database import models as _models  # noqa: F401
 from ...infrastructure.database.base import Base
 
 BACKEND_ROOT = Path(__file__).resolve().parents[3]
-REQUIRED_MODULES = ("fastapi", "sqlalchemy", "alembic", "pypdf")
+REQUIRED_MODULES = ("fastapi", "sqlalchemy", "alembic")
 
 
 def _head_revision() -> str:
@@ -122,7 +122,11 @@ def _database_status(database_url: str, head: str, project_root: Path) -> dict:
 def _source_status(config: Settings) -> dict:
     directories = {
         path.resolve()
-        for path in (config.source_files_dir, config.resources_dir)
+        for path in (
+            config.source_files_dir,
+            config.resources_dir,
+            config.data_dir / "imported_sources",
+        )
         if path is not None
     }
     pdfs = set()
@@ -159,12 +163,24 @@ def inspect_readiness(config: Settings = settings) -> dict:
         if importlib.util.find_spec(module) is None
     ]
     model_configured = bool((config.model_api_key or config.deepseek_api_key).strip())
+    deepseek_ocr_configured = bool(
+        config.deepseek_api_key.strip()
+        or (
+            config.model_provider.strip().lower() == "deepseek"
+            and config.model_api_key.strip()
+        )
+    )
 
     if database["status"] in {"unreadable", "unsupported"} or missing_modules:
         status = "blocked"
     elif database["status"] != "current":
         status = "migration_required"
-    elif not frontend_built or sources["status"] == "missing" or not model_configured:
+    elif (
+        not frontend_built
+        or sources["status"] == "missing"
+        or not model_configured
+        or not deepseek_ocr_configured
+    ):
         status = "ready_with_warnings"
     else:
         status = "ready"
@@ -192,6 +208,13 @@ def inspect_readiness(config: Settings = settings) -> dict:
             else "未找到来源 PDF；来源签核仍须由教师完成。",
         },
         {
+            "id": "deepseek_ocr",
+            "status": "passed" if deepseek_ocr_configured else "warning",
+            "detail": "DeepSeek OCR 自动解析已配置。"
+            if deepseek_ocr_configured
+            else "未配置 DeepSeek API Key；导入时课程标准和教材 PDF 将无法自动解析。",
+        },
+        {
             "id": "frontend_build",
             "status": "passed" if frontend_built else "warning",
             "detail": "前端构建文件可用。"
@@ -216,5 +239,6 @@ def inspect_readiness(config: Settings = settings) -> dict:
             "configured": model_configured,
             "required_for_core": False,
         },
+        "deepseek_ocr": {"configured": deepseek_ocr_configured},
         "checks": checks,
     }

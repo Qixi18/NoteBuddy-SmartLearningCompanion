@@ -32,7 +32,10 @@ def _scoped_score(rows: list[dict], item_ids: set[str] | None = None) -> dict:
 
 
 def build_class_insights(
-    run: dict, node_id: str, source_verifications: dict[str, list[dict]]
+    run: dict,
+    node_id: str,
+    source_verifications: dict[str, list[dict]],
+    ai_mappings: dict[str, dict] | None = None,
 ) -> dict:
     node = next(
         (item for item in run.get("nodes", []) if item.get("节点编号") == node_id),
@@ -115,6 +118,18 @@ def build_class_insights(
         }
         | {row["indicator_id"] for row in scored_rows}
     )
+    source_mapping_view = {
+        indicator_id: (ai_mappings or {}).get(
+            indicator_id,
+            {
+                "status": "not_generated",
+                "usable_count": 0,
+                "needs_resolution_count": 0,
+                "mappings": [],
+            },
+        )
+        for indicator_id in indicators
+    }
     comparisons = []
     issues = []
     summaries = []
@@ -256,6 +271,7 @@ def build_class_insights(
         "classes": summaries,
         "comparisons": comparisons,
         "issues": issues,
+        "source_mappings": source_mapping_view,
         "limitations": [
             "不输出班级能力排名或显著性结论。",
             "全题集口径受各班实际作答覆盖影响；可比口径仅重算共同观察题目。",

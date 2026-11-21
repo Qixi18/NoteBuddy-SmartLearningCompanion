@@ -13,7 +13,7 @@ describe('ObjectivesPanel source checks', () => {
 
   afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
-  it('shows topic-level checks separately from pending indicator verification', async () => {
+  it('shows topic-level source notes separately from unconfirmed indicator relations', async () => {
     const run = {
       objectives: [{
         '指标编号': 'T01I1',
@@ -26,8 +26,8 @@ describe('ObjectivesPanel source checks', () => {
         indicator_id: 'T01I1',
         topic_id: 'T01',
         source_check: {
-          curriculum_check: '课标主题定位待人工核验',
-          textbook_check: '主题教材切片已核查',
+          curriculum_check: '课标主题页码已登记',
+          textbook_check: '主题教材切片已登记',
           textbook_slices: [],
         },
         verification: 'pending',
@@ -36,10 +36,10 @@ describe('ObjectivesPanel source checks', () => {
 
     render(<ObjectivesPanel run={run} />);
 
-    expect(screen.getByText(/课标主题定位待人工核验/)).toBeTruthy();
-    expect(screen.getByText(/主题教材切片已核查/)).toBeTruthy();
+    expect(screen.getByText(/课标主题页码已登记/)).toBeTruthy();
+    expect(screen.getByText(/主题教材切片已登记/)).toBeTruthy();
     await waitFor(() => {
-      expect(screen.getAllByText(/指标关系状态：待核验/).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/指标关系状态：关系待确认/).length).toBeGreaterThan(0);
     });
   });
 
@@ -50,7 +50,7 @@ describe('ObjectivesPanel source checks', () => {
       items: [], source_index: [{ indicator_id: 'I1', verification: 'pending' }],
     } as unknown as AnalysisRun;
     render(<ObjectivesPanel run={run} />);
-    await waitFor(() => expect(screen.getByText(/指标关系状态：待核验/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/指标关系状态：关系待确认/)).toBeTruthy());
     expect(screen.queryByText(/正在读取签核记录/)).toBeNull();
   });
 
@@ -68,7 +68,7 @@ describe('ObjectivesPanel source checks', () => {
     expect(screen.getAllByRole('heading', { name: 'I2 · 指标二' }).length).toBeGreaterThan(0);
     expect(screen.getByText('第二题')).toBeTruthy();
     await waitFor(() => {
-      expect(screen.getAllByText(/指标关系状态：待核验/).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/指标关系状态：关系待确认/).length).toBeGreaterThan(0);
     });
   });
 
@@ -145,9 +145,9 @@ describe('ObjectivesPanel source checks', () => {
       expect(screen.getByText(/教材 TB01 · 再次讲解 · verified/)).toBeTruthy();
     });
 
-    fireEvent.click(screen.getByText('更新签核'));
+    fireEvent.click(screen.getByText('更新关系确认'));
     const editor = screen.getByText(/评分点问题 同类项识别有误/).closest('section');
-    fireEvent.click(within(editor!).getByRole('button', { name: '确认本指标来源' }));
+    fireEvent.click(within(editor!).getByRole('button', { name: '确认指标与来源关系' }));
     await waitFor(() => expect(save).toHaveBeenCalledWith(expect.objectContaining({
       indicator_id: 'T01I1',
       expected_version: 1,
@@ -190,7 +190,7 @@ describe('ObjectivesPanel source checks', () => {
         documents: [{
           name: '课程标准_2022.pdf', available: true, sha256: 'a'.repeat(64), bytes: 20,
           page_count: 70, text_page_count: 0, text_pages: [], expected_file_page: 62,
-          body_page: 55, source_kind: 'curriculum', status: 'needs_manual_review',
+          body_page: 55, source_kind: 'curriculum', status: 'page_text_unavailable',
           url: '/api/source?file=课程标准_2022.pdf',
         }],
         materials: [{
@@ -208,8 +208,8 @@ describe('ObjectivesPanel source checks', () => {
     render(<ObjectivesPanel run={run} />);
 
     expect(await screen.findByText(/SHA-256：a{12}/)).toBeTruthy();
-    expect(screen.getByText(/无文本层或扫描页，待人工核验/)).toBeTruthy();
-    expect(screen.getByText(/已核验用途：复习概念 · 教材第 68 页/)).toBeTruthy();
+    expect(screen.getByText(/OCR未提取到该页文本/)).toBeTruthy();
+    expect(screen.getByText(/TB01/)).toBeTruthy();
     expect(screen.getByRole('link', { name: '打开第 62 页' }).getAttribute('href')).toContain('#page=62');
   });
 

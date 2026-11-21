@@ -175,10 +175,50 @@ def test_rejects_stale_scope_evidence_signature_or_materials(change, expected_co
 def test_cannot_build_a_plan_without_scored_evidence_or_node_practice():
     empty_evidence = _bundle()
     empty_evidence["responses"] = []
-    with pytest.raises(ValueError, match="有效评分证据"):
+    with pytest.raises(ValueError, match="评分或覆盖证据"):
         build_teaching_plan(empty_evidence, [], _selection(), "指标", {"R1"})
 
     no_practice = _selection()
     no_practice["practice_items"] = []
     with pytest.raises(ValueError, match="节点内练习题"):
         build_teaching_plan(_bundle(), [], no_practice, "指标", {"R1"})
+
+
+def test_diagnostic_plan_uses_coverage_evidence_when_student_has_no_records():
+    empty = _bundle()
+    empty["responses"] = []
+    empty["coverage"] = {"evidence_id": "coverage-1", "record_count": 0}
+    selection = _selection()
+    selection["purpose"] = "diagnostic"
+
+    plan = build_teaching_plan(empty, [], selection, "指标")
+
+    assert plan["evidence_refs"] == [
+        {
+            "kind": "coverage",
+            "evidence_id": "coverage-1",
+            "record_id": "",
+            "material_id": "",
+            "source_line": 0,
+        }
+    ]
+    assert validate_teaching_plan(plan, empty, _sources()) == []
+
+
+def test_diagnostic_plan_uses_coverage_when_records_exist_but_none_are_scored():
+    pending = _bundle()
+    pending["responses"][0]["disposition"] = "pending"
+    pending["coverage"] = {
+        "evidence_id": "coverage-pending-only",
+        "record_count": 1,
+        "scored_record_count": 0,
+        "record_disposition_counts": {"pending": 1},
+    }
+    selection = _selection()
+    selection["purpose"] = "diagnostic"
+
+    plan = build_teaching_plan(pending, [], selection)
+
+    assert plan["evidence_refs"][0]["kind"] == "coverage"
+    assert plan["evidence_refs"][0]["evidence_id"] == "coverage-pending-only"
+    assert validate_teaching_plan(plan, pending, _sources()) == []

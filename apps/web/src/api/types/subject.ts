@@ -59,7 +59,7 @@ export interface MaterialCatalogDocument {
   expected_file_page?: number | null;
   body_page?: number | null;
   source_kind: 'curriculum' | 'textbook';
-  status: 'missing' | 'unreadable' | 'page_out_of_range' | 'needs_manual_review' | 'page_valid_text' | 'locator_required';
+  status: 'missing' | 'unreadable' | 'page_out_of_range' | 'ocr_pending' | 'ocr_failed' | 'page_text_unavailable' | 'page_text_available' | 'locator_required';
   url: string;
 }
 

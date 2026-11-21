@@ -100,6 +100,24 @@ def test_issue_counts_deduplicate_students_and_report_observation_denominator():
     assert by_class["C2"]["observed_student_count"] == 2
 
 
+def test_class_insights_expose_current_ai_mapping_coverage_per_indicator():
+    mappings = {
+        "I1": {
+            "status": "needs_resolution",
+            "usable_count": 1,
+            "needs_resolution_count": 1,
+            "mappings": [
+                {"material_id": "Q1", "status": "usable", "evidence": [{"page": 3}]},
+                {"material_id": "Q2", "status": "needs_resolution", "evidence": []},
+            ],
+        }
+    }
+
+    result = build_class_insights(_run(), "N01", _verified_sources(), mappings)
+
+    assert result["source_mappings"]["I1"] == mappings["I1"]
+
+
 def test_class_comparison_recomputes_only_on_common_observed_items():
     run = _run()
     run["responses"] = [

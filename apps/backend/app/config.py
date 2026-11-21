@@ -62,6 +62,14 @@ class Settings:
     deepseek_timeout_seconds: int = field(
         default_factory=lambda: int(os.getenv("DEEPSEEK_TIMEOUT_SECONDS", "30"))
     )
+    deepseek_ocr_timeout_seconds: int = field(
+        default_factory=lambda: int(os.getenv("DEEPSEEK_OCR_TIMEOUT_SECONDS", "180"))
+    )
+    deepseek_ocr_api_url: str = field(
+        default_factory=lambda: os.getenv(
+            "DEEPSEEK_OCR_API_URL", "https://api.deepseek.com/v1/tools/ocr"
+        )
+    )
     model_provider: str = field(
         default_factory=lambda: os.getenv("MODEL_PROVIDER", "deepseek")
     )
@@ -87,6 +95,10 @@ class Settings:
             raise ValueError("SMART_LEARNING_PORT 必须在 1 到 65535 之间")
         if not 1 <= self.deepseek_timeout_seconds <= 120:
             raise ValueError("DEEPSEEK_TIMEOUT_SECONDS 必须在 1 到 120 之间")
+        if not 1 <= self.deepseek_ocr_timeout_seconds <= 180:
+            raise ValueError("DEEPSEEK_OCR_TIMEOUT_SECONDS 必须在 1 到 180 之间")
+        if not self.deepseek_ocr_api_url.startswith("https://"):
+            raise ValueError("DEEPSEEK_OCR_API_URL 必须使用 HTTPS")
         provider = self.model_provider.strip().lower()
         if provider == "deepseek" and not self.model_api_url:
             object.__setattr__(

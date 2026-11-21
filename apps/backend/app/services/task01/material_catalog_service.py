@@ -1,23 +1,32 @@
-"""Build a current, human-reviewable catalog of materials and PDF sources."""
+"""Build a current material catalog with OCR and source-mapping states."""
 
 
 def _document_status(inspection: dict, expected_file_page: int | None) -> str:
     if not inspection["available"]:
         return "missing"
+    page_count = inspection.get("page_count")
+    if (
+        expected_file_page is not None
+        and isinstance(page_count, int)
+        and not 1 <= expected_file_page <= page_count
+    ):
+        return "page_out_of_range"
+    parse_status = inspection.get("parse_status", inspection.get("status"))
+    if parse_status == "unparsed":
+        return "ocr_pending"
+    if parse_status == "failed":
+        return "ocr_failed"
     if inspection.get("status") != "readable":
         return "unreadable"
-    page_count = inspection["page_count"]
-    if expected_file_page is not None and not 1 <= expected_file_page <= page_count:
-        return "page_out_of_range"
     if (
         expected_file_page is not None
         and expected_file_page not in inspection["text_pages"]
     ):
-        return "needs_manual_review"
+        return "page_text_unavailable"
     if expected_file_page is not None:
-        return "page_valid_text"
+        return "page_text_available"
     if not inspection["text_page_count"]:
-        return "needs_manual_review"
+        return "page_text_unavailable"
     return "locator_required"
 
 

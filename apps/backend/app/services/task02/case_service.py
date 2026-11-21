@@ -55,10 +55,7 @@ def suggest_cases(run: dict) -> list[dict]:
         for student_id, rows in by_student.items()
     }
     if any(partial_rows.values()):
-        first = max(
-            student_order,
-            key=lambda sid: (len(partial_rows.get(sid, [])), sid),
-        )
+        first = max(student_order, key=lambda sid: len(partial_rows.get(sid, [])))
     else:
         first = min(
             student_order,
@@ -79,7 +76,7 @@ def suggest_cases(run: dict) -> list[dict]:
     second_pool = other_class or remaining
     second = max(
         second_pool,
-        key=lambda sid: (ratio(sid) if ratio(sid) is not None else -1, sid),
+        key=lambda sid: ratio(sid) if ratio(sid) is not None else -1,
     )
     remaining.remove(second)
     represented_classes = {class_by_student[first], class_by_student[second]}
@@ -89,7 +86,7 @@ def suggest_cases(run: dict) -> list[dict]:
     third_pool = uncovered_class_candidates or remaining
     third = min(
         third_pool,
-        key=lambda sid: (len(by_student.get(sid, [])), sid),
+        key=lambda sid: len(by_student.get(sid, [])),
     )
 
     selected_classes = {class_by_student[sid] for sid in (first, second, third)}

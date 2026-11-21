@@ -26,3 +26,26 @@ node_modules/
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+
+# Local agent tooling and generated planning artifacts
+/.agents/
+/.superpowers/
+/.local/
+/.bmad/
+/.bmad-output/
+/_bmad/
+/_bmad-output/
+
+# Project planning, design, and other documentation
+/docs/
+/DESIGN.md
+/PRODUCT.md
+/AGENTS.md
+*.md
+!README.md
+
+# Local scratch and generated artifacts
+/tmp/
+/C%3A/
+/.ruff_cache/
+/.venv/

@@ -131,7 +131,7 @@ export function ExportPanel({ students, runId, ids, node, onNavigate, onExport }
         <label className="check-row"><input type="checkbox" checked={contentReviewed}
           disabled={!uniqueReady || !node || !reviewer.trim()}
           onChange={event => { setContentReviewed(event.target.checked); setDownloadError(''); }} />
-          我已逐页审阅三案例和班级报告，确认事实、解释及限制
+          我已重点复核三案例和班级报告的证据、样本范围、异常结论及限制
         </label>
       </div>
       {downloadError && <p role="alert" className="error">{downloadError}</p>}

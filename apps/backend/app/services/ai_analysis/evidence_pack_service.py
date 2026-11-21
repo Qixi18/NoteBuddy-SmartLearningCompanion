@@ -134,6 +134,7 @@ def _task01_facts(
             "kind": "source",
             "name": page.get("name"),
             "page": page.get("page"),
+            "indicator_id": page.get("indicator_id"),
             "text": page["text"],
         }
     for fact in facts:
@@ -144,6 +145,8 @@ def _task01_facts(
                 "text": reference["text"],
             }
             for alias, reference in pdf_pages_by_name.items()
+            if reference.get("indicator_id")
+            == reference_map[fact["fact_id"]].get("indicator_id")
         ]
     reference_map.update(pdf_pages_by_name)
     return facts, [], reference_map
@@ -156,10 +159,14 @@ def _task02_03_units(
     student_id: str | None,
     indicator_id: str | None,
 ) -> tuple[list[dict], dict[str, dict]]:
-    node = next(
-        (item for item in run.get("nodes", []) if item.get("节点编号") == node_id),
-        None,
-    ) if node_id else None
+    node = (
+        next(
+            (item for item in run.get("nodes", []) if item.get("节点编号") == node_id),
+            None,
+        )
+        if node_id
+        else None
+    )
     if node_id and node is None:
         raise ValueError("测验节点不存在")
     students = {
@@ -293,6 +300,28 @@ def build_task_packets(
                 "kind": "metric",
                 "value": metric,
                 "text": json.dumps(metric, ensure_ascii=False, sort_keys=True),
+            }
+        for index, page in enumerate((sources or {}).get("pdf_pages", []), 1):
+            if not isinstance(page, dict) or not page.get("text"):
+                continue
+            source_id = f"source{index}"
+            fact_id = f"fact{len(facts) + 1}"
+            facts.append(
+                {
+                    "fact_id": fact_id,
+                    "kind": "verified_pdf_source",
+                    "reference": source_id,
+                    "file": page.get("name"),
+                    "page": page.get("page"),
+                    "indicator_id": page.get("indicator_id"),
+                    "text": page["text"],
+                }
+            )
+            reference_map[fact_id] = {
+                "kind": "source",
+                "name": page.get("name"),
+                "page": page.get("page"),
+                "text": page["text"],
             }
         scoped_rows = [
             row

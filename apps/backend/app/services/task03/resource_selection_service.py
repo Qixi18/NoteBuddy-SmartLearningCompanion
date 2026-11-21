@@ -33,6 +33,12 @@ def select_resources(
     }
     scoped_items = {str(item.get("material_id")) for item in bundle.get("items", [])}
     verified_questions = set(source.get("material_ids", []))
+    ai_mappings = source.get("ai_mappings", {})
+    ai_materials = {
+        material_id
+        for material_id, mapping in ai_mappings.items()
+        if mapping.get("status") == "usable"
+    }
     resource_links = {
         str(link.get("material_id")): link
         for link in source.get("resource_links", [])
@@ -108,10 +114,13 @@ def select_resources(
                     )
                 )
                 continue
-            if (
-                source.get("status") != "verified"
-                or source.get("stale")
-                or material_id not in verified_questions
+            if not (
+                (
+                    source.get("status") == "verified"
+                    and not source.get("stale")
+                    and material_id in verified_questions
+                )
+                or material_id in ai_materials
             ):
                 excluded.append(
                     _excluded(
@@ -123,11 +132,12 @@ def select_resources(
                 continue
             link = None
         else:
-            if (
-                link is None
-                or link.get("status") != "verified"
-                or source.get("status") != "verified"
-                or source.get("stale")
+            if not (
+                link is not None
+                and link.get("status") == "verified"
+                and source.get("status") == "verified"
+                and not source.get("stale")
+                or material_id in ai_materials
             ):
                 excluded.append(
                     _excluded(
@@ -137,14 +147,22 @@ def select_resources(
                     )
                 )
                 continue
-            if indicator_id not in link.get("indicator_ids", []):
+            if (
+                link is not None
+                and indicator_id not in link.get("indicator_ids", [])
+                and material_id not in ai_materials
+            ):
                 excluded.append(
                     _excluded(
                         material_id, "indicator_mismatch", "资源映射没有覆盖当前指标。"
                     )
                 )
                 continue
-            if node_id not in link.get("allowed_node_ids", []):
+            if (
+                link is not None
+                and node_id not in link.get("allowed_node_ids", [])
+                and material_id not in ai_materials
+            ):
                 excluded.append(
                     _excluded(
                         material_id,
@@ -154,11 +172,20 @@ def select_resources(
                 )
                 continue
 
-        purpose_text = str((link or {}).get("purpose", item.get("purpose", "")))
+        ai_relation = ai_mappings.get(material_id, {})
+        purpose_text = str(
+            (link or {}).get(
+                "purpose", item.get("purpose", ai_relation.get("relation", ""))
+            )
+        )
         purpose_match = any(term in purpose_text for term in _PURPOSE_TERMS[purpose])
         issue_match = material_id in target_issue_materials
         unseen = material_id not in observed
-        reason_codes = ["verified_indicator_match"]
+        reason_codes = [
+            "ai_mapping_match"
+            if material_id in ai_materials
+            else "verified_indicator_match"
+        ]
         if issue_match:
             reason_codes.append("target_issue_match")
         if purpose_match:

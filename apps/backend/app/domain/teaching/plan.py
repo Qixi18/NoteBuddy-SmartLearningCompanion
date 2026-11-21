@@ -42,9 +42,10 @@ class PlanResourceReason:
 @dataclass(frozen=True, slots=True)
 class PlanEvidenceRef:
     evidence_id: str
-    record_id: str
-    material_id: str
-    source_line: int
+    record_id: str = ""
+    material_id: str = ""
+    source_line: int = 0
+    kind: str = "response"
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,10 +122,19 @@ class TeachingPlanV2:
             for reason in self.resource_reasons
         ):
             raise InvalidReview("每项方案材料都须有有效类型和选择理由")
-        if not self.evidence_refs or any(
-            ref.source_line < 1 for ref in self.evidence_refs
+        if not self.evidence_refs:
+            raise InvalidReview("方案须引用作答或覆盖证据")
+        if any(
+            (ref.kind == "response" and (not ref.record_id or ref.source_line < 1))
+            or ref.kind not in {"response", "coverage"}
+            for ref in self.evidence_refs
         ):
-            raise InvalidReview("方案须引用有效的作答证据")
+            raise InvalidReview("方案证据引用格式无效")
+        if any(ref.kind == "coverage" for ref in self.evidence_refs) and (
+            self.purpose != "diagnostic"
+            or any(ref.kind != "coverage" for ref in self.evidence_refs)
+        ):
+            raise InvalidReview("覆盖证据只能用于纯观察型诊断方案")
         if not self.source_versions or any(
             version < 1 for version in self.source_versions.values()
         ):

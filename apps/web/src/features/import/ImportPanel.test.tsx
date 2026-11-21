@@ -30,10 +30,11 @@ describe('ImportPanel', () => {
     chooseFiles(screen.getByLabelText('选择 CSV 文件夹'));
     fireEvent.click(screen.getByRole('button', { name: '检查文件并导入' }));
     await waitFor(() => expect(onImported).toHaveBeenCalledWith('run-1'));
-    expect(onMessage).toHaveBeenCalledWith('正在导入和分析…');
+    expect(onMessage).toHaveBeenCalledWith('正在本机导入和分析…');
     expect(JSON.parse(fetch.mock.calls[0][1].body as string).files).toEqual(
       Object.fromEntries(requiredNames.map(name => [name, `内容-${name}`])),
     );
+    expect(fetch.mock.calls).toHaveLength(1);
   });
 
   it('submits the import form with Enter', async () => {
@@ -59,13 +60,39 @@ describe('ImportPanel', () => {
 
     const pending = await screen.findByRole('button', { name: '正在导入…' });
     expect((pending as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByRole('status').textContent).toContain('正在导入和分析');
+    expect(screen.getByRole('status').textContent).toContain('正在本机导入 CSV');
+    expect(screen.getByRole('status').textContent).not.toContain('自动解析');
     expect(fetch).toHaveBeenCalledTimes(1);
 
     await act(async () => resolveResponse(new Response('{"run_id":"run-pending","quality":{}}', {
       status: 200, headers: { 'content-type': 'application/json' },
     })));
     await waitFor(() => expect(onImported).toHaveBeenCalledWith('run-pending'));
+  });
+
+  it('sends OCR only after confirming the exact previewed file list', async () => {
+    const fingerprint = 'a'.repeat(64);
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        provider: 'DeepSeek OCR', purpose: 'rich_layout_recognition', billing_unit: 'successful_page', fingerprint,
+        status: 'ready', will_send_count: 1, cached_count: 1,
+        files: {
+          '课程标准_2022.pdf': { status: 'ready', will_send: true, bytes: 1024, sha256: 'hash-1' },
+          '教材.pdf': { status: 'cached', will_send: false, bytes: 512, sha256: 'hash-2' },
+        },
+      }), { status: 200, headers: { 'content-type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'complete', parsed_file_count: 2, file_count: 2 }), { status: 200, headers: { 'content-type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetch);
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<ImportPanel onImported={vi.fn()} onMessage={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /识别来源 PDF/ }));
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('课程标准_2022.pdf（1024 字节）'));
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('成功识别页'));
+    expect(fetch.mock.calls[1][0]).toBe('/api/source-ocr');
+    expect(JSON.parse(fetch.mock.calls[1][1].body as string)).toEqual({ confirmed: true, preview_fingerprint: fingerprint });
   });
 
   it('reports missing required files before making a request', async () => {

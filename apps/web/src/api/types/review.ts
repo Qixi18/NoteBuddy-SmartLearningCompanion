@@ -100,6 +100,8 @@ export interface TeacherCase {
   run_id: string;
   student_id: string;
   status: 'draft' | 'confirmed' | 'rejected';
+  need_type?: '部分得分' | '表现较好' | '记录较少' | '无记录观察' | '自定义' | null;
+  selection_reason?: string;
   narrative: string;
   limitations: string;
   evidence_record_ids: string[];

@@ -7,6 +7,24 @@ from app.config import settings
 from test_server import client_for
 
 
+def response_refs(client, student_id, indicator_id, node_id, record_ids):
+    bundle = client.get(
+        "/api/evidence-bundle",
+        params={"student": student_id, "indicator": indicator_id, "node": node_id},
+    ).json()
+    return [
+        {
+            "kind": "response",
+            "evidence_id": row["evidence_id"],
+            "record_id": row["record_id"],
+            "source_line": row["source_line"],
+            "scope": bundle["scope"],
+        }
+        for row in bundle["responses"]
+        if row["record_id"] in record_ids
+    ]
+
+
 def test_source_signoff_structured_plan_case_and_export_roundtrip(tmp_path):
     client = client_for(tmp_path)
     draft = client.get(
@@ -80,6 +98,11 @@ def test_source_signoff_structured_plan_case_and_export_roundtrip(tmp_path):
         "narrative": "本节点作答需核对代入步骤",
         "limitations": "仅依据 N01 的已选记录，不代表全班",
         "evidence_record_ids": draft["evidence_record_ids"],
+        "evidence_refs": response_refs(
+            client, "D01", "T01I1", "N01", draft["evidence_record_ids"]
+        ),
+        "need_type": "部分得分",
+        "selection_reason": "通过原始步骤证据选取该案例用于过程核对。",
         "review_refs": [{"indicator_id": "T01I1", "node_id": "N01", "version": 1}],
         "reviewer": "数学教师甲",
     }
@@ -187,6 +210,11 @@ def test_teaching_plan_v2_is_revalidated_on_save_and_export(tmp_path):
             "narrative": "根据当前节点证据复核后形成方案。",
             "limitations": "结论仅限已列出的有效评分记录。",
             "evidence_record_ids": draft["evidence_record_ids"],
+            "evidence_refs": response_refs(
+                client, "D01", "T01I1", "N01", draft["evidence_record_ids"]
+            ),
+            "need_type": "部分得分",
+            "selection_reason": "该案例有可复核的当前节点步骤证据。",
             "review_refs": [{"indicator_id": "T01I1", "node_id": "N01", "version": 1}],
             "reviewer": "数学教师甲",
         },
@@ -313,12 +341,30 @@ def test_confirmed_case_requires_teacher_content_evidence_and_review_reference(
         },
     )
     assert saved_review.status_code == 200, saved_review.text
+    bundle = client.get(
+        "/api/evidence-bundle",
+        params={"student": "D01", "indicator": "T01I1", "node": "N01"},
+    ).json()
+    selected_evidence = next(
+        row for row in bundle["responses"] if row["record_id"] == "R2"
+    )
     valid = {
         "student_id": "D01",
         "status": "confirmed",
+        "need_type": "部分得分",
+        "selection_reason": "当前节点有可复核的部分得分步骤证据。",
         "narrative": "按步骤核查该节点作答",
         "limitations": "仅代表该节点证据",
         "evidence_record_ids": ["R2"],
+        "evidence_refs": [
+            {
+                "kind": "response",
+                "evidence_id": selected_evidence["evidence_id"],
+                "record_id": "R2",
+                "source_line": selected_evidence["source_line"],
+                "scope": bundle["scope"],
+            }
+        ],
         "review_refs": [
             {
                 "indicator_id": "T01I1",
@@ -335,6 +381,8 @@ def test_confirmed_case_requires_teacher_content_evidence_and_review_reference(
         {**valid, "evidence_record_ids": []},
         {**valid, "evidence_record_ids": ["UNKNOWN"]},
         {**valid, "review_refs": []},
+        {**valid, "need_type": ""},
+        {**valid, "selection_reason": "  "},
         {
             **valid,
             "review_refs": [{"indicator_id": "T01I1", "node_id": "N01", "version": 99}],
@@ -343,7 +391,7 @@ def test_confirmed_case_requires_teacher_content_evidence_and_review_reference(
 
     for payload in invalid_payloads:
         response = client.post("/api/teacher-case", json=payload)
-        assert response.status_code == 400
+        assert response.status_code in {400, 422}
     assert client.get("/api/teacher-cases").json() == {}
     confirmed = client.post("/api/teacher-case", json=valid)
     assert confirmed.status_code == 200, confirmed.text

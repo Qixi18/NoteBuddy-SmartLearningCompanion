@@ -9,6 +9,7 @@ from ..infrastructure.database.engine import make_engine
 from ..infrastructure.database.session import Database
 from ..infrastructure.database.unit_of_work import SqlAlchemyUnitOfWork
 from ..infrastructure.llm.deepseek_client import DeepSeekAdapter
+from ..infrastructure.llm.deepseek_ocr_client import DeepSeekOCRAdapter
 from ..services.task01.source_service import SourceService
 from ..services.task02.import_service import ImportService
 from .analysis_run_repository import AnalysisRunRepository
@@ -57,9 +58,24 @@ class Store:
         self.sources = SourceService(
             self._resources_dir,
             source_files_dir=config.source_files_dir,
+            ocr_cache_dir=config.data_dir / "source_ocr_cache",
         )
         self.review_service.source_service = self.sources
         self.imports.sources = self.sources
+        ocr_key = config.deepseek_api_key or (
+            config.model_api_key
+            if config.model_provider.strip().lower() == "deepseek"
+            else ""
+        )
+        self.imports.ocr_client = (
+            DeepSeekOCRAdapter(
+                ocr_key,
+                timeout=config.deepseek_ocr_timeout_seconds,
+                api_url=config.deepseek_ocr_api_url,
+            )
+            if ocr_key
+            else None
+        )
         llm_client = (
             DeepSeekAdapter(
                 config.model_api_key or config.deepseek_api_key,

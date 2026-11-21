@@ -31,6 +31,7 @@ def check_release(
     node_id: str,
     content_reviewed: bool = False,
     reviewer: str = "",
+    ai_mappings: dict[str, list[dict]] | None = None,
 ) -> list[dict]:
     students = {row.get("学生编号") for row in run.get("students", [])}
     valid_selection = (
@@ -50,6 +51,7 @@ def check_release(
     ]
     confirmed = {}
     invalid_refs = []
+    invalid_case_selection = []
     stale_sources = []
     invalid_reviews = []
     for student_id in case_ids if valid_selection else []:
@@ -65,6 +67,10 @@ def check_release(
         if not case or case.get("status") != "confirmed":
             continue
         confirmed[student_id] = case
+        if not case.get("need_type") or not case.get("selection_reason", "").strip():
+            invalid_case_selection.append(
+                f"{student_id} 缺少正式案例需求类型或选择理由"
+            )
         if not case.get("review_refs"):
             invalid_reviews.append(f"{student_id} 未关联教师复核版本")
         try:
@@ -149,6 +155,17 @@ def check_release(
     )
     checks.append(
         _check(
+            "case_selection_reason",
+            "正式案例需求类型与选择理由",
+            "passed" if complete_cases and not invalid_case_selection else "blocked",
+            "三份正式案例均记录需求类型和独立选择理由。"
+            if complete_cases and not invalid_case_selection
+            else "；".join(invalid_case_selection)
+            or "请先完成三份当前运行的正式案例确认。",
+        )
+    )
+    checks.append(
+        _check(
             "evidence_references",
             "案例证据引用有效且可追溯",
             "passed" if complete_cases and not invalid_refs else "blocked",
@@ -222,7 +239,7 @@ def check_release(
     checks.append(
         _check(
             "human_content_review",
-            "内容负责人逐页复核并签名",
+            "内容负责人重点风险复核并签名",
             "passed" if signoff else "not_checked",
             f"人工复核人：{reviewer.strip()}。"
             if signoff
@@ -253,6 +270,7 @@ def release_fingerprint(
     checks: list[dict],
     reviewer: str,
     content_reviewed: bool,
+    ai_mappings: dict[str, list[dict]] | None = None,
 ) -> str:
     payload = {
         "run_id": run.get("run_id"),
@@ -266,6 +284,7 @@ def release_fingerprint(
             if key.partition(":")[0] in case_ids
         },
         "sources": sources,
+        "ai_mappings": ai_mappings or {},
         "reports": reports,
         "checks": checks,
         "reviewer": reviewer.strip(),

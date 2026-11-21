@@ -116,7 +116,9 @@ def analyze_packets(
         body = {
             "model": model,
             "response_format": {"type": "json_object"},
-            "max_tokens": 4096 if (provider or "").strip().lower() == "deepseek" else 1400,
+            "max_tokens": 4096
+            if (provider or "").strip().lower() == "deepseek"
+            else 1400,
             "messages": [
                 {
                     "role": "system",
