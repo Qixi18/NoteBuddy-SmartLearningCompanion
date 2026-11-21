@@ -43,16 +43,18 @@ export function ObjectivesPanel({ run, indicatorId, onIndicatorChange, onSaved, 
   const [machineRunning, setMachineRunning] = useState(false);
   const [machineMessage, setMachineMessage] = useState('');
   const [machineRefreshToken, setMachineRefreshToken] = useState(0);
-  const runMachineCheck = async () => {
+  const runMachineCheck = async (targetId?: string) => {
     setMachineRunning(true);
     setMachineMessage('');
     try {
-      const result = await learningApi.runMachineVerification(selectedId);
-      const skipped = result.skipped.find(item => item.indicator_id === selectedId);
+      const result = await learningApi.runMachineVerification(targetId ?? undefined);
+      const skipped = targetId ? result.skipped.find(item => item.indicator_id === targetId) : undefined;
       setMachineMessage(
         result.verified.length
-          ? `机器核验完成：本指标的教材映射与定位已自动核验并写入记录。${skipped ? skipped.reason : ''}`
-          : `机器核验未写入：${skipped?.reason ?? '证据不足'}。可人工核验后再确认。`,
+          ? `机器核验完成：${result.verified.map(record => record.indicator_id).join('、')} 已自动核验并写入记录。`
+          : targetId
+            ? `机器核验未写入：${skipped?.reason ?? '证据不足'}。可人工核验后再确认。`
+            : '没有需要新写入的指标（均已核验或证据不足）；详见核验进度。',
       );
       if (result.verified.length) {
         setMachineRefreshToken(token => token + 1);
@@ -118,17 +120,25 @@ export function ObjectivesPanel({ run, indicatorId, onIndicatorChange, onSaved, 
   const indicatorCheck = source?.indicator_check;
   const catalogEntry = catalog.find(item => item.indicator_id === objective['指标编号']);
   const page = topicCheck?.curriculum_file_page;
+  const verificationRows = run.objectives.map(item => ({ item, latest: sourceHistory[item['指标编号']]?.at(-1) }));
+  const verifiedCount = verificationRows.filter(row => row.latest?.status === 'verified' && !row.latest?.stale).length;
+  const machineSignedCount = verificationRows.filter(row => row.latest?.verified_by === 'machine' && row.latest?.status === 'verified' && !row.latest?.stale).length;
   return <div className="knowledge-layout">
     <Panel title="主题与指标目录"><p className="muted">{topics.length} 个数据主题 · {run.objectives.length} 项指标</p>
       {topics.map(topic => <section className="topic-group" key={topic}><h3>{topic} <small>{run.objectives.filter(item => (item['主题'] || item['主题编号']) === topic).length} 项</small></h3>
       {run.objectives.filter(item => (item['主题'] || item['主题编号']) === topic).map(item => { const signoff = sourceHistory[item['指标编号']]?.at(-1); return <button type="button" className={`knowledge-option${objective['指标编号'] === item['指标编号'] ? ' selected' : ''}`} aria-current={objective['指标编号'] === item['指标编号'] ? 'true' : undefined} key={item['指标编号']} onClick={() => selectIndicator(item['指标编号'])}><strong>{item['指标编号']}</strong><span>{item['观察指标']}</span><small>关联题目 {run.items.filter(question => question['指标编号'] === item['指标编号']).length} 道 · {sourceHistoryLoaded && !sourceHistoryFailed ? verificationLabel(signoff?.status ?? run.source_index.find(entry => entry.indicator_id === item['指标编号'])?.verification, signoff?.stale) : sourceHistoryFailed ? '签核记录暂不可用' : '正在读取签核记录'}</small></button>; })}</section>)}
+      <div className="verification-report">
+        <div className="verification-report-head"><strong>核验进度 {verifiedCount}/{run.objectives.length}</strong><span>机器 {machineSignedCount} · 教师 {verifiedCount - machineSignedCount} · 待核对 {run.objectives.length - verifiedCount}</span><button type="button" className="secondary" disabled={machineRunning} onClick={() => void runMachineCheck()}>{machineRunning ? '正在匹配切片文本…' : '一键机器核验全部指标'}</button></div>
+        <ul className="verification-report-list">{verificationRows.map(row => { const status = row.latest?.stale ? '来源已变化' : row.latest?.status === 'verified' ? '已核验' : row.latest?.status === 'rejected' ? '已驳回' : row.latest ? '待复核' : '未核验'; const by = row.latest?.verified_by === 'machine' ? '机器' : row.latest?.reviewer ? `教师 ${row.latest.reviewer}` : '—'; const evidence = row.latest?.machine_evidence?.[0]; return <li key={row.item['指标编号']}><button type="button" className="verification-row" onClick={() => selectIndicator(row.item['指标编号'])}><strong>{row.item['指标编号']}</strong><span>{status} · {by}{row.latest?.confidence != null ? ` · 置信度 ${Math.round(row.latest.confidence * 100)}%` : ''}{evidence?.page ? ` · ${evidence.slice ?? ''} 第 ${evidence.page} 页` : ''}</span></button></li>; })}</ul>
+        {machineMessage && <p className="muted" role="status">{machineMessage}</p>}
+      </div>
     </Panel>
     <Panel title="指标详情"><h3>{objective['指标编号']} · {objective['观察指标']}</h3><p>主题：{objective['主题'] || objective['主题编号']}</p><p>主题目标：{objective['主题目标'] || '未提供'}</p>
       <section className="source-detail"><h3>关联题目 · {items.length} 道</h3>{items.length ? <>
         {(showAllItems ? items : items.slice(0, 5)).map(item => <div className="row" key={item['材料编号']}><strong>{item['材料编号']}</strong><p>{item['题干或内容'] || '未提供题干'}</p><small>指标与题目关系：{verificationText}</small></div>)}
         {items.length > 5 && <button type="button" className="text-action" aria-expanded={showAllItems} onClick={() => setExpandedItemsFor(showAllItems ? '' : objective['指标编号'])}>{showAllItems ? '收起关联题目' : `查看全部关联题目（${items.length}）`}</button>}
       </> : <p>当前快照没有关联题目；不能据此判断知识覆盖。</p>}</section>
-      <section className="source-detail"><h3>课程标准</h3><p>导入定位：{objective['课标文件页／正文页'] ? curriculumLocatorLabel(objective['课标文件页／正文页']) : '待核验'}；指标级定位：{indicatorCheck?.curriculum_locator || '待核对'}</p><p>主题课标核验：{topicCheck?.curriculum_check || '待核对'}。{page && <a href={`${learningApi.sourceUrl('课程标准_2022.pdf')}#page=${page}`} target="_blank" rel="noopener noreferrer">打开原页（文件第 {page} 页）</a>}</p><div className="machine-check-row"><button type="button" className="secondary" disabled={machineRunning} onClick={() => void runMachineCheck()}>{machineRunning ? '正在匹配切片文本…' : '机器核验教材映射与定位'}</button>{machineMessage && <p role="status">{machineMessage}</p>}</div></section>
+      <section className="source-detail"><h3>课程标准</h3><p>导入定位：{objective['课标文件页／正文页'] ? curriculumLocatorLabel(objective['课标文件页／正文页']) : '待核验'}；指标级定位：{indicatorCheck?.curriculum_locator || '待核对'}</p><p>主题课标核验：{topicCheck?.curriculum_check || '待核对'}。{page && <a href={`${learningApi.sourceUrl('课程标准_2022.pdf')}#page=${page}`} target="_blank" rel="noopener noreferrer">打开原页（文件第 {page} 页）</a>}</p><div className="machine-check-row"><button type="button" className="secondary" disabled={machineRunning} onClick={() => void runMachineCheck(selectedId)}>{machineRunning ? '正在匹配切片文本…' : '机器核验教材映射与定位'}</button>{machineMessage && <p role="status">{machineMessage}</p>}</div></section>
       <section className="source-detail"><h3>教材来源</h3><p>导入定位：{objective['教材正文页'] || '待核验'}；指标级定位：{indicatorCheck?.textbook_locator || '待核对'}</p><p>主题教材核验：{topicCheck?.textbook_check || '待核对'}</p>{topicCheck?.textbook_slices?.length ? <p>原页：{topicCheck.textbook_slices.map(name => <a key={name} href={learningApi.sourceUrl(name)} target="_blank" rel="noopener noreferrer">{name} </a>)}</p> : <p>当前运行没有教材原页链接。</p>}</section>
       {catalogFailed && <p className="warn" role="alert">材料目录暂不可用；来源签核历史已单独读取。<button type="button" className="text-action" onClick={() => void refreshSourceData()}>重试加载材料目录</button></p>}
       {catalogEntry && <section className="source-detail" aria-label="材料目录与来源文件核验"><h3>材料目录与来源文件核验</h3><p>签核状态：{catalogEntry.source_stale ? '来源已变化，需重新核验' : verificationLabel(catalogEntry.source_status)}</p><p>指标级定位：课标 {catalogEntry.curriculum_locator || '待补充'}；教材 {catalogEntry.textbook_locator || '待补充'}</p>{catalogEntry.documents.map(document => <div className="row" key={document.name}><strong>{document.name}</strong><p>状态：{documentStatusLabel(document.status)} · {document.page_count === null || document.page_count === undefined ? '页数未知' : `共 ${document.page_count} 页`}{document.expected_file_page ? ` · 赛题文件页 ${document.expected_file_page}` : ''}{document.body_page ? ` · 正文页 ${document.body_page}` : ''}</p><p>SHA-256：{document.sha256 || '文件缺失'}</p><a href={`${learningApi.sourceUrl(document.name)}${document.expected_file_page ? `#page=${document.expected_file_page}` : ''}`} target="_blank" rel="noopener noreferrer">{document.expected_file_page ? `打开第 ${document.expected_file_page} 页` : '打开来源文件'}</a></div>)}{catalogEntry.materials.filter(material => material.resource_type !== '题目').map(material => <div className="row" key={material.material_id}><strong>{material.material_id} · {material.resource_type}</strong><p>{material.title || material.source || '材料内容待核对'}</p><p>{material.verified ? `已核验用途：${material.purpose} · ${material.source_locator}` : '需完成指标级人工来源映射'}</p></div>)}</section>}

@@ -60,6 +60,19 @@ export interface SourceVerification {
   reason: string;
   version: number;
   reviewed_at: string;
+  // 契约 #5：机器核验层署名与证据快照（机器核验管线的记录才携带）。
+  verified_by?: string | null;
+  confidence?: number | null;
+  machine_evidence?: Array<{
+    type: string;
+    material_id?: string;
+    slice?: string;
+    page?: number;
+    keywords_matched?: string[];
+    keywords_total?: number;
+    excerpt?: string;
+    confidence?: number;
+  }>;
 }
 
 export interface ResourceLink {

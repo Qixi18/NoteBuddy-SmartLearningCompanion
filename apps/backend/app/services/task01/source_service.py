@@ -64,9 +64,14 @@ class SourceService:
         }
         try:
             reader = PdfReader(BytesIO(content), strict=False)
-            text_pages = [
-                bool((page.extract_text() or "").strip()) for page in reader.pages
-            ]
+            text_pages = []
+            for page in reader.pages:
+                try:
+                    text_pages.append(bool((page.extract_text() or "").strip()))
+                except (OSError, ValueError, TypeError, PdfReadError, PdfStreamError):
+                    # 个别页面字体编码异常（如缺少 fontTools 的 CFF Type1）；
+                    # 该页按无文本处理，不影响其余页面的检查。
+                    text_pages.append(False)
         except (OSError, ValueError, PdfReadError, PdfStreamError):
             return {**result, "status": "unreadable", "page_count": None}
         return {
@@ -94,7 +99,10 @@ class SourceService:
         for number in sorted(set(page_numbers)):
             if number < 1 or number > len(reader.pages):
                 continue
-            text = (reader.pages[number - 1].extract_text() or "").strip()
+            try:
+                text = (reader.pages[number - 1].extract_text() or "").strip()
+            except (OSError, ValueError, TypeError, PdfReadError, PdfStreamError):
+                continue
             if text:
                 pages.append({"name": name, "page": number, "text": text[:12000]})
         return pages
