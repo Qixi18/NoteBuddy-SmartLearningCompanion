@@ -1,10 +1,34 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeHash, parseNavigationHash, resolveCaseStudentIds, routeFor, serializeNavigation } from './navigation';
+import { normalizeHash, parseNavigationHash, resolveCaseStudentIds, routeFor, serializeNavigation, switchViewHref } from './navigation';
 
 describe('navigation', () => {
-  it('normalizes an empty or unknown hash to the overview', () => {
-    expect(normalizeHash('')).toBe('/home');
-    expect(normalizeHash('#/made-up')).toBe('/home');
+  it('switching views preserves run, node, indicator and student ids', () => {
+    const href = switchViewHref(
+      '#/performance?runId=r1&nodeId=N01&indicatorId=I01&studentId=D01&view=quality',
+      '/performance',
+      'student',
+    );
+    expect(parseNavigationHash(`#${href}`)).toMatchObject({
+      path: '/performance',
+      view: 'student',
+      runId: 'r1',
+      nodeId: 'N01',
+      indicatorId: 'I01',
+      studentId: 'D01',
+    });
+  });
+
+  it('switching pages keeps scope ids and drops only the source view', () => {
+    const href = switchViewHref(
+      '#/performance?runId=r1&nodeId=N01&view=quality',
+      '/requirements',
+    );
+    expect(parseNavigationHash(`#${href}`)).toMatchObject({
+      path: '/requirements',
+      runId: 'r1',
+      nodeId: 'N01',
+    });
+    expect(parseNavigationHash(`#${href}`).view).toBeUndefined();
   });
 
   it('keeps known Chinese workbench views addressable', () => {

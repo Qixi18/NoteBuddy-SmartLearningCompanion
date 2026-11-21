@@ -129,3 +129,11 @@ export function resolveCaseStudentIds(state: NavigationState, currentRunId: stri
 export function routeFor(path: RoutePath) {
   return routes.find(route => route.path === path) ?? routes[0];
 }
+
+// 同范围切页：保留当前 URL 里的批次/节点/指标/学生等选择，仅切换页面与视图。
+// 依据：重构规划 §5 切换规则 1——同一范围切页保留当前选择。
+export function switchViewHref(currentHash: string, path: RoutePath, view?: NavigationView): string {
+  const state = parseNavigationHash(currentHash);
+  const next: NavigationState = { ...state, path, view };
+  return serializeNavigation(next).slice(1);
+}

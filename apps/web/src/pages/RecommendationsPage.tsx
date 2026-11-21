@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { AnalysisRun, AIAnalysisFinding, Draft, Review, ReviewStatus, StructuredPlan, TeachingPlanV2, WorkbenchReadiness, EvidenceReference } from '../api/types';
 import type { NavigationView } from '../app/navigation';
+import { switchViewHref } from '../app/navigation';
 import { AIAnalysisPanel } from '../features/ai-analysis/AIAnalysisPanel';
 import { ReviewPanel } from '../features/task03/components/ReviewPanel';
 import { TeachingAdjustmentsPanel } from '../features/task03/components/TeachingAdjustmentsPanel';
@@ -34,7 +35,7 @@ export function RecommendationsPage({ run, view, student, indicator, node, revie
     next[emptySlot] = student;
     addToPreparation(next);
   };
-  const recommendationNavigation = <nav className="recommendation-views" aria-label="学习建议视图">{([['read', '建议阅读与复核'], ['observe', '观察与调整']] as const).map(([target, label]) => <button type="button" key={target} className="text-action" aria-current={(view ?? 'read') === target ? 'page' : undefined} onClick={() => onNavigate(`/recommendations?view=${target}`)}>{label}</button>)}</nav>;
+  const recommendationNavigation = <nav className="recommendation-views" aria-label="学习建议视图">{([['read', '建议阅读与复核'], ['observe', '观察与调整']] as const).map(([target, label]) => <button key={target} type="button" className={`text-action${(view ?? 'read') === target ? ' active' : ''}`} aria-current={(view ?? 'read') === target ? 'page' : undefined} onClick={() => onNavigate(switchViewHref(window.location.hash, '/recommendations', target))}>{label}</button>)}</nav>;
   if (view === 'observe') return <>{recommendationNavigation}<TeachingAdjustmentsPanel run={run} reviews={reviews} onSaved={onDataChanged} onDirtyChange={onDirtyChange} onBeforeScopeChange={onBeforeScopeChange} /></>;
   const observation = student && indicator && node ? run.observations.find(item => item.student_id === student && item.indicator_id === indicator && item.node_id === node) : undefined;
   return <>{recommendationNavigation}
