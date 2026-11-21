@@ -732,7 +732,11 @@ def test_resource_links_include_unscoped_textbook_and_card_with_server_metadata(
         }
         for material_id in supporting_ids
     )
-    client = client_for(tmp_path, tables=tables)
+    client = client_for(
+        tmp_path,
+        config=replace(settings, source_files_dir=tmp_path / "no-source-files"),
+        tables=tables,
+    )
     payload = {
         "indicator_id": "T01I1",
         "status": "verified",
