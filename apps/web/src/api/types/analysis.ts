@@ -94,7 +94,7 @@ export interface AnalysisRun {
   objectives: Objective[];
   items: LearningItem[];
   students: Student[];
-  nodes: Array<{ '节点编号': string; '可用题目编号': string }>;
+  nodes: Array<{ '节点编号': string; '可用题目编号': string; '模拟测验日期'?: string; '已教及测量主题'?: string; '说明'?: string }>;
   metrics: Metric[];
   responses: ResponseRecord[];
   raw_responses?: ResponseRecord[];

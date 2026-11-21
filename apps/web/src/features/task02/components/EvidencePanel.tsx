@@ -1,6 +1,7 @@
 import type { AnalysisRun } from '../../../api/types';
 import { Panel } from '../../../components/Panel';
 import { dispositionLabel } from '../qualityLabels';
+import { nodeLabel } from '../../../app/glossary';
 import { useEffect, useState } from 'react';
 export function EvidencePanel({ run, student, indicator, node: activeNode, onNode, focusEvidence, onClose }: { run: AnalysisRun; student: string; indicator: string; node?: string; onNode?: (id: string) => void; focusEvidence?: { recordId: string; sourceLine: number } | null; onClose?: () => void }) {
   const [localNode, setLocalNode] = useState(run.nodes[0]?.['节点编号'] ?? '');
@@ -30,7 +31,7 @@ export function EvidencePanel({ run, student, indicator, node: activeNode, onNod
   const source = (row: typeof records[number]) => run.quality.record_dispositions?.find(item => item.record_id === row['记录编号'] && item.source_line === row._source_line);
   const disposition = (row: typeof records[number]) => source(row)?.disposition ?? 'unknown';
   const rubricLabel: Record<string, string> = { valid: '校验一致', conflict: '评分点冲突', unknown: '未知' };
-  return <Panel title="作答证据与评分点"><button type="button" className="text-action" onClick={onClose}>返回学生分析</button><div className="scope-summary"><strong>{student || '未选学生'} · {indicator || '未选指标'} · 节点 {node || '未选择'}</strong><span>当前范围共 {records.length} 条原始行，包含修订和待处理记录；只有通过校验的记录进入评分。</span></div><label>证据节点<select value={node} onChange={event => chooseNode(event.target.value)}><option value="">请选择测验节点</option>{run.nodes.map(item => <option key={item['节点编号']} value={item['节点编号']}>{item['节点编号']}</option>)}</select></label>{records.length ? <div className="evidence-list">{records.map((row, index) => {
+  return <Panel title="作答证据与评分点"><button type="button" className="text-action" onClick={onClose}>返回学生分析</button><div className="scope-summary"><strong>{student || '未选学生'} · {indicator || '未选指标'} · 节点 {node || '未选择'}</strong><span>当前范围共 {records.length} 条原始行，包含修订和待处理记录；只有通过校验的记录进入评分。</span></div><label>证据节点<select value={node} onChange={event => chooseNode(event.target.value)}><option value="">请选择测验节点</option>{run.nodes.map(item => <option key={item['节点编号']} value={item['节点编号']}>{nodeLabel(item)}</option>)}</select></label>{records.length ? <div className="evidence-list">{records.map((row, index) => {
     const item = run.items.find(entry => entry['材料编号'] === row['材料编号']);
     const rubric = run.rubric_observations?.find(observation => observation.record_id === row['记录编号'] && observation.student_id === row['学生编号'] && observation.item_id === row['材料编号'] && observation.node_id === row['节点编号']);
     const selected = run.responses.some(response => response['记录编号'] === row['记录编号'] && response._source_line === row._source_line);

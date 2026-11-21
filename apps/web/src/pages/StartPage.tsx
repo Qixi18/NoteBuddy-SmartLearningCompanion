@@ -10,6 +10,16 @@ export function StartPage({ run, readiness, student, node, draft, review, onNavi
     ['作答记录', run.quality.raw_rows, '含版本与待处理记录'],
     ['有效评分', run.quality.eligible_scored, '计入得分统计'],
   ];
+  const pendingSourceCount = run.source_index.filter(entry => entry.verification === 'pending').length;
+  const readinessTasks: Array<{ key: string; label: string; action?: string; path: string }> = [];
+  if (readiness?.sources.status === 'missing') {
+    readinessTasks.push({ key: 'sources-missing', label: '来源 PDF 未找到：来源预览和 AI 课标证据暂时不可用', action: '查看学习要求', path: '/requirements' });
+  } else if (pendingSourceCount > 0) {
+    readinessTasks.push({ key: 'sources-pending', label: `学习要求来源待核对 ${pendingSourceCount} 项：核对完成后 AI 才能引用课标原文`, action: '去核对', path: '/requirements' });
+  }
+  if (readiness?.model.configured === false) {
+    readinessTasks.push({ key: 'model-missing', label: '模型未配置：AI 辅助不可用；统计与规则草稿不受影响', path: '' });
+  }
   const tasks = [
     { path: '/requirements', title: '学习要求', icon: 'subject', description: '本次要学什么，题目和材料依据在哪里。' },
     { path: '/performance', title: '已有表现', icon: 'insights', description: '学生的记录说明什么，还有哪些限制。' },
@@ -34,6 +44,7 @@ export function StartPage({ run, readiness, student, node, draft, review, onNavi
       <button onClick={() => onNavigate(nextStep.path)}>{nextStep.action}<span aria-hidden="true"> →</span></button>
     </section>
     <section className="stat-grid" aria-label="当前运行摘要">{summary.map(([label, value, note]) => <article className="stat-block" key={label}><span className="stat-label">{label}</span><strong>{value}</strong><small>{note}</small></article>)}</section>
+    <p className="muted stat-note">未作答、待评分与已排除的记录不计入得分统计；缺少记录不等于未掌握。</p>
     <section className="overview-routes" aria-labelledby="overview-routes-title"><header className="section-heading"><h2 id="overview-routes-title">从这里继续</h2></header><div className="entry-list">{tasks.map(task => <button className="entry-link" key={task.path} onClick={() => onNavigate(task.path)}><span className="entry-icon"><NavIcon name={task.icon} /></span><span className="entry-copy"><strong>{task.title}</strong><span>{task.description}</span></span><span className="entry-arrow" aria-hidden="true" /></button>)}</div></section>
     <section className="overview-detail-grid"><article className="overview-panel attention-panel"><header className="overview-panel-header"><h2>系统已处理</h2><span className={`attention-count${attention.length ? ' has-attention' : ''}`}>{attention.length ? `${attention.length} 项` : '无异常'}</span></header>
       <p className="muted">无效记录由系统自动排除，不计入统计；提示保留作追溯，无需逐条人工核对。</p>
@@ -41,6 +52,7 @@ export function StartPage({ run, readiness, student, node, draft, review, onNavi
       <button className="text-action" onClick={() => onNavigate('/performance?view=quality')}>查看详情 <span aria-hidden="true">↗</span></button></article>
       <article className="overview-panel scope-panel"><header className="overview-panel-header"><h2>分析范围与来源</h2></header><p>覆盖 {run.nodes.length} 个测验节点。统计依据通过校验的作答；没有有效记录的范围不代表学生未掌握。</p>
         {readiness && <div className={`source-status-row ${readiness.sources.status === 'missing' ? 'needs-source' : ''}`}><div><strong>来源 PDF</strong><span>{readiness.sources.status === 'missing' ? '当前未找到来源文件' : `找到 ${readiness.sources.pdf_count} 份，按指标核验`}</span></div><button className="text-action" onClick={() => onNavigate('/requirements')}>查看来源 <span aria-hidden="true">↗</span></button></div>}
+        {readinessTasks.length > 0 && <div className="readiness-tasks"><strong>待完成</strong><ul>{readinessTasks.map(task => <li key={task.key}><span>{task.label}</span>{task.path && <button className="text-action" onClick={() => onNavigate(task.path)}>{task.action} <span aria-hidden="true">↗</span></button>}</li>)}</ul></div>}
         <p className="scope-footnote">规则版本 {run.rule_version} · 原始行与事件按不同口径统计</p></article></section>
   </>;
 }

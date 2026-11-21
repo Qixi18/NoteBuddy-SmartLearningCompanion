@@ -65,7 +65,7 @@ describe('WorkbenchPage empty state', () => {
 
   it('does not invent a student target on the recommendation page', () => {
     render(<WorkbenchPage {...defaults} path="/recommendations" student="" />);
-    expect(screen.getByText('请选择一名学生，再查看或生成对应范围的学习建议。')).not.toBeNull();
+    expect(screen.getByText('请选择一名学生，查看该生跨指标、跨测验节点的整体学习分析与建议。')).not.toBeNull();
     expect(screen.queryByRole('button', { name: '生成规则草稿' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '观察与调整' }));
     expect(defaults.onNavigate).toHaveBeenCalledWith('/recommendations?view=observe');

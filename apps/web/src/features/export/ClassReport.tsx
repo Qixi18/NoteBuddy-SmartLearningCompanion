@@ -3,6 +3,7 @@ import type { AnalysisRun, CompetitionClassReport } from '../../api/types';
 import { learningApi } from '../../api/client';
 import { Panel } from '../../components/Panel';
 import { printReport } from './printReport';
+import { nodeLabel } from '../../app/glossary';
 
 export function ClassReport({ run, node, onNode }: { run: AnalysisRun; node: string; onNode: (node: string) => void }) {
   const [result, setResult] = useState<{ node: string; report?: CompetitionClassReport; error?: string }>();
@@ -22,7 +23,7 @@ export function ClassReport({ run, node, onNode }: { run: AnalysisRun; node: str
   }, [node, run.run_id]);
 
   return <Panel id="class-report" title="两班对照阅读报告" className="competition-class-report report-view">
-    <div className="report-toolbar"><p>共性观察、共同题目口径和覆盖范围来自当前运行的班级证据。</p><div><label>报告节点 <select aria-label="班级报告节点" value={node} onChange={event => onNode(event.target.value)}>{run.nodes.map(item => <option key={item['节点编号']} value={item['节点编号']}>{item['节点编号']}</option>)}</select></label><button className="secondary" disabled={!report || report.status !== 'ready'} onClick={() => printReport('class-report')}>打印 / 保存为 PDF</button></div></div>
+    <div className="report-toolbar"><p>共性观察、共同题目口径和覆盖范围来自当前运行的班级证据。</p><div><label>报告节点 <select aria-label="班级报告节点" value={node} onChange={event => onNode(event.target.value)}>{run.nodes.map(item => <option key={item['节点编号']} value={item['节点编号']}>{nodeLabel(item)}</option>)}</select></label><button className="secondary" disabled={!report || report.status !== 'ready'} onClick={() => printReport('class-report')}>打印 / 保存为 PDF</button></div></div>
     {current?.error && <p role="alert" className="error">报告读取失败：{current.error}</p>}
     {node && !current && <p role="status" className="muted">正在读取 {node} 的班级报告…</p>}
     {report && <div className="class-report-content"><header><span className="eyebrow">运行 {report.run_id} · 节点 {report.node_id}</span><h3>班级共性、差异与覆盖</h3></header>
