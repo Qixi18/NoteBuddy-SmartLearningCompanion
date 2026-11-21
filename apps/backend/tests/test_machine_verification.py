@@ -57,10 +57,12 @@ ENGLISH_PAGE = [
 
 
 def test_indicator_keywords_splits_on_particles():
+    # 切分片段在前，领域词表命中项在后（同类项由词表补充）。
     assert mvs.indicator_keywords("识别同类项、去括号并化简") == [
         "识别同类项",
         "去括号",
         "化简",
+        "同类项",
     ]
 
 

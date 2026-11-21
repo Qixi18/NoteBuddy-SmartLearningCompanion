@@ -21,17 +21,58 @@ from pypdf.errors import PdfReadError, PdfStreamError
 from ...application.ports.file_storage import FileStorage
 from ...infrastructure.files.local_file_storage import LocalFileStorage
 
-# 把观察指标切成可检索的关键词片段：中文连接词与虚词作为分隔。
+# 把观察指标切成可检索的关键词片段：中文连接词、虚词作为分隔。
+# 注意：不把"解""释""简"等常用字作为分隔符，避免拆坏"解释""解方程""化简"这类词；
+# "解一元一次方程"这类长段由二元组匹配兜底。
 _SEGMENT_SPLIT = re.compile(
-    r"[，。、；：！？（）()\s的与和及或并了是在中为到对由从被把时若以及其中]+"
+    r"[，。、；：！？（）()\s的与和及或并了是在中为到对由从被把时若以及其中"
+    r"运用根据能会进行正确实写出说明检验结合判断理掌握初综合应用]+"
 )
+
+# 七年级数学领域词表：出现于观察指标中的词项作为额外关键词。
+# 词表覆盖本赛题三个主题的核心概念，随教材表述差异仍由二元组匹配兜底。
+_DOMAIN_LEXICON = (
+    "代数式",
+    "整式",
+    "同类项",
+    "去括号",
+    "合并同类项",
+    "化简",
+    "代入",
+    "求值",
+    "数量关系",
+    "等式",
+    "等式的性质",
+    "等式性质",
+    "一元一次方程",
+    "二元一次方程组",
+    "方程组",
+    "消元",
+    "不等式",
+    "不等式组",
+    "不等式的性质",
+    "不等式性质",
+    "交集",
+    "解集",
+    "负数",
+    "乘除",
+    "检验",
+)
+
+
+def _domain_lexicon_keywords(indicator_text: str) -> list[str]:
+    return [term for term in _DOMAIN_LEXICON if term in (indicator_text or "")]
 
 _MATCH_MIN_KEYWORDS = 2
 _MATCH_MIN_RATIO = 0.5
 
 
 def indicator_keywords(indicator_text: str) -> list[str]:
-    """Return de-duplicated searchable keyword segments for an indicator."""
+    """Return de-duplicated searchable keywords for an indicator.
+
+    关键词 = 虚词切分片段 + 领域词表命中项。词表项解决教材表述与
+    课程要求表述的用字差异（如"求代数式的值" vs "求值"）。
+    """
     keywords: list[str] = []
     for segment in _SEGMENT_SPLIT.split(indicator_text or ""):
         segment = segment.strip()
@@ -41,6 +82,9 @@ def indicator_keywords(indicator_text: str) -> list[str]:
             and segment not in keywords
         ):
             keywords.append(segment)
+    for term in _domain_lexicon_keywords(indicator_text):
+        if term not in keywords:
+            keywords.append(term)
     return keywords
 
 
@@ -61,13 +105,29 @@ def _page_texts(path: Path) -> list[dict[str, Any]]:
     return pages
 
 
+def _keyword_matches(keyword: str, text_lower: str) -> bool:
+    """关键词命中：完整子串，或（≥3 字词）二元组覆盖率 ≥60%。
+
+    二元组覆盖让"等式性质"能命中教材里的"等式的性质"，
+    避免教材表述与课程要求表述的用字差异导致永远不命中。
+    """
+    lowered = keyword.lower()
+    if lowered in text_lower:
+        return True
+    if len(lowered) < 3:
+        return False
+    bigrams = {lowered[i : i + 2] for i in range(len(lowered) - 1)}
+    hit = sum(1 for bigram in bigrams if bigram in text_lower)
+    return hit / len(bigrams) >= 0.6
+
+
 def _matched_excerpt(page_text: str, keywords: list[str], limit: int = 120) -> str:
     lowered = page_text.lower()
     sentences = [s.strip() for s in re.split(r"[。！？\n]", page_text) if s.strip()]
     hits = [
         sentence
         for sentence in sentences
-        if any(k.lower() in lowered and k.lower() in sentence.lower() for k in keywords)
+        if any(_keyword_matches(k, sentence.lower()) for k in keywords)
     ]
     excerpt = "；".join(hits[:2])
     return excerpt[:limit]
@@ -77,10 +137,9 @@ def _best_page(
     pages: list[dict[str, Any]], keywords: list[str]
 ) -> dict[str, Any] | None:
     best: dict[str, Any] | None = None
-    lowered_keywords = [(k, k.lower()) for k in keywords]
     for page in pages:
         text_lower = page["text"].lower()
-        matched = [original for original, low in lowered_keywords if low in text_lower]
+        matched = [k for k in keywords if _keyword_matches(k, text_lower)]
         if not matched:
             continue
         if best is None or len(matched) > len(best["matched"]):
@@ -90,6 +149,33 @@ def _best_page(
                 "excerpt": _matched_excerpt(page["text"], matched),
             }
     return best
+
+
+def _slice_match(
+    pages: list[dict[str, Any]], keywords: list[str]
+) -> dict[str, Any] | None:
+    """切片级匹配：任一页命中的关键词并入切片覆盖集；定位页取命中最多的一页。"""
+    slice_matched: list[str] = []
+    best_page: dict[str, Any] | None = None
+    for page in pages:
+        text_lower = page["text"].lower()
+        matched = [k for k in keywords if _keyword_matches(k, text_lower)]
+        if not matched:
+            continue
+        slice_matched.extend(k for k in matched if k not in slice_matched)
+        if best_page is None or len(matched) > len(best_page["matched"]):
+            best_page = {"page": page["page"], "matched": matched}
+    if not slice_matched:
+        return None
+    excerpt = ""
+    if best_page is not None:
+        page_text = next(p["text"] for p in pages if p["page"] == best_page["page"])
+        excerpt = _matched_excerpt(page_text, best_page["matched"])
+    return {
+        "matched": slice_matched,
+        "page": best_page["page"] if best_page else None,
+        "excerpt": excerpt,
+    }
 
 
 def build_machine_verification(
@@ -150,7 +236,7 @@ def build_machine_verification(
             pages = extract(path)
         except (PdfReadError, PdfStreamError, OSError, TypeError, ValueError):
             continue
-        candidate = _best_page(pages, keywords)
+        candidate = _slice_match(pages, keywords)
         if candidate and (
             best is None or len(candidate["matched"]) > len(best["matched"])
         ):
