@@ -1,5 +1,6 @@
 import type { AnalysisRun } from '../../../api/types';
 import { Panel } from '../../../components/Panel';
+import { DispositionBar } from '../../../components/DispositionBar';
 import { dispositionLabel, findingLabel, severityLabel } from '../qualityLabels';
 
 type EvidenceScope = { studentId: string; indicatorId: string; nodeId: string };
@@ -28,6 +29,7 @@ export function QualityPanel({ run, onOpenEvidence }: { run: AnalysisRun; onOpen
 
     <section className="quality-group" aria-labelledby="quality-dispositions-title">
       <h3 id="quality-dispositions-title">记录如何进入分析 <span className="quality-helper">状态口径分开统计</span></h3>
+      <DispositionBar counts={quality.disposition_counts ?? {}} />
       {counts.length ? <div className="quality-counts">{counts.map(([name, count]) => <span className={`quality-count-${name}`} key={name}>{dispositionLabel(name)} · {count}</span>)}</div> : <p className="muted">当前运行没有逐行处置摘要。</p>}
       {quality.event_disposition_counts && <p className="muted"><strong>最终事件处置：</strong>{Object.entries(quality.event_disposition_counts).map(([name, count]) => `${dispositionLabel(name)} ${count}`).join(' · ')}</p>}
     </section>

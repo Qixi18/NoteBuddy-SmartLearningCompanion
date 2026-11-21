@@ -1,5 +1,6 @@
 import type { AnalysisRun, Draft, Review, WorkbenchReadiness } from '../api/types';
 import { NavIcon } from '../components/NavIcon';
+import { DispositionBar } from '../components/DispositionBar';
 import { findingLabel, severityLabel } from '../features/task02/qualityLabels';
 
 export function StartPage({ run, readiness, student, node, draft, review, onNavigate }: { run: AnalysisRun; readiness?: WorkbenchReadiness; student?: string; node?: string; draft?: Draft | null; review?: Review; onNavigate: (path: string) => void }) {
@@ -45,6 +46,7 @@ export function StartPage({ run, readiness, student, node, draft, review, onNavi
     </section>
     <section className="stat-grid" aria-label="当前运行摘要">{summary.map(([label, value, note]) => <article className="stat-block" key={label}><span className="stat-label">{label}</span><strong>{value}</strong><small>{note}</small></article>)}</section>
     <p className="muted stat-note">未作答、待评分与已排除的记录不计入得分统计；缺少记录不等于未掌握。</p>
+    <DispositionBar counts={run.quality.disposition_counts ?? {}} compact />
     <section className="overview-routes" aria-labelledby="overview-routes-title"><header className="section-heading"><h2 id="overview-routes-title">从这里继续</h2></header><div className="entry-list">{tasks.map(task => <button className="entry-link" key={task.path} onClick={() => onNavigate(task.path)}><span className="entry-icon"><NavIcon name={task.icon} /></span><span className="entry-copy"><strong>{task.title}</strong><span>{task.description}</span></span><span className="entry-arrow" aria-hidden="true" /></button>)}</div></section>
     <section className="overview-detail-grid"><article className="overview-panel attention-panel"><header className="overview-panel-header"><h2>系统已处理</h2><span className={`attention-count${attention.length ? ' has-attention' : ''}`}>{attention.length ? `${attention.length} 项` : '无异常'}</span></header>
       <p className="muted">无效记录由系统自动排除，不计入统计；提示保留作追溯，无需逐条人工核对。</p>
