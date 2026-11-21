@@ -99,7 +99,11 @@ export function normalizeHash(hash: string): RoutePath {
 export function serializeNavigation(state: NavigationState): string {
   const params = new URLSearchParams();
   const view = validView(state.path, state.view ?? null);
-  if (view && view !== pageViews[state.path]) params.set('view', view);
+  // 当 URL 携带 studentId/recordId 时，解析端的视图推断会把无 view 的默认视图
+  // 覆盖成 student/evidence；此时显式写出 view（含默认视图），保证
+  // "班级比较"这类显式切换往返后不被推断顶掉。
+  const needsExplicitView = Boolean(state.studentId || state.recordId);
+  if (view && (view !== pageViews[state.path] || needsExplicitView)) params.set('view', view);
   for (const key of ['runId', 'nodeId', 'indicatorId', 'classId', 'studentId', 'recordId'] as const) {
     const value = safeId(state[key] ?? null);
     if (value) params.set(key, value);
