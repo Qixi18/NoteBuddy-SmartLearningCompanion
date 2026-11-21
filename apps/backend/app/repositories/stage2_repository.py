@@ -89,6 +89,37 @@ class Stage2Repository(SqlAlchemyRepository):
             )
             return record
 
+    def annotate_spot_check(
+        self,
+        run_id: str,
+        indicator_id: str,
+        version: int,
+        entry: dict,
+    ) -> dict:
+        """抽查留痕：在指定版本的机器核验记录上追加抽查注记。
+
+        只追加 spot_checks 元数据，不改变状态、署名与版本号——抽查是
+        人工监督痕迹，不是新的签核决定。
+        """
+        with self.session_scope(write=True) as session:
+            row = session.scalars(
+                select(SourceVerificationRow)
+                .where(
+                    SourceVerificationRow.run_id == run_id,
+                    SourceVerificationRow.indicator_id == indicator_id,
+                    SourceVerificationRow.version == version,
+                )
+                .limit(1)
+            ).first()
+            if row is None:
+                raise ValueError("未找到待抽查的签核记录")
+            record = json.loads(row.payload_json)
+            checks = list(record.get("spot_checks") or [])
+            checks.append(entry)
+            record["spot_checks"] = checks
+            row.payload_json = json.dumps(record, ensure_ascii=False)
+            return record
+
     def append_case(self, run_id: str, student_id: str, payload: dict) -> dict:
         with self.session_scope(write=True) as session:
             latest = session.scalars(

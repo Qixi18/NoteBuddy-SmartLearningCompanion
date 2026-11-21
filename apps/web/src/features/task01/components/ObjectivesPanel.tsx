@@ -49,6 +49,9 @@ export function ObjectivesPanel({ run, indicatorId, onIndicatorChange, onSaved, 
   const [judgmentNote, setJudgmentNote] = useState('');
   const [judgmentMessage, setJudgmentMessage] = useState('');
   const [judgmentSaving, setJudgmentSaving] = useState(false);
+  const [spotReviewer, setSpotReviewer] = useState('');
+  const [spotMessage, setSpotMessage] = useState('');
+  const [spotSaving, setSpotSaving] = useState(false);
   const judgmentTarget = sourceHistory[selectedId]?.at(-1);
   useEffect(() => {
     let alive = true;
@@ -63,6 +66,25 @@ export function ObjectivesPanel({ run, indicatorId, onIndicatorChange, onSaved, 
   }, [selectedId, machineRefreshToken]);
   const toggleCandidate = (target: string) => {
     setSelectedCandidates(old => old.includes(target) ? old.filter(id => id !== target) : [...old, target]);
+  };
+  const saveSpotCheck = async () => {
+    setSpotSaving(true);
+    setSpotMessage('');
+    try {
+      await learningApi.recordSpotCheck({
+        indicator_id: selectedId,
+        reviewer: spotReviewer.trim(),
+        verdict: '抽查通过',
+        checked_items: (judgmentTarget?.machine_evidence ?? []).map(entry => `${entry.slice ?? ''}${entry.page ? ` 第 ${entry.page} 页` : ''}`.trim()),
+      });
+      setSpotMessage('抽查已登记：留痕进入该版本记录与导出包。');
+      setMachineRefreshToken(token => token + 1);
+      await refreshSourceData();
+    } catch (error) {
+      setSpotMessage(`抽查登记失败：${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setSpotSaving(false);
+    }
   };
   const saveTeacherJudgment = async () => {
     if (!judgmentTarget) return;
@@ -190,7 +212,7 @@ export function ObjectivesPanel({ run, indicatorId, onIndicatorChange, onSaved, 
       {run.objectives.filter(item => (item['主题'] || item['主题编号']) === topic).map(item => { const signoff = sourceHistory[item['指标编号']]?.at(-1); return <button type="button" className={`knowledge-option${objective['指标编号'] === item['指标编号'] ? ' selected' : ''}`} aria-current={objective['指标编号'] === item['指标编号'] ? 'true' : undefined} key={item['指标编号']} onClick={() => selectIndicator(item['指标编号'])}><strong>{item['指标编号']}</strong><span>{item['观察指标']}</span><small>关联题目 {run.items.filter(question => question['指标编号'] === item['指标编号']).length} 道 · {sourceHistoryLoaded && !sourceHistoryFailed ? verificationLabel(signoff?.status ?? run.source_index.find(entry => entry.indicator_id === item['指标编号'])?.verification, signoff?.stale) : sourceHistoryFailed ? '签核记录暂不可用' : '正在读取签核记录'}</small></button>; })}</section>)}
       <div className="verification-report">
         <div className="verification-report-head"><strong>核验进度 {verifiedCount}/{run.objectives.length}</strong><span>机器 {machineSignedCount} · 教师 {verifiedCount - machineSignedCount} · 待核对 {run.objectives.length - verifiedCount}</span><button type="button" className="secondary" disabled={machineRunning} onClick={() => void runMachineCheck()}>{machineRunning ? '正在匹配切片文本…' : '一键机器核验全部指标'}</button></div>
-        <ul className="verification-report-list">{verificationRows.map(row => { const status = row.latest?.stale ? '来源已变化' : row.latest?.status === 'verified' ? '已核验' : row.latest?.status === 'rejected' ? '已驳回' : row.latest ? '待复核' : '未核验'; const by = row.latest?.verified_by === 'machine' ? '机器' : row.latest?.reviewer ? `教师 ${row.latest.reviewer}` : '—'; const evidence = row.latest?.machine_evidence?.[0]; return <li key={row.item['指标编号']}><button type="button" className="verification-row" onClick={() => selectIndicator(row.item['指标编号'])}><strong>{row.item['指标编号']}</strong><span>{status} · {by}{row.latest?.confidence != null ? ` · 置信度 ${Math.round(row.latest.confidence * 100)}%` : ''}{evidence?.page ? ` · ${evidence.slice ?? ''} 第 ${evidence.page} 页` : ''}</span></button></li>; })}</ul>
+        <ul className="verification-report-list">{verificationRows.map(row => { const status = row.latest?.stale ? '来源已变化' : row.latest?.status === 'verified' ? '已核验' : row.latest?.status === 'rejected' ? '已驳回' : row.latest ? '待复核' : '未核验'; const by = row.latest?.verified_by === 'machine' ? '机器' : row.latest?.reviewer ? `教师 ${row.latest.reviewer}` : '—'; const evidence = row.latest?.machine_evidence?.[0]; return <li key={row.item['指标编号']}><button type="button" className="verification-row" onClick={() => selectIndicator(row.item['指标编号'])}><strong>{row.item['指标编号']}</strong><span>{status} · {by}{row.latest?.confidence != null ? ` · 置信度 ${Math.round(row.latest.confidence * 100)}%` : ''}{evidence?.page ? ` · ${evidence.slice ?? ''} 第 ${evidence.page} 页` : ''}{row.latest?.spot_checks?.length ? ' · 已抽查' : ''}</span></button></li>; })}</ul>
         {machineMessage && <p className="muted" role="status">{machineMessage}</p>}
       </div>
     </Panel>
@@ -214,6 +236,14 @@ export function ObjectivesPanel({ run, indicatorId, onIndicatorChange, onSaved, 
         <div className="scope-fields"><label>核验人<input value={judgmentReviewer} onChange={event => setJudgmentReviewer(event.target.value)} placeholder="填写教师姓名" /></label><label>确认说明<input value={judgmentNote} onChange={event => setJudgmentNote(event.target.value)} placeholder="默认：确认机器核验结果并补充学习顺序判断" /></label></div>
         <button type="button" className="secondary" disabled={judgmentSaving || !judgmentReviewer.trim()} onClick={() => void saveTeacherJudgment()}>{judgmentSaving ? '正在保存…' : '以教师署名确认'}</button>
         {judgmentMessage && <p role="status">{judgmentMessage}</p>}
+        <div className="spot-check-block">
+          <h4>抽查机器核验记录</h4>
+          <p className="muted">核对上方"打开原页"与机器给出的定位、摘录后，登记抽查结论；抽查留痕进入该版本记录与导出包。</p>
+          {(judgmentTarget.spot_checks ?? []).length > 0 && <ul className="spot-check-list">{(judgmentTarget.spot_checks ?? []).map((entry, index) => <li key={`${entry.reviewer}:${index}`}>{entry.verdict} · {entry.reviewer} · {(entry.at ?? '').slice(0, 10)}</li>)}</ul>}
+          <div className="scope-fields"><label>抽查核验人<input value={spotReviewer} onChange={event => setSpotReviewer(event.target.value)} placeholder="填写教师姓名" /></label></div>
+          <button type="button" className="secondary" disabled={spotSaving || !spotReviewer.trim()} onClick={() => void saveSpotCheck()}>{spotSaving ? '正在登记…' : '标记抽查通过'}</button>
+          {spotMessage && <p role="status">{spotMessage}</p>}
+        </div>
       </section>}
       {judgmentTarget && judgmentTarget.verified_by === 'teacher' && judgmentTarget.status === 'verified' && !judgmentTarget.stale && <p className="muted">本指标的机器核验与教师判断均已完成（版本 {judgmentTarget.version} · 教师 {judgmentTarget.reviewer || '未署名'}）。</p>}
       {catalogFailed && <p className="warn" role="alert">材料目录暂不可用；来源签核历史已单独读取。<button type="button" className="text-action" onClick={() => void refreshSourceData()}>重试加载材料目录</button></p>}

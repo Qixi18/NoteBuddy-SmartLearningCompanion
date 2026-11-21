@@ -249,6 +249,7 @@ class SourceVerificationRequest(BaseModel):
     verified_by: str | None = Field(default=None, max_length=100)
     confidence: float | None = Field(default=None, ge=0, le=1)
     machine_evidence: list[dict[str, Any]] = Field(default_factory=list)
+    spot_checks: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class CaseReviewRef(BaseModel):
@@ -487,6 +488,18 @@ class MachineVerificationSkipped(BaseModel):
 class MachineVerificationResponse(BaseModel):
     verified: list[SourceVerificationResponse] = Field(default_factory=list)
     skipped: list[MachineVerificationSkipped] = Field(default_factory=list)
+
+
+class SpotCheckRequest(BaseModel):
+    """抽查机制：教师对机器核验记录的抽样人工复核留痕。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    indicator_id: str = Field(min_length=1)
+    reviewer: str = Field(min_length=1, max_length=200)
+    verdict: Literal["抽查通过", "抽查发现问题"]
+    checked_items: list[str] = Field(default_factory=list)
+    note: str = Field(default="", max_length=2000)
 
 
 class MaterialCatalogDocument(BaseModel):

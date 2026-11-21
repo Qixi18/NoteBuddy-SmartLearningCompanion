@@ -32,5 +32,6 @@
   "reason": "已逐项核对原页与题目关联及评分点问题",
   "verified_by": null,
   "confidence": null,
-  "machine_evidence": []
+  "machine_evidence": [],
+  "spot_checks": []
 }

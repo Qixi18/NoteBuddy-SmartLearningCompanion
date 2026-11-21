@@ -12,6 +12,7 @@ from ...schemas.http import (
     MaterialCatalogResponse,
     SourceVerificationRequest,
     SourceVerificationResponse,
+    SpotCheckRequest,
     TeacherCaseRequest,
     TeacherCaseResponse,
     TeachingAdjustmentCreateRequest,
@@ -79,6 +80,19 @@ def run_machine_verification(
     """机器核验层：切片文本匹配自动写入机器署名的已核验记录。"""
     try:
         return use_cases.stage2.apply_machine_verification(payload.indicator_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post(
+    "/api/source-spot-check",
+    response_model=SourceVerificationResponse,
+    tags=["sources"],
+)
+def record_spot_check(payload: SpotCheckRequest, use_cases: UseCases) -> dict:
+    """抽查机制：教师抽样人工复核机器核验记录，留痕于该版本。"""
+    try:
+        return use_cases.stage2.record_spot_check(payload.model_dump())
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

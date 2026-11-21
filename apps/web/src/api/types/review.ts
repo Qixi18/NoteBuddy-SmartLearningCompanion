@@ -73,6 +73,13 @@ export interface SourceVerification {
     excerpt?: string;
     confidence?: number;
   }>;
+  spot_checks?: Array<{
+    reviewer: string;
+    verdict: string;
+    at?: string;
+    checked_items?: string[];
+    note?: string;
+  }>;
 }
 
 export interface ResourceLink {

@@ -240,3 +240,68 @@ def test_teacher_confirmation_flow_after_machine_verification(tmp_path, monkeypa
     listed = client.get("/api/source-verifications").json()["T01I1"]
     assert listed[-1]["verified_by"] == "teacher"
     assert listed[-2]["verified_by"] == "machine"
+
+
+def test_spot_check_records_audit_trail_on_machine_record(tmp_path, monkeypatch):
+    pdf_root = tmp_path / "pdfs"
+    pdf_root.mkdir()
+    (pdf_root / "B01_相关资料切片.pdf").write_bytes(b"%PDF-1.4 stub")
+    config = replace(settings, source_files_dir=pdf_root)
+    run = sample_run()
+    store = Store(tmp_path / "state", config=config)
+    store.database.create_schema_for_tests()
+    with store.uow_factory() as uow:
+        uow.runs.save(run)
+    monkeypatch.setattr(mvs, "_page_texts", lambda path: ENGLISH_PAGE)
+    client = TestClient(create_app(store, config))
+
+    confirmed = client.post("/api/source-machine-verification", json={})
+    assert confirmed.status_code == 200
+
+    spot = client.post(
+        "/api/source-spot-check",
+        json={
+            "indicator_id": "T01I1",
+            "reviewer": "数学教师乙",
+            "verdict": "抽查通过",
+            "checked_items": ["B01_相关资料切片.pdf 第 12 页"],
+        },
+    )
+    assert spot.status_code == 200
+    record = spot.json()
+    assert record["status"] == "verified"
+    assert record["verified_by"] == "machine"
+    assert record["spot_checks"][-1]["reviewer"] == "数学教师乙"
+    assert record["version"] == 1  # 抽查留痕不新增版本
+
+    listed = client.get("/api/source-verifications").json()["T01I1"]
+    assert listed[-1]["spot_checks"][-1]["verdict"] == "抽查通过"
+
+    # 教师署名记录不接受抽查
+    judgment = {
+        "indicator_id": "T01I1",
+        "status": "verified",
+        "curriculum_locator": "62／55",
+        "textbook_locator": "上册68—109",
+        "material_ids": confirmed.json()["verified"][0]["material_ids"],
+        "knowledge_links": [],
+        "resource_links": confirmed.json()["verified"][0]["resource_links"],
+        "source_fingerprints": confirmed.json()["verified"][0]["source_fingerprints"],
+        "expected_version": 1,
+        "reviewer": "数学教师甲",
+        "reason": "确认机器核验结果",
+        "verified_by": "teacher",
+    }
+    assert client.post("/api/source-verification", json=judgment).status_code == 200
+    refused = client.post(
+        "/api/source-spot-check",
+        json={"indicator_id": "T01I1", "reviewer": "数学教师乙", "verdict": "抽查通过"},
+    )
+    assert refused.status_code == 400
+    assert "机器核验" in refused.json()["error"]
+
+    invalid = client.post(
+        "/api/source-spot-check",
+        json={"indicator_id": "T01I1", "reviewer": "数学教师乙", "verdict": "很好"},
+    )
+    assert invalid.status_code in (400, 422)  # 无效结论被 schema 或用例拒绝

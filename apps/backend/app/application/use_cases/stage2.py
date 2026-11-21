@@ -82,6 +82,12 @@ class Stage2Decisions:
         signature = payload.get("verified_by")
         if signature and signature != "teacher":
             raise ValueError("教师签核署名只能标注为教师本人；机器核验走专用管线")
+        if (
+            payload.get("confidence") is not None
+            or payload.get("machine_evidence")
+            or payload.get("spot_checks")
+        ):
+            raise ValueError("教师签核不接受机器核验与抽查字段")
         with self.uow_factory() as uow:
             expected_version = payload.pop("expected_version", None)
             run = uow.runs.current()
@@ -265,6 +271,43 @@ class Stage2Decisions:
                 record = uow.stage2.append_source(run["run_id"], target, payload)
             verified.append(record)
         return {"verified": verified, "skipped": skipped}
+
+    def record_spot_check(self, payload: dict) -> dict:
+        """抽查机制：教师抽样人工复核机器核验记录，留痕于该版本记录。
+
+        只追加 spot_checks 元数据——不改状态、署名与版本号；
+        抽查发现问题时，教师应通过签核编辑器驳回或重新核验。
+        """
+        indicator_id = payload["indicator_id"]
+        reviewer = str(payload.get("reviewer", "")).strip()
+        verdict = payload.get("verdict")
+        if verdict not in ("抽查通过", "抽查发现问题"):
+            raise ValueError("抽查结论无效")
+        if not reviewer:
+            raise ValueError("抽查须填写核验人")
+        with self.uow_factory(immediate=False) as uow:
+            run = uow.runs.current()
+            fresh = self.with_source_freshness(
+                run, uow.stage2.list_sources(run["run_id"])
+            )
+            latest = (fresh.get(indicator_id) or [None])[-1]
+        if (
+            not latest
+            or latest.get("verified_by") != "machine"
+            or latest.get("status") != "verified"
+            or latest.get("stale")
+        ):
+            raise ValueError("抽查仅针对未过期的机器核验记录")
+        entry = {
+            "reviewer": reviewer,
+            "verdict": verdict,
+            "checked_items": payload.get("checked_items") or [],
+            "note": str(payload.get("note", "")).strip(),
+        }
+        with self.uow_factory() as uow:
+            return uow.stage2.annotate_spot_check(
+                run["run_id"], indicator_id, latest["version"], entry
+            )
 
     def save_case(self, payload: dict) -> dict:
         with self.uow_factory() as uow:

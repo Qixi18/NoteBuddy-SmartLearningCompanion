@@ -418,6 +418,9 @@ h3 { margin-top: 18px; font-size: 15px; font-weight: 700; }
 .student-profile-list .profile-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .student-profile-list .profile-unmeasured { padding: 2px 8px; border-radius: 999px; background: #eef1f5; color: #8a94a3; font-size: 11px; width: fit-content; }
 .student-profile-list small { color: var(--muted); }
+.spot-check-block { margin-top: 12px; padding-top: 10px; border-top: 1px dashed #cdd9e4; }
+.spot-check-block h4 { margin: 0 0 6px; font-size: 13px; }
+.spot-check-list { display: grid; gap: 3px; margin: 0 0 8px; padding: 0; list-style: none; font-size: 12px; color: #465b73; }
 .student-profile-radar { display: flex; align-items: center; gap: 8px; }
 .student-profile-radar .radar-chart { flex-shrink: 0; width: 240px; max-width: 46%; }
 .radar-ring, .radar-spoke { vector-effect: non-scaling-stroke; }
