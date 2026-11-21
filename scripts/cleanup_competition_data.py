@@ -30,23 +30,34 @@ def managed_targets(data_root: Path) -> list[Path]:
 
 
 def fingerprint(paths: list[Path]) -> str:
-    listing = []
+    listing: list[tuple[str, str]] = []
     for target in paths:
-        if target.is_file():
-            listing.append((str(target), target.stat().st_size))
-        else:
-            listing.extend(
-                (str(item), item.stat().st_size)
-                for item in sorted(target.rglob("*"))
-                if item.is_file() and not item.is_symlink()
-            )
+        if target.is_symlink():
+            listing.append((str(target), f"symlink:{target.readlink()}"))
+            continue
+        listing.append((str(target), "directory" if target.is_dir() else "file"))
+        files = [target] if target.is_file() else sorted(target.rglob("*"))
+        for item in files:
+            if item.is_symlink():
+                listing.append((str(item), f"symlink:{item.readlink()}"))
+                continue
+            if not item.is_file():
+                continue
+            content_hash = hashlib.sha256()
+            with item.open("rb") as stream:
+                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                    content_hash.update(chunk)
+            digest = content_hash.hexdigest()
+            listing.append((str(item.relative_to(target.parent)), digest))
     return hashlib.sha256(repr(listing).encode()).hexdigest()[:12]
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--apply", action="store_true", help="执行清理；默认只预览")
-    parser.add_argument("--stopped", action="store_true", help="确认应用和后台服务已停止")
+    parser.add_argument(
+        "--stopped", action="store_true", help="确认应用和后台服务已停止"
+    )
     parser.add_argument("--confirm", help="输入预览给出的清单指纹")
     args = parser.parse_args()
     root = Path(settings.data_dir).resolve()

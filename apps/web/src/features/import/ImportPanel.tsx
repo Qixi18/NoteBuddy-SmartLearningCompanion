@@ -32,7 +32,7 @@ export function ImportPanel({ onImported, onMessage }: { onImported: (id: string
     const oversized = pdfs.find(file => file.size > 100 * 1024 * 1024);
     if (oversized) { const text = `${oversized.name} 超过 DeepSeek OCR 单文件 100 MiB 限制。`; setFeedback(text); setFailed(true); onMessage(text, true); return; }
     if (pdfs.reduce((total, file) => total + file.size, 0) > 250 * 1024 * 1024) { const text = '所选 PDF 总大小超过单次导入 250 MiB 限制。'; setFeedback(text); setFailed(true); onMessage(text, true); return; }
-    setBusy(true); setFeedback('正在导入和分析（包含课程标准与教材 PDF 自动解析）…'); setFailed(false); onMessage('正在导入和分析…');
+    setBusy(true); setFeedback('正在本机导入 CSV 并保存来源文件…'); setFailed(false); onMessage('正在本机导入和分析…');
     try {
       const contents = Object.fromEntries(await Promise.all(expected.map(async name => [name, await selected.get(name)!.text()] as const)));
       const pdfFiles = Object.fromEntries(await Promise.all(
@@ -72,9 +72,10 @@ export function ImportPanel({ onImported, onMessage }: { onImported: (id: string
         onMessage(preview.status === 'api_key_missing' ? '未配置 OCR 服务密钥，未发送文件。' : '没有可识别的已登记来源 PDF。', preview.status === 'api_key_missing');
         return;
       }
-      const accepted = window.confirm(`OCR 服务：${preview.provider}\n将上传 ${names.length} 个文件：${names.join('、') || '无（仅使用缓存）'}\n已缓存 ${preview.cached_count} 个文件。服务按成功识别页计费。是否继续？`);
+      const fileSummary = names.map(name => `${name}（${preview.files[name].bytes ?? 0} 字节）`).join('、');
+      const accepted = window.confirm(`OCR 服务：${preview.provider}\n未缓存文件将发送：${fileSummary || '无（仅使用缓存）'}\n缓存命中：${preview.cached_count} 个文件。计费单位：成功识别页。确认后才会发送；文件清单变化需重新确认。是否继续？`);
       if (!accepted) return;
-      const result = await learningApi.sourceOcr();
+      const result = await learningApi.sourceOcr(preview.fingerprint);
       onMessage(`来源 OCR 完成：${result.parsed_file_count}/${result.file_count} 份文件。`);
     } catch (reason) {
       onMessage(reason instanceof Error ? reason.message : String(reason), true);
@@ -86,7 +87,7 @@ export function ImportPanel({ onImported, onMessage }: { onImported: (id: string
       <button type="button" className="secondary" disabled={busy} onClick={() => picker.current?.click()}>选择数据文件夹</button>
       <p>{folder ? `已选择 ${folder} · ${files.length} 个文件` : '尚未选择文件夹'}</p>
       <details className="required-files" open><summary>6 个必需 CSV 文件名</summary><ul>{['课程要求.csv', '题目与材料.csv', '模拟学生.csv', '测验节点.csv', '作答记录.csv', '字段说明.csv'].map(name => <li key={name}>{name}</li>)}</ul></details>
-      <p className={failed ? 'error' : 'muted'} role={failed ? 'alert' : 'status'} aria-live={failed ? 'assertive' : 'polite'}>{busy ? '正在导入和分析（包含课程标准与教材 PDF 自动解析）…' : feedback}</p>
+      <p className={failed ? 'error' : 'muted'} role={failed ? 'alert' : 'status'} aria-live={failed ? 'assertive' : 'polite'}>{busy ? '正在本机导入 CSV 并保存来源文件…' : feedback}</p>
       <button type="submit" disabled={busy || files.length === 0}>{busy ? '正在导入…' : '检查文件并导入'}</button>
       <button type="button" className="secondary" disabled={busy || ocrBusy} onClick={() => void recognizeSources()}>{ocrBusy ? '正在识别…' : '识别来源 PDF（按页计费）'}</button>
     </form>

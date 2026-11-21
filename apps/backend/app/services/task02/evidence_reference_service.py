@@ -28,8 +28,11 @@ def validate_coverage_reference(run: dict, reference: dict) -> dict:
     except (TypeError, KeyError, ValueError) as exc:
         raise ValueError("覆盖证据不属于当前运行或范围") from exc
     coverage = bundle.get("coverage", {})
-    if bundle.get("responses") or coverage.get("record_count") != 0:
-        raise ValueError("只有当前节点确实无作答记录时才能引用覆盖证据")
+    scored_count = coverage.get("scored_record_count")
+    if scored_count is None:
+        scored_count = coverage.get("record_count", 0)
+    if scored_count != 0:
+        raise ValueError("当前范围存在有效已评分证据，不能改用覆盖证据")
     if reference.get("evidence_id") != coverage.get("evidence_id"):
         raise ValueError("覆盖证据已过期或运行哈希不匹配")
     return coverage_reference(bundle)

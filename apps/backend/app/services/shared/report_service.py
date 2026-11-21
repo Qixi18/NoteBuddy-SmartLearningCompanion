@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from ..task02.evidence_bundle_service import build_evidence_bundle
+from ...domain.assessment.evidence_bundle import AnalysisScope
+
 
 def _confirmed_case(history: list[dict], run_id: str) -> dict | None:
     current = next(
@@ -58,11 +61,38 @@ def build_case_report(
     evidence = []
     for ref in evidence_refs:
         if ref.get("kind") == "coverage":
+            coverage = {}
+            try:
+                coverage = build_evidence_bundle(
+                    run, AnalysisScope(**ref.get("scope", {})), sources
+                )["coverage"]
+            except (TypeError, KeyError, ValueError):
+                pass
+            counts = coverage.get("record_disposition_counts", {})
+            if coverage.get("record_count") == 0:
+                description = (
+                    "当前学生、指标和节点范围没有作答记录；不代表缺席、零分或未掌握。"
+                )
+            elif coverage.get("scored_record_count") == 0:
+                states = (
+                    "、".join(
+                        f"{state}{count}条" for state, count in sorted(counts.items())
+                    )
+                    or "状态未知"
+                )
+                description = (
+                    f"当前范围有 {coverage.get('record_count', '未知')} 条原始记录，"
+                    f"有效已评分记录为 0 条（{states}）；不能据此推断成绩或掌握程度。"
+                )
+            else:
+                description = (
+                    "当前范围有有效已评分记录；该覆盖引用不得代替具体作答证据。"
+                )
             evidence.append(
                 {
                     "kind": "coverage",
                     "node_id": ref.get("scope", {}).get("node_id", ""),
-                    "description": "当前学生、指标和节点范围没有匹配的作答记录；不代表缺席、零分或未掌握。",
+                    "description": description,
                 }
             )
         else:
@@ -187,6 +217,8 @@ def build_case_report(
         "case_version": teacher_case.get("version"),
         "reviewer": teacher_case.get("reviewer", ""),
         "reviewed_at": teacher_case.get("reviewed_at", ""),
+        "need_type": teacher_case.get("need_type"),
+        "selection_reason": teacher_case.get("selection_reason", ""),
         "narrative": teacher_case.get("narrative", ""),
         "limitations": teacher_case.get("limitations", ""),
         "evidence": evidence,
@@ -276,6 +308,7 @@ def build_class_report(run: dict, node_id: str, insights: dict) -> dict:
         "status": "ready" if classes else "incomplete",
         "classes": classes,
         "comparisons": comparisons,
+        "source_mappings": insights.get("source_mappings", {}),
         "common_observations": [
             issue
             for issue in issues

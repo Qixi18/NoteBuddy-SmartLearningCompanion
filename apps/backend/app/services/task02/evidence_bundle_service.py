@@ -160,6 +160,15 @@ def build_evidence_bundle(
         "expected_material_ids": expected_material_ids,
         "observed_material_ids": observed_material_ids,
         "record_count": len(responses),
+        "scored_record_count": sum(
+            row.get("disposition") == "scored" for row in responses
+        ),
+        "record_disposition_counts": {
+            state: sum(row.get("disposition") == state for row in responses)
+            for state in sorted(
+                {row.get("disposition", "unknown") for row in responses}
+            )
+        },
     }
     coverage = {
         **coverage_basis,

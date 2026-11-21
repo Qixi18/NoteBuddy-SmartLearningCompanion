@@ -48,9 +48,12 @@ class GenerateAIAnalysis:
         key = scope_key(task, node_id, student_id, indicator_id)
         with self.uow_factory(immediate=False) as uow:
             run = uow.runs.current() if run_id is None else uow.runs.load(run_id)
-            if task in {"task02", "task03"} and node_id and node_id not in {
-                item.get("节点编号") for item in run.get("nodes", [])
-            }:
+            if (
+                task in {"task02", "task03"}
+                and node_id
+                and node_id
+                not in {item.get("节点编号") for item in run.get("nodes", [])}
+            ):
                 raise ValueError("测验节点不存在")
             if student_id and student_id not in {
                 item.get("学生编号") for item in run.get("students", [])
@@ -72,7 +75,11 @@ class GenerateAIAnalysis:
             requested_indicator = indicator_id
             for entry in run.get("source_index", []):
                 source_indicator_id = entry.get("indicator_id")
-                if task == "task03" and requested_indicator and source_indicator_id != requested_indicator:
+                if (
+                    task == "task03"
+                    and requested_indicator
+                    and source_indicator_id != requested_indicator
+                ):
                     continue
                 verification = latest.get(source_indicator_id, {})
                 if verification.get("status") != "verified" or verification.get(
@@ -90,7 +97,9 @@ class GenerateAIAnalysis:
                 if page_number is not None:
                     selected.setdefault("课程标准_2022.pdf", set()).add(page_number)
                 for name in entry.get("source_check", {}).get("textbook_slices", []):
-                    parsed = run.get("source_parsing", {}).get("files", {}).get(name, {})
+                    parsed = (
+                        run.get("source_parsing", {}).get("files", {}).get(name, {})
+                    )
                     pages = parsed.get("pages", [])
                     selected[name] = {
                         page.get("index", -1) + 1
@@ -98,7 +107,9 @@ class GenerateAIAnalysis:
                         if isinstance(page, dict) and isinstance(page.get("index"), int)
                     }
                 for name, page_numbers in selected.items():
-                    valid_numbers = sorted(number for number in page_numbers if number > 0)[:20]
+                    valid_numbers = sorted(
+                        number for number in page_numbers if number > 0
+                    )[:20]
                     if not valid_numbers:
                         continue
                     try:
@@ -284,9 +295,7 @@ class GenerateAIAnalysis:
                         "raw_records_included", 0
                     ),
                     "packet_total": total,
-                    "failure_details": result["coverage"].get(
-                        "failure_details", []
-                    ),
+                    "failure_details": result["coverage"].get("failure_details", []),
                 }
                 result["findings"] = [*old.get("findings", []), *result["findings"]]
                 result["status"] = "partial" if remaining else "complete"

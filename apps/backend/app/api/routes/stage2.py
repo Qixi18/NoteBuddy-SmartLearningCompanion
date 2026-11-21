@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ...application.use_cases.workbench import WorkbenchUseCases
 from ...repositories.stage2_repository import SourceVerificationVersionConflict
@@ -27,11 +27,21 @@ def ai_source_mappings(use_cases: UseCases) -> dict:
     return use_cases.indicator_mappings.list()
 
 
+@router.get("/api/ai-source-mappings/preview", tags=["sources"])
+def preview_ai_source_mappings(
+    use_cases: UseCases,
+    indicator_id: str | None = Query(default=None, min_length=1),
+) -> dict:
+    return use_cases.indicator_mappings.preview(indicator_id)
+
+
 @router.post("/api/ai-source-mappings", tags=["sources"])
 def generate_ai_source_mappings(
     payload: IndicatorMappingRequest, use_cases: UseCases
 ) -> dict:
-    return use_cases.indicator_mappings.generate(payload.indicator_id)
+    return use_cases.indicator_mappings.generate(
+        payload.indicator_id, payload.preview_fingerprint
+    )
 
 
 @router.get(

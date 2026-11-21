@@ -220,9 +220,20 @@ class SourceService:
             }
         send_count = sum(item["will_send"] for item in files.values())
         cached_count = sum(item["status"] == "cached" for item in files.values())
+        purpose = "rich_layout_recognition"
+        fingerprint = hashlib.sha256(
+            json.dumps(
+                {"provider": "deepseek", "purpose": purpose, "files": files},
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
         return {
             "provider": "deepseek",
-            "purpose": "rich_layout_recognition",
+            "purpose": purpose,
+            "billing_unit": "successful_page",
+            "fingerprint": fingerprint,
             "status": (
                 "ready"
                 if send_count and client

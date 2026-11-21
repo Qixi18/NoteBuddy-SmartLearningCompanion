@@ -105,7 +105,9 @@ def analyze_packets(
         body = {
             "model": model,
             "response_format": {"type": "json_object"},
-            "max_tokens": 4096 if (provider or "").strip().lower() == "deepseek" else 1400,
+            "max_tokens": 4096
+            if (provider or "").strip().lower() == "deepseek"
+            else 1400,
             "messages": [
                 {
                     "role": "system",
@@ -122,19 +124,28 @@ def analyze_packets(
             response = client.complete(body)
         except (LLMError, TimeoutError, ConnectionError, OSError) as exc:
             failed.append(packet["packet_id"])
-            failures.append({"packet_id": packet["packet_id"], "reason": f"provider:{type(exc).__name__}"})
+            failures.append(
+                {
+                    "packet_id": packet["packet_id"],
+                    "reason": f"provider:{type(exc).__name__}",
+                }
+            )
             continue
         try:
             candidate = _parse_response(response)
         except (TypeError, ValueError) as exc:
             failed.append(packet["packet_id"])
-            failures.append({"packet_id": packet["packet_id"], "reason": f"response:{str(exc)}"})
+            failures.append(
+                {"packet_id": packet["packet_id"], "reason": f"response:{str(exc)}"}
+            )
             continue
         try:
             validated = validate_packet_output(candidate, packet)
         except (TypeError, ValueError) as exc:
             failed.append(packet["packet_id"])
-            failures.append({"packet_id": packet["packet_id"], "reason": f"evidence:{str(exc)}"})
+            failures.append(
+                {"packet_id": packet["packet_id"], "reason": f"evidence:{str(exc)}"}
+            )
             continue
         for finding in validated["findings"]:
             finding["finding_id"] = f"{packet['packet_id']}:{finding['finding_id']}"

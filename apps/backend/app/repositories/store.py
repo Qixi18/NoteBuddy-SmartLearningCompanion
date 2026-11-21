@@ -63,7 +63,9 @@ class Store:
         self.review_service.source_service = self.sources
         self.imports.sources = self.sources
         ocr_key = config.deepseek_api_key or (
-            config.model_api_key if config.model_provider.strip().lower() == "deepseek" else ""
+            config.model_api_key
+            if config.model_provider.strip().lower() == "deepseek"
+            else ""
         )
         self.imports.ocr_client = (
             DeepSeekOCRAdapter(

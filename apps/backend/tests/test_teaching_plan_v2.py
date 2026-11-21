@@ -203,3 +203,22 @@ def test_diagnostic_plan_uses_coverage_evidence_when_student_has_no_records():
         }
     ]
     assert validate_teaching_plan(plan, empty, _sources()) == []
+
+
+def test_diagnostic_plan_uses_coverage_when_records_exist_but_none_are_scored():
+    pending = _bundle()
+    pending["responses"][0]["disposition"] = "pending"
+    pending["coverage"] = {
+        "evidence_id": "coverage-pending-only",
+        "record_count": 1,
+        "scored_record_count": 0,
+        "record_disposition_counts": {"pending": 1},
+    }
+    selection = _selection()
+    selection["purpose"] = "diagnostic"
+
+    plan = build_teaching_plan(pending, [], selection)
+
+    assert plan["evidence_refs"][0]["kind"] == "coverage"
+    assert plan["evidence_refs"][0]["evidence_id"] == "coverage-pending-only"
+    assert validate_teaching_plan(plan, pending, _sources()) == []

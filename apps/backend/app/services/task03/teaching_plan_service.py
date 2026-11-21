@@ -194,7 +194,7 @@ def validate_teaching_plan(
     for ref in plan.evidence_refs:
         if ref.kind == "coverage":
             if (
-                bundle.get("responses")
+                bundle.get("coverage", {}).get("scored_record_count", 0) > 0
                 or ref.evidence_id != coverage.get("evidence_id")
                 or ref.record_id
                 or ref.material_id

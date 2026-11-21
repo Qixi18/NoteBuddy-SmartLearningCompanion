@@ -124,6 +124,7 @@ def test_ocr_preview_only_marks_uncached_sources_for_explicit_send(tmp_path):
 
     assert preview["will_send_count"] == 1
     assert preview["files"][curriculum.name]["will_send"] is True
+    assert len(preview["fingerprint"]) == 64
     fingerprint = preview["files"][curriculum.name]["sha256"]
     sources._write_ocr_cache(
         fingerprint,
@@ -132,6 +133,10 @@ def test_ocr_preview_only_marks_uncached_sources_for_explicit_send(tmp_path):
     cached = sources.preview_registered_pdfs(run, client)
     assert cached["will_send_count"] == 0
     assert cached["cached_count"] == 1
+    assert cached["fingerprint"] != preview["fingerprint"]
+    curriculum.write_bytes(curriculum.read_bytes() + b"changed")
+    changed = sources.preview_registered_pdfs(run, client)
+    assert changed["fingerprint"] != cached["fingerprint"]
 
 
 def test_ocr_result_rejects_missing_or_duplicate_page_indexes(tmp_path):

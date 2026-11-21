@@ -38,7 +38,12 @@ def verify(path: Path) -> list[str]:
                 errors.append("成果包类型不是 competition_submission")
             if not manifest.get("run_id") or len(manifest.get("case_ids", [])) != 3:
                 errors.append("manifest 缺少运行 ID 或三名案例 ID")
-            for member in ("release_checks.json", "case_reports.json", "class_report.json", "submission.schema.json"):
+            for member in (
+                "release_checks.json",
+                "case_reports.json",
+                "class_report.json",
+                "submission.schema.json",
+            ):
                 if member not in names:
                     errors.append(f"正式成果包缺少成员：{member}")
             for member in names:

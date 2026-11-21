@@ -44,6 +44,8 @@ export interface CaseReport {
   case_version?: number;
   reviewer?: string;
   reviewed_at?: string;
+  need_type?: '部分得分' | '表现较好' | '记录较少' | '无记录观察' | '自定义' | null;
+  selection_reason?: string;
   narrative?: string;
   limitations?: string;
   evidence: CaseReportEvidence[];
@@ -72,6 +74,7 @@ export interface CompetitionClassReport {
     classes: Array<{ class_id: string; observed_student_count: number; scored_record_count: number; ratio: number | null; common_ratio: number | null; common_record_count: number }>;
   }>;
   common_observations: Array<{ indicator_id: string; issue_id: string; label: string; by_class: Array<{ class_id: string; affected_count: number; observed_student_count: number; evidence_refs: Array<{ record_id: string; source_line: number | null; material_id: string }> }> }>;
+  source_mappings?: Record<string, { status: string; version?: number; usable_count: number; needs_resolution_count: number; mappings: Array<{ material_id: string; relation: string; status: string; explanation: string; evidence: Array<{ source: string; page?: number; line?: number; excerpt: string }> }>; validation_errors?: string[] }>;
   limitations: string[];
 }
 

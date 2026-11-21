@@ -29,8 +29,8 @@ class DeepSeekOCRAdapter:
         boundary = f"----NoteBuddyOCR{secrets.token_hex(16)}"
         body = b"".join(
             (
-                f"--{boundary}\r\nContent-Disposition: form-data; name=\"purpose\"\r\n\r\n{self.purpose}\r\n".encode(),
-                f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"document.pdf\"\r\nContent-Type: application/pdf\r\n\r\n".encode(),
+                f'--{boundary}\r\nContent-Disposition: form-data; name="purpose"\r\n\r\n{self.purpose}\r\n'.encode(),
+                f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="document.pdf"\r\nContent-Type: application/pdf\r\n\r\n'.encode(),
                 content,
                 f"\r\n--{boundary}--\r\n".encode(),
             )
@@ -60,7 +60,9 @@ class DeepSeekOCRAdapter:
         if result.get("error"):
             error = result["error"]
             code = error.get("code") if isinstance(error, dict) else None
-            raise DeepSeekOCRError(f"DeepSeek OCR 识别失败{f' ({code})' if code else ''}")
+            raise DeepSeekOCRError(
+                f"DeepSeek OCR 识别失败{f' ({code})' if code else ''}"
+            )
         pages = result.get("pages")
         if not isinstance(pages, list):
             raise DeepSeekOCRError("DeepSeek OCR 未返回逐页识别结果")

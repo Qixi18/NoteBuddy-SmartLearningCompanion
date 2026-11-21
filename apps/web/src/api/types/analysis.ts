@@ -184,6 +184,8 @@ export interface EvidenceBundle {
     observed_material_ids: string[];
     unobserved_material_ids: string[];
     record_count: number;
+    scored_record_count: number;
+    record_disposition_counts?: Record<string, number>;
     unknown_reason: string | null;
     evidence_id: string;
   };
@@ -244,6 +246,7 @@ export interface ClassInsights {
     by_class: Array<{ class_id: string; affected_count: number; affected_student_ids: string[]; observed_student_count: number; evidence_refs: Array<{ record_id: string; source_line: number | null; material_id: string }> }>;
     limitations: string[];
   }>;
+  source_mappings?: Record<string, { status: string; version?: number; usable_count: number; needs_resolution_count: number; mappings: Array<Record<string, unknown>>; validation_errors?: string[] }>;
   limitations: string[];
 }
 

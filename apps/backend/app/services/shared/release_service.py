@@ -51,6 +51,7 @@ def check_release(
     ]
     confirmed = {}
     invalid_refs = []
+    invalid_case_selection = []
     stale_sources = []
     invalid_reviews = []
     for student_id in case_ids if valid_selection else []:
@@ -66,6 +67,10 @@ def check_release(
         if not case or case.get("status") != "confirmed":
             continue
         confirmed[student_id] = case
+        if not case.get("need_type") or not case.get("selection_reason", "").strip():
+            invalid_case_selection.append(
+                f"{student_id} 缺少正式案例需求类型或选择理由"
+            )
         if not case.get("review_refs"):
             invalid_reviews.append(f"{student_id} 未关联教师复核版本")
         try:
@@ -146,6 +151,17 @@ def check_release(
             "三名学生均已确认案例。"
             if complete_cases
             else f"已确认 {len(confirmed)}/3；请完成未确认案例。",
+        )
+    )
+    checks.append(
+        _check(
+            "case_selection_reason",
+            "正式案例需求类型与选择理由",
+            "passed" if complete_cases and not invalid_case_selection else "blocked",
+            "三份正式案例均记录需求类型和独立选择理由。"
+            if complete_cases and not invalid_case_selection
+            else "；".join(invalid_case_selection)
+            or "请先完成三份当前运行的正式案例确认。",
         )
     )
     checks.append(

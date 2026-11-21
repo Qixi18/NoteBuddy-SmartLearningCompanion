@@ -53,6 +53,12 @@ class ImportFilesRequest(BaseModel):
         return self
 
 
+class SourceOCRRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    confirmed: Literal[True]
+    preview_fingerprint: str = Field(min_length=64, max_length=64)
+
+
 class DraftRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     student_id: str = Field(min_length=1)
@@ -253,6 +259,7 @@ class IndicatorMappingRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     transmission_confirmed: Literal[True]
     indicator_id: str | None = Field(default=None, min_length=1)
+    preview_fingerprint: str = Field(min_length=64, max_length=64)
 
 
 class SourceVerificationRequest(BaseModel):
@@ -282,6 +289,10 @@ class TeacherCaseRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     student_id: str = Field(min_length=1)
     status: Literal["draft", "confirmed", "rejected"]
+    need_type: (
+        Literal["部分得分", "表现较好", "记录较少", "无记录观察", "自定义"] | None
+    ) = None
+    selection_reason: str = Field(default="", max_length=4000)
     narrative: str = Field(default="", max_length=10000)
     limitations: str = Field(default="", max_length=4000)
     evidence_record_ids: list[str] = Field(default_factory=list)

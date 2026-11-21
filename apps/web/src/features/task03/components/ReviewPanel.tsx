@@ -92,6 +92,7 @@ export function ReviewPanel({ run, student, indicator, node, review, draft, mode
   const [history, setHistory] = useState<Review[]>([]);
   const [coverageRef, setCoverageRef] = useState<EvidenceReference | null>(null);
   const [includeCoverage, setIncludeCoverage] = useState(false);
+  const [coverageRecordCount, setCoverageRecordCount] = useState(0);
   const [failure, setFailure] = useState('');
   const [drafting, setDrafting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -114,10 +115,14 @@ export function ReviewPanel({ run, student, indicator, node, review, draft, mode
   useEffect(() => {
     setCoverageRef(null);
     setIncludeCoverage(false);
+    setCoverageRecordCount(0);
     if (!run || !node) return;
     let alive = true;
     learningApi.evidenceBundle(student, indicator, node).then(bundle => {
-      if (!alive || bundle.coverage.record_count !== 0) return;
+      if (!alive) return;
+      setCoverageRecordCount(bundle.coverage.record_count);
+      const scoredCount = bundle.coverage.scored_record_count ?? bundle.coverage.record_count;
+      if (scoredCount !== 0) return;
       const next: EvidenceReference = {
         kind: 'coverage',
         evidence_id: bundle.coverage.evidence_id,
@@ -213,7 +218,7 @@ export function ReviewPanel({ run, student, indicator, node, review, draft, mode
     {draft && !draft.scope_required && <div className="review-workspace">
       <EvidenceContext run={run} student={student} indicator={indicator} node={node} draft={draft} />
       <section className="review-editor" aria-label="教师复核草稿">
-        {coverageRef && <section className="context-limit" aria-label="无记录覆盖证据"><strong>当前范围有 {coverageRef.scope.node_id} 节点覆盖证据，作答记录为 0 条。</strong><p>覆盖证据只能说明系统在该学生、指标和节点内没有作答记录；不代表缺席、未作答或零分。</p><label className="check-row"><input type="checkbox" checked={includeCoverage} onChange={event => setIncludeCoverage(event.target.checked)} />将此覆盖记录作为本次教师复核的证据引用</label></section>}
+        {coverageRef && <section className="context-limit" aria-label="无有效评分覆盖证据"><strong>当前范围有 {coverageRef.scope.node_id} 节点覆盖证据，原始记录 {coverageRecordCount} 条，有效已评分记录为 0 条。</strong><p>覆盖证据只说明当前范围没有有效已评分证据；未评分、未作答、异常或缺失原因须分别核对，不能据此推断成绩或掌握程度。</p><label className="check-row"><input type="checkbox" checked={includeCoverage} onChange={event => setIncludeCoverage(event.target.checked)} />将此覆盖记录作为本次教师复核的证据引用</label></section>}
         <div className="draft-banner"><span>系统草稿</span><strong>{draft.source === 'rule' ? '规则生成' : '模型辅助生成'}</strong><small>未确认 · 请核对左侧证据和来源边界</small></div>
         <div className="draft-target"><span>教学对象与目标</span><p>{draft.objective || '草稿未提供目标。'}</p></div>
         <ResourceSelectionPanel draft={draft} />

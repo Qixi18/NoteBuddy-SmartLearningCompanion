@@ -16,6 +16,38 @@ def _coverage_ref(bundle):
     }
 
 
+def test_teacher_case_requires_traceable_refs_for_selected_response_ids(tmp_path):
+    client = client_for(tmp_path)
+    bundle = client.get(
+        "/api/evidence-bundle",
+        params={"student": "D01", "indicator": "T01I1", "node": "N01"},
+    ).json()
+    run = client.get("/api/run").json()
+    current_record_ids = {
+        row["记录编号"] for row in run["responses"] if row["学生编号"] == "D01"
+    }
+    record = next(
+        row for row in bundle["responses"] if row["record_id"] in current_record_ids
+    )
+
+    response = client.post(
+        "/api/teacher-case",
+        json={
+            "student_id": "D01",
+            "status": "draft",
+            "narrative": "当前范围案例草稿",
+            "limitations": "仅说明当前指标和节点",
+            "evidence_record_ids": [record["record_id"]],
+            "evidence_refs": [],
+            "review_refs": [],
+            "reviewer": "",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "证据引用" in response.json()["error"]
+
+
 def _csv_files(tables):
     files = {}
     for name, rows in tables.items():
@@ -103,6 +135,8 @@ def test_no_record_coverage_to_diagnostic_plan_case_export_and_followup(tmp_path
     case_base = {
         "student_id": "D01",
         "status": "confirmed",
+        "need_type": "无记录观察",
+        "selection_reason": "当前节点缺少有效评分记录，选择该案例验证补充观察流程。",
         "narrative": "当前节点没有学生作答记录，教师安排诊断活动补充观察。",
         "limitations": "缺记录原因未知；不推断为未作答、零分或能力不足。",
         "evidence_record_ids": [],

@@ -4,7 +4,12 @@ from fastapi import APIRouter, Depends
 
 from ..dependencies import get_use_cases
 from ...application.use_cases.workbench import WorkbenchUseCases
-from ...schemas.http import ImportFilesRequest, ImportRequest, ImportResponse
+from ...schemas.http import (
+    ImportFilesRequest,
+    ImportRequest,
+    ImportResponse,
+    SourceOCRRequest,
+)
 
 router = APIRouter()
 
@@ -63,7 +68,9 @@ def source_ocr_preview(
 
 @router.post("/api/source-ocr", tags=["sources"])
 def source_ocr(
-    confirmed: bool = False,
+    payload: SourceOCRRequest,
     use_cases: WorkbenchUseCases = Depends(get_use_cases),
 ) -> dict:
-    return use_cases.import_folder.execute_ocr(confirmed)
+    return use_cases.import_folder.execute_ocr(
+        payload.confirmed, payload.preview_fingerprint
+    )

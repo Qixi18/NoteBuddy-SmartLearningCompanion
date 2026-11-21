@@ -102,14 +102,14 @@ describe('ReviewPanel', () => {
     expect(status.value).toBe('needs_observation');
   });
 
-  it('lets a teacher attach server-computed zero-response coverage to a review', async () => {
+  it('lets a teacher attach no-scored-evidence coverage to a review', async () => {
     const run = {
       run_id: 'RUN-1', items: [], responses: [], raw_responses: [], observations: [], source_index: [],
       objectives: [], nodes: [], quality: { record_dispositions: [], findings: [] },
     } as unknown as AnalysisRun;
     const bundle = {
       scope: { run_id: 'RUN-1', student_id: 'D01', indicator_id: 'T01I1', node_id: 'N01' },
-      coverage: { evidence_id: 'coverage:current-hash', record_count: 0 },
+      coverage: { evidence_id: 'coverage:current-hash', record_count: 1, scored_record_count: 0, record_disposition_counts: { pending: 1 } },
     };
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);

@@ -43,6 +43,8 @@ def release_state():
                 "run_id": "run-1",
                 "student_id": student_id,
                 "status": "confirmed",
+                "need_type": "部分得分",
+                "selection_reason": "选择用于核验该节点的教学建议。",
                 "version": 1,
                 "evidence_refs": [reference],
                 "review_refs": [{"indicator_id": "I1", "node_id": "N1", "version": 2}],

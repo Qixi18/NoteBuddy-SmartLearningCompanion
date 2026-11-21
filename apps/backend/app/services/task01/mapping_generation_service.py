@@ -84,6 +84,57 @@ def mapping_is_current(run: dict, sources, mapping: dict) -> bool:
     return fingerprint == mapping.get("input_fingerprint")
 
 
+def build_mapping_preview(
+    run: dict, sources, provider: str, model: str, indicator_ids: list[str]
+) -> dict:
+    """Describe exactly what a confirmed mapping request will send to a model."""
+    input_fingerprints = []
+    source_ranges: dict[str, dict[str, set[int]]] = {}
+    input_bytes = 0
+    for indicator_id in indicator_ids:
+        refs, fingerprint = _references(run, sources, indicator_id)
+        input_fingerprints.append((indicator_id, fingerprint))
+        input_bytes += len(
+            json.dumps(refs, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        )
+        for ref in refs:
+            ranges = source_ranges.setdefault(
+                ref["source"], {"pages": set(), "lines": set()}
+            )
+            if isinstance(ref.get("page"), int):
+                ranges["pages"].add(ref["page"])
+            if isinstance(ref.get("line"), int):
+                ranges["lines"].add(ref["line"])
+    fingerprint = hashlib.sha256(
+        json.dumps(
+            {"run_id": run.get("run_id"), "inputs": input_fingerprints},
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    source_files = []
+    for name, ranges in sorted(source_ranges.items()):
+        source_file = {"name": name}
+        if ranges["pages"]:
+            source_file["pages"] = sorted(ranges["pages"])
+        if ranges["lines"]:
+            source_file["lines"] = sorted(ranges["lines"])
+        source_files.append(source_file)
+    return {
+        "run_id": run.get("run_id", ""),
+        "indicator_ids": indicator_ids,
+        "provider": provider,
+        "model": model,
+        "billing_unit": "input_output_tokens",
+        "cache_behavior": "each_request_is_billable",
+        "source_files": source_files,
+        "source_count": len(source_ranges),
+        "input_bytes": input_bytes,
+        "fingerprint": fingerprint,
+    }
+
+
 def generate_indicator_mapping(
     run: dict, sources, llm_client, indicator_id: str
 ) -> dict:
@@ -123,7 +174,16 @@ def validate_mapping_candidate(
         candidate.get("mappings"), list
     ):
         raise ValueError("映射结果结构无效")
-    known_items = {str(item.get("材料编号")) for item in run.get("items", [])}
+    item_ref_by_material = {
+        str(item.get("材料编号")): f"item-{index}"
+        for index, item in enumerate(run.get("items", []), 1)
+        if item.get("指标编号") == indicator_id and item.get("材料编号")
+    }
+    known_items = {
+        str(item.get("材料编号"))
+        for item in run.get("items", [])
+        if item.get("材料编号")
+    }
     reference_map = {row["ref_id"]: row for row in refs}
     validated, errors = [], []
     for index, row in enumerate(candidate["mappings"]):
@@ -133,6 +193,10 @@ def validate_mapping_candidate(
         material_id = str(row.get("material_id", ""))
         if material_id not in known_items:
             errors.append(f"mapping_{index}:unknown_material")
+            continue
+        expected_item_ref = item_ref_by_material.get(material_id)
+        if expected_item_ref is None:
+            errors.append(f"mapping_{index}:indicator_mismatch")
             continue
         evidence = []
         for citation in row.get("evidence", []):
@@ -166,12 +230,23 @@ def validate_mapping_candidate(
                     "excerpt": excerpt,
                 }
             )
+        item_link_evidence = any(
+            citation["ref_id"] == expected_item_ref for citation in evidence
+        )
+        if not item_link_evidence:
+            errors.append(f"mapping_{index}:item_link_evidence_missing")
         if (
             row.get("relation") not in {"assesses", "supports"}
             or not row.get("explanation")
             or not evidence
         ):
             errors.append(f"mapping_{index}:insufficient_basis")
+        relation_valid = (
+            item_link_evidence
+            and bool(evidence)
+            and row.get("relation") in {"assesses", "supports"}
+            and bool(str(row.get("explanation", "")).strip())
+        )
         validated.append(
             {
                 "material_id": material_id,
@@ -179,9 +254,12 @@ def validate_mapping_candidate(
                 "relation": row.get("relation"),
                 "explanation": str(row.get("explanation", "")),
                 "evidence": evidence,
-                "status": "usable"
-                if evidence and row.get("relation") in {"assesses", "supports"}
-                else "needs_resolution",
+                "relationship_check": {
+                    "status": "passed" if relation_valid else "needs_resolution",
+                    "method": "official_indicator_item_binding",
+                    "detail": "材料编号和指标关联来自当前运行 CSV，且关系引用了该题目行。",
+                },
+                "status": "usable" if relation_valid else "needs_resolution",
             }
         )
     return {

@@ -17,9 +17,16 @@ export function RequirementsPage({ run, indicator, onIndicator, onEvidence, onDa
   const [mappingBusy, setMappingBusy] = useState(false);
   useEffect(() => { let active = true; learningApi.aiSourceMappings().then(value => { if (active) setMappings(value); }).catch(() => undefined); return () => { active = false; }; }, [run.run_id]);
   const generateMappings = async (all = false) => {
-    if (!window.confirm('将当前运行中已解析的课标、题目、评分点及来源文本发送至已配置的文本模型。仅提交当前允许来源；继续？')) return;
-    setMappingBusy(true); setMappingMessage(all ? '正在逐项分析所有指标…' : '正在分析当前指标…');
-    try { const result = await learningApi.generateAISourceMappings(all ? undefined : indicator); const updated = await learningApi.aiSourceMappings(); setMappings(updated); const successes = result.results.filter(row => row.status === 'usable').length; setMappingMessage(`处理完成：${successes}/${result.results.length} 项映射通过校验；其余项目显示具体失败或待处理原因。`); onDataChanged?.(); }
+    setMappingBusy(true); setMappingMessage('正在生成本次模型发送清单…');
+    try {
+      const preview = await learningApi.aiSourceMappingPreview(all ? undefined : indicator);
+      const sourceFiles = preview.source_files.map(file => `${file.name}${file.pages?.length ? ` 第 ${file.pages.join('、')} 页` : ''}${file.lines?.length ? ` 第 ${file.lines.join('、')} 行` : ''}`).join('；');
+      const accepted = window.confirm(`模型服务：${preview.provider} · ${preview.model}\n指标范围：${preview.indicator_ids.join('、')}\n发送来源：${sourceFiles || '无可用来源'}\n本次输入约 ${preview.input_bytes} 字节；费用单位：输入和输出 tokens。映射结果不缓存，每次请求均可能计费；失败项可单独重试，重试会再次调用模型。确认发送？`);
+      if (!accepted) return;
+      setMappingMessage(all ? '正在逐项分析所有指标…' : '正在分析当前指标…');
+      const result = await learningApi.generateAISourceMappings(all ? undefined : indicator, preview.fingerprint);
+      const updated = await learningApi.aiSourceMappings(); setMappings(updated); const successes = result.results.filter(row => row.status === 'usable').length; setMappingMessage(`处理完成：${successes}/${result.results.length} 项映射通过校验；其余项目显示具体失败或待处理原因。`); onDataChanged?.();
+    }
     catch (error) { setMappingMessage(error instanceof Error ? error.message : String(error)); }
     finally { setMappingBusy(false); }
   };

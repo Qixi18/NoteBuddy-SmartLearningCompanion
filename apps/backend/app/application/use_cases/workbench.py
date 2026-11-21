@@ -15,6 +15,7 @@ from ...services.shared.release_service import check_release, release_fingerprin
 from ...services.shared.report_service import build_case_reports, build_class_report
 from ...services.task01.material_catalog_service import build_material_catalog
 from ...services.task01.mapping_generation_service import (
+    build_mapping_preview,
     generate_indicator_mapping,
     mapping_is_current,
 )
@@ -36,15 +37,46 @@ def _current_ai_mappings(
     if not history:
         return {}
     latest = history[-1]
-    if latest.get("status") != "usable" or not mapping_is_current(
-        run, source_service, latest
-    ):
+    if not mapping_is_current(run, source_service, latest):
         return {}
     return {
         row["material_id"]: row
         for row in latest.get("mappings", [])
         if row.get("status") == "usable" and row.get("indicator_id") == indicator_id
     }
+
+
+def _ai_mapping_summaries(run: dict, histories: dict, source_service) -> dict:
+    summaries = {}
+    for objective in run.get("objectives", []):
+        indicator_id = objective.get("指标编号", "")
+        history = histories.get(indicator_id, [])
+        latest = history[-1] if history else None
+        if latest is None:
+            summaries[indicator_id] = {
+                "status": "not_generated",
+                "usable_count": 0,
+                "needs_resolution_count": 0,
+                "mappings": [],
+            }
+            continue
+        current = mapping_is_current(run, source_service, latest)
+        mappings = latest.get("mappings", [])
+        summaries[indicator_id] = {
+            "status": latest.get("status") if current else "stale",
+            "version": latest.get("version"),
+            "usable_count": sum(
+                current and row.get("status") == "usable" for row in mappings
+            ),
+            "needs_resolution_count": sum(
+                not current or row.get("status") != "usable" for row in mappings
+            ),
+            "mappings": mappings
+            if current
+            else [{**row, "status": "stale"} for row in mappings],
+            "validation_errors": latest.get("validation_errors", []),
+        }
+    return summaries
 
 
 def _attach_resource_selection(
@@ -194,13 +226,17 @@ class ImportFolder:
             run, self.import_service.ocr_client
         )
 
-    def execute_ocr(self, confirmed: bool) -> dict:
+    def execute_ocr(self, confirmed: bool, preview_fingerprint: str) -> dict:
         if not confirmed:
             raise ValueError("必须明确确认后才能向 OCR 服务发送来源文件")
         run = self.import_service.runs.current()
         preview = self.import_service.sources.preview_registered_pdfs(
             run, self.import_service.ocr_client
         )
+        if not preview_fingerprint or preview.get("fingerprint") != preview_fingerprint:
+            raise ValueError(
+                "OCR 预览已变化（文件清单或缓存状态不同）；请重新预览并确认"
+            )
         if (
             preview.get("will_send_count", 0)
             and preview.get("status") == "api_key_missing"
@@ -212,19 +248,43 @@ class ImportFolder:
 
 
 class IndicatorMappings:
-    def __init__(self, uow_factory, source_service, llm_client):
+    def __init__(self, uow_factory, source_service, llm_client, config):
         self.uow_factory = uow_factory
         self.source_service = source_service
         self.llm_client = llm_client
+        self.config = config
+
+    def preview(self, indicator_id: str | None = None) -> dict:
+        with self.uow_factory(immediate=False) as uow:
+            run = uow.runs.current()
+        indicator_ids = [
+            row["指标编号"]
+            for row in run.get("objectives", [])
+            if indicator_id is None or row.get("指标编号") == indicator_id
+        ]
+        if indicator_id and not indicator_ids:
+            raise ValueError("指标编号不存在")
+        return build_mapping_preview(
+            run,
+            self.source_service,
+            self.config.model_provider,
+            self.config.model_name,
+            indicator_ids,
+        )
 
     def list(self) -> dict:
         with self.uow_factory(immediate=False) as uow:
             run = uow.runs.current()
             return uow.stage2.list_ai_mappings(run["run_id"])
 
-    def generate(self, indicator_id: str | None = None) -> dict:
+    def generate(
+        self, indicator_id: str | None = None, preview_fingerprint: str = ""
+    ) -> dict:
         if self.llm_client is None:
             raise ValueError("未配置文本模型，无法生成 AI 映射")
+        preview = self.preview(indicator_id)
+        if not preview_fingerprint or preview_fingerprint != preview["fingerprint"]:
+            raise ValueError("AI 映射预览已变化；请重新预览并确认")
         with self.uow_factory(immediate=False) as uow:
             run = uow.runs.current()
         indicator_ids = [
@@ -425,22 +485,32 @@ class GetStudentInsights:
 
 
 class GetClassInsights:
-    def __init__(self, current_run: CurrentRun, stage2: Stage2Decisions):
+    def __init__(
+        self, current_run: CurrentRun, stage2: Stage2Decisions, source_service
+    ):
         self.current_run = current_run
         self.stage2 = stage2
+        self.source_service = source_service
 
     def execute(self, node_id: str) -> dict:
         with self.current_run.uow_factory(immediate=False) as uow:
             run = uow.runs.current()
             sources = uow.stage2.list_sources(run["run_id"])
+            ai_mappings = uow.stage2.list_ai_mappings(run["run_id"])
         sources = self.stage2.with_source_freshness(run, sources)
-        return build_class_insights(run, node_id, sources)
+        return build_class_insights(
+            run,
+            node_id,
+            sources,
+            _ai_mapping_summaries(run, ai_mappings, self.source_service),
+        )
 
 
 class GetCompetitionReports:
-    def __init__(self, uow_factory, stage2: Stage2Decisions):
+    def __init__(self, uow_factory, stage2: Stage2Decisions, source_service):
         self.uow_factory = uow_factory
         self.stage2 = stage2
+        self.source_service = source_service
 
     def cases(self, student_ids: list[str]) -> dict:
         with self.uow_factory(immediate=False) as uow:
@@ -458,8 +528,14 @@ class GetCompetitionReports:
         with self.uow_factory(immediate=False) as uow:
             run = uow.runs.current()
             sources = uow.stage2.list_sources(run["run_id"])
+            ai_mappings = uow.stage2.list_ai_mappings(run["run_id"])
         sources = self.stage2.with_source_freshness(run, sources)
-        insights = build_class_insights(run, node_id, sources)
+        insights = build_class_insights(
+            run,
+            node_id,
+            sources,
+            _ai_mapping_summaries(run, ai_mappings, self.source_service),
+        )
         return build_class_report(run, node_id, insights)
 
 
@@ -505,7 +581,12 @@ class PrepareSubmission:
                 "limitations": [],
             }
         try:
-            insights = build_class_insights(run, node_id, sources)
+            insights = build_class_insights(
+                run,
+                node_id,
+                sources,
+                _ai_mapping_summaries(run, ai_mappings, self.stage2.source_service),
+            )
             class_report = build_class_report(run, node_id, insights)
         except ValueError:
             class_report = {
@@ -631,7 +712,7 @@ class WorkbenchUseCases:
         self.current_run = CurrentRun(uow_factory)
         self.import_folder = ImportFolder(import_service)
         self.indicator_mappings = IndicatorMappings(
-            uow_factory, source_service, llm_client
+            uow_factory, source_service, llm_client, config
         )
         self.list_reviews = ListReviews(uow_factory)
         self.save_review = save_review
@@ -652,8 +733,12 @@ class WorkbenchUseCases:
         self.export_package = ExportPackage(uow_factory, self.current_run, self.stage2)
         self.evidence_bundle = GetEvidenceBundle(uow_factory, self.stage2)
         self.student_insights = GetStudentInsights(self.evidence_bundle)
-        self.class_insights = GetClassInsights(self.current_run, self.stage2)
-        self.competition_reports = GetCompetitionReports(uow_factory, self.stage2)
+        self.class_insights = GetClassInsights(
+            self.current_run, self.stage2, source_service
+        )
+        self.competition_reports = GetCompetitionReports(
+            uow_factory, self.stage2, source_service
+        )
         self.prepare_submission = PrepareSubmission(uow_factory, self.stage2)
         self.export_submission = ExportSubmission(
             self.prepare_submission, uow_factory, self.stage2
