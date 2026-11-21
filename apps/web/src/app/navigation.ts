@@ -132,8 +132,19 @@ export function routeFor(path: RoutePath) {
 
 // 同范围切页：保留当前 URL 里的批次/节点/指标/学生等选择，仅切换页面与视图。
 // 依据：重构规划 §5 切换规则 1——同一范围切页保留当前选择。
+// 注意：serializeNavigation 会省略与页面默认视图相同的 view 参数；但 URL 保留
+// studentId/recordId 时，解析端的视图推断会把默认视图覆盖成 student/evidence。
+// 因此这里做一次往返校验，推断覆盖了显式目标视图时显式补回 view 参数。
 export function switchViewHref(currentHash: string, path: RoutePath, view?: NavigationView): string {
   const state = parseNavigationHash(currentHash);
   const next: NavigationState = { ...state, path, view };
-  return serializeNavigation(next).slice(1);
+  const href = serializeNavigation(next).slice(1);
+  if (view) {
+    const parsed = parseNavigationHash(`#${href}`);
+    if (parsed.view !== view) {
+      const separator = href.includes('?') ? '&' : '?';
+      return `${href}${separator}view=${view}`;
+    }
+  }
+  return href;
 }

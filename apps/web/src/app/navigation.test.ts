@@ -18,6 +18,19 @@ describe('navigation', () => {
     });
   });
 
+  it('explicit class view survives studentId view inference', () => {
+    // 学生 ID 在 URL 中时，解析推断会把默认视图覆盖为学生分析；
+    // 显式目标视图（如班级比较）必须经往返校验后补回 view 参数。
+    const href = switchViewHref(
+      '#/performance?runId=r1&nodeId=N01&indicatorId=I01&studentId=D01',
+      '/performance',
+      'class',
+    );
+    const parsed = parseNavigationHash(`#${href}`);
+    expect(parsed.view).toBe('class');
+    expect(parsed.studentId).toBe('D01');
+  });
+
   it('switching pages keeps scope ids and drops only the source view', () => {
     const href = switchViewHref(
       '#/performance?runId=r1&nodeId=N01&view=quality',
