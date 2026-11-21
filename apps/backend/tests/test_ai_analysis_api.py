@@ -202,7 +202,9 @@ def test_partial_analysis_retries_only_failed_packet_and_keeps_prior_findings(tm
 
         def complete(self, body):
             self.calls += 1
-            if self.calls == 2:
+            # 自动重写会给失败分块第二次尝试；两个尝试都失败才会进入 partial，
+            # 这样 retry_failed 仍然只重试失败分块并保留已有 findings。
+            if self.calls in (2, 3):
                 return {"choices": []}
             return {
                 "choices": [
@@ -239,4 +241,4 @@ def test_partial_analysis_retries_only_failed_packet_and_keeps_prior_findings(tm
     assert retried["coverage"]["packet_total"] == 2
     assert retried["coverage"]["packet_succeeded"] == 2
     assert retried["coverage"]["failed_packet_ids"] == []
-    assert model.calls == 3
+    assert model.calls == 4

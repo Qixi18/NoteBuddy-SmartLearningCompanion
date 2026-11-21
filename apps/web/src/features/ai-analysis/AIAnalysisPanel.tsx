@@ -2,6 +2,14 @@ import { useEffect, useState } from 'react';
 import { learningApi } from '../../api/client';
 import type { AIAnalysisPreview, AIAnalysisResult, AIAnalysisTask } from '../../api/types';
 
+const citationKindLabel: Record<string, string> = {
+  response: '作答记录',
+  objective: '学习要求',
+  metric: '统计事实',
+  quality_coverage: '数据质量',
+  source: '来源原文',
+};
+
 type Props = {
   task: AIAnalysisTask;
   runId: string;
@@ -108,6 +116,7 @@ export function AIAnalysisPanel({ task, runId, node, student, indicator, onEvide
         <p className="ai-limitation"><strong>限制：</strong>{finding.limitations}</p>
         {finding.next_step && <p><strong>建议：</strong>{finding.next_step}</p>}
         {finding.evidence_refs.length > 0 && <div className="ai-citations"><strong>引用证据</strong>{finding.evidence_refs.map((ref, index) => <div className="ai-citation" key={`${ref.alias ?? ref.record_id ?? 'source'}-${index}`}>
+          {ref.kind && <span className="ai-citation-kind">{citationKindLabel[ref.kind] ?? '证据'}</span>}
           <span>{ref.record_id ? `记录 ${ref.record_id}${ref.source_line ? ` · 第 ${ref.source_line} 行` : ''}` : ref.kind === 'objective' ? `指标 ${ref.indicator_id ?? ''}` : `${ref.name ?? '来源材料'}${ref.page ? ` · 第 ${ref.page} 页` : ''}`}</span>
           <q>{ref.excerpt}</q>
           {ref.record_id ? <button className="text-action" onClick={() => onEvidence?.(ref)} disabled={!onEvidence}>查看原始记录 ↗</button> : ref.kind === 'source' && ref.name ? <a href={learningApi.sourceUrl(ref.name)} target="_blank" rel="noreferrer">打开来源 PDF ↗</a> : ref.indicator_id ? <button className="text-action" onClick={() => onEvidence?.(ref)} disabled={!onEvidence}>查看指标 ↗</button> : null}

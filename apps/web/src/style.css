@@ -303,6 +303,7 @@ h1 { font-size: 30px; font-weight: 700; letter-spacing: -.025em; line-height: 1.
 .ai-limitation { color: #786023; }
 .ai-citations { display: grid; gap: 8px; margin-top: 13px; }
 .ai-citation { display: grid; gap: 6px; padding: 10px 12px; border-left: 2px solid #8da9d0; background: #f7f9fc; color: #43536b; font-size: 12px; }
+.ai-citation-kind { width: fit-content; padding: 1px 8px; border-radius: 999px; background: #e3ebf7; color: #345d91; font-size: 11px; }
 .ai-citation q { color: #243751; font-size: 13px; }
 .ai-citation a, .ai-citation .text-action { width: fit-content; color: #345d91; }
 .ai-provenance { display: block; margin-top: 12px; color: #7b899c; }

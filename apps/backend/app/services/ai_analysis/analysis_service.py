@@ -30,9 +30,19 @@ _SYSTEM_SUFFIX = (
     "不得编造事实、分数、来源、记录或证据。每项 finding 必须用当前上下文的 evidence_id 或 fact_id 引用；"
     "原始作答引用必须摘录一段完全一致的短原文，事实引用也必须提供上下文中的原文摘录。"
     "不返回学生、记录、材料的真实编号，不得输出评分、审核、确认或 verified 状态。"
+    "面向教师写作：category、claim、interpretation、limitations、next_step 一律使用面向教师的中文；"
+    "正文不得出现内部字段名、英文代号、原始 JSON 片段或 factN/evidenceN 这类编号"
+    "（编号只允许出现在 evidence_refs 的 ref 字段，不得写进句子）；"
+    "比率与得分率一律用百分数表示（如 20.0%），不得写 0.2 这类小数。"
     '只返回 JSON：{"findings":[{"category":string,"claim":string,"interpretation":string,'
     '"support_level":"supported|limited|conflicting|unavailable","limitations":string,'
     '"next_step":string,"evidence_refs":[{"ref":string,"excerpt":string}]}]}。'
+)
+_REWRITE_INSTRUCTION = (
+    " 你的上一次输出不符合教师语言要求：出现了内部字段名、英文代号、factN/evidenceN 编号、"
+    "原始 JSON 片段或小数形式的比率，或结构与要求不符。"
+    "请完全用面向教师的中文重写全部文本字段，比率与得分率一律写成百分数，"
+    "然后按原 JSON 结构重新返回，不要添加任何解释。"
 )
 
 
@@ -101,7 +111,8 @@ def analyze_packets(
     findings = []
     failed = []
     failures = []
-    for packet, content in zip(packets, serialized, strict=True):
+
+    def _build_body(packet: dict[str, Any], content: str, extra: str = "") -> dict:
         body = {
             "model": model,
             "response_format": {"type": "json_object"},
@@ -109,7 +120,7 @@ def analyze_packets(
             "messages": [
                 {
                     "role": "system",
-                    "content": _SYSTEM_PROMPTS[packet["task"]] + _SYSTEM_SUFFIX,
+                    "content": _SYSTEM_PROMPTS[packet["task"]] + _SYSTEM_SUFFIX + extra,
                 },
                 {"role": "user", "content": content},
             ],
@@ -118,23 +129,36 @@ def analyze_packets(
             # DeepSeek enables thinking by default; its reasoning tokens share
             # max_tokens with the JSON body and can consume the entire budget.
             body["thinking"] = {"type": "disabled"}
+        return body
+
+    for packet, content in zip(packets, serialized, strict=True):
+        validated = None
+        failure_reason: str | None = None
         try:
-            response = client.complete(body)
+            response = client.complete(_build_body(packet, content))
         except (LLMError, TimeoutError, ConnectionError, OSError) as exc:
+            failure_reason = f"provider:{type(exc).__name__}"
+        else:
+            try:
+                candidate = _parse_response(response)
+                validated = validate_packet_output(candidate, packet)
+            except (TypeError, ValueError) as exc:
+                failure_reason = f"{type(exc).__name__}: {exc}"
+        if validated is None and failure_reason is not None and not failure_reason.startswith("provider:"):
+            # 教师语言或结构不合格时，给模型一次按教师语言要求重写的机会。
+            try:
+                response = client.complete(_build_body(packet, content, _REWRITE_INSTRUCTION))
+            except (LLMError, TimeoutError, ConnectionError, OSError) as exc:
+                failure_reason = f"provider:{type(exc).__name__}"
+            else:
+                try:
+                    candidate = _parse_response(response)
+                    validated = validate_packet_output(candidate, packet)
+                except (TypeError, ValueError) as exc:
+                    failure_reason = f"{type(exc).__name__}: {exc}"
+        if validated is None:
             failed.append(packet["packet_id"])
-            failures.append({"packet_id": packet["packet_id"], "reason": f"provider:{type(exc).__name__}"})
-            continue
-        try:
-            candidate = _parse_response(response)
-        except (TypeError, ValueError) as exc:
-            failed.append(packet["packet_id"])
-            failures.append({"packet_id": packet["packet_id"], "reason": f"response:{str(exc)}"})
-            continue
-        try:
-            validated = validate_packet_output(candidate, packet)
-        except (TypeError, ValueError) as exc:
-            failed.append(packet["packet_id"])
-            failures.append({"packet_id": packet["packet_id"], "reason": f"evidence:{str(exc)}"})
+            failures.append({"packet_id": packet["packet_id"], "reason": failure_reason or "unknown"})
             continue
         for finding in validated["findings"]:
             finding["finding_id"] = f"{packet['packet_id']}:{finding['finding_id']}"

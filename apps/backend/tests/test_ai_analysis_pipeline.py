@@ -180,51 +180,167 @@ def test_ai_output_requires_exact_scoped_evidence_excerpt(run_snapshot):
     assert validated["findings"][0]["evidence_refs"][0]["source_line"] == 2
 
 
-def test_ai_output_rejects_an_excerpt_not_present_in_current_scope(run_snapshot):
+def test_ai_output_restores_an_excerpt_not_present_in_current_scope(run_snapshot):
     packet = build_task_packets(run_snapshot, "task02", node_id="N01")[0]
 
-    with pytest.raises(ValueError, match="excerpt"):
-        validate_packet_output(
-            {
-                "findings": [
-                    {
-                        "category": "student_work",
-                        "claim": "未经证实的结论。",
-                        "interpretation": "解释。",
-                        "support_level": "supported",
-                        "limitations": "限制。",
-                        "next_step": "下一步。",
-                        "evidence_refs": [
-                            {"ref": "evidence1", "excerpt": "这段话没有出现在作答中"}
-                        ],
-                    }
-                ]
-            },
-            packet,
-        )
+    validated = validate_packet_output(
+        {
+            "findings": [
+                {
+                    "category": "student_work",
+                    "claim": "未经证实的结论。",
+                    "interpretation": "解释。",
+                    "support_level": "supported",
+                    "limitations": "限制。",
+                    "next_step": "下一步。",
+                    "evidence_refs": [
+                        {"ref": "evidence1", "excerpt": "这段话没有出现在作答中"}
+                    ],
+                }
+            ]
+        },
+        packet,
+    )
+
+    ref = validated["findings"][0]["evidence_refs"][0]
+    assert ref["record_id"] == "R01"
+    assert ref["source_line"] == 2
+    # 模型自创的摘录被替换为可信的本地证据摘录，不会进入界面。
+    assert "这段话没有出现在作答中" not in ref["excerpt"]
+    assert ref["excerpt"].strip()
 
 
-def test_ai_output_rejects_unverified_fact_excerpt(run_snapshot):
+def test_ai_output_restores_unverified_fact_excerpt(run_snapshot):
     packet = build_task_packets(run_snapshot, "task01")[0]
 
-    with pytest.raises(ValueError, match="excerpt"):
+    validated = validate_packet_output(
+        {
+            "findings": [
+                {
+                    "category": "curriculum",
+                    "claim": "课标包含此要求。",
+                    "interpretation": "解释。",
+                    "support_level": "limited",
+                    "limitations": "来源待核验。",
+                    "evidence_refs": [
+                        {"ref": "fact1", "excerpt": "不存在于当前目标的文字"}
+                    ],
+                }
+            ]
+        },
+        packet,
+    )
+
+    ref = validated["findings"][0]["evidence_refs"][0]
+    # 事实引用摘录同样以可信本地证据渲染为教师语言。
+    assert "不存在于当前目标的文字" not in ref["excerpt"]
+    assert "观察指标：能解释等式性质" in ref["excerpt"]
+    assert "来源状态：待核验" in ref["excerpt"]
+
+
+def test_validation_rejects_internal_jargon_in_findings(run_snapshot):
+    packet = build_task_packets(run_snapshot, "task02", node_id="N01")[0]
+
+    with pytest.raises(ValueError, match="非教师语言"):
         validate_packet_output(
             {
                 "findings": [
                     {
-                        "category": "curriculum",
-                        "claim": "课标包含此要求。",
+                        "category": "pattern",
+                        "claim": "fact1 显示当前节点存在确定性统计事实。",
                         "interpretation": "解释。",
                         "support_level": "limited",
-                        "limitations": "来源待核验。",
+                        "limitations": "限制。",
                         "evidence_refs": [
-                            {"ref": "fact1", "excerpt": "不存在于当前目标的文字"}
+                            {"ref": "fact1", "excerpt": "class_node_indicator"}
                         ],
                     }
                 ]
             },
             packet,
         )
+
+
+def test_source_excerpt_renders_metric_and_quality_facts_in_teacher_language():
+    from app.services.ai_analysis.validation_service import _source_excerpt
+
+    metric = _source_excerpt(
+        {
+            "kind": "metric",
+            "value": {
+                "kind": "class_node_indicator",
+                "score": 3,
+                "maximum": 4,
+                "ratio": 0.75,
+                "count": 2,
+            },
+        }
+    )
+    assert metric == "得分：3；满分：4；得分率：75.0%；记录数：2"
+
+    quality = _source_excerpt(
+        {
+            "kind": "quality_coverage",
+            "text": json.dumps(
+                {"raw_rows": 3, "eligible_scored": 2, "dispositions": {"scored": 2, "pending": 1}},
+                ensure_ascii=False,
+                sort_keys=True,
+            ),
+        }
+    )
+    assert quality == "原始记录数：3；有效评分数：2；处置分布：待评分 1，已评分 2"
+
+
+def test_analysis_service_rewrites_packet_with_internal_jargon(run_snapshot):
+    from app.services.ai_analysis.analysis_service import analyze_packets
+
+    packet = build_task_packets(run_snapshot, "task02", node_id="N01")[0]
+
+    def _finding(claim: str) -> dict:
+        return {
+            "findings": [
+                {
+                    "category": "student_work",
+                    "claim": claim,
+                    "interpretation": "可结合原始作答进一步观察。",
+                    "support_level": "limited",
+                    "limitations": "样本仅来自当前测验节点。",
+                    "next_step": "核对同类题目的解题过程。",
+                    "evidence_refs": [
+                        {"ref": "evidence1", "excerpt": "先两边同时除以2"}
+                    ],
+                }
+            ]
+        }
+
+    bad = _finding("fact1 显示当前节点存在已评分作答。")
+    good = _finding("当前节点记录展示了除法变形步骤。")
+
+    class Client:
+        def __init__(self):
+            self.system_prompts = []
+
+        def complete(self, body):
+            self.system_prompts.append(body["messages"][0]["content"])
+            content = bad if len(self.system_prompts) == 1 else good
+            return {
+                "choices": [
+                    {
+                        "finish_reason": "stop",
+                        "message": {
+                            "content": json.dumps(content, ensure_ascii=False)
+                        },
+                    }
+                ]
+            }
+
+    client = Client()
+    result = analyze_packets([packet], client, "mock-model")
+
+    assert result["status"] == "complete"
+    assert len(client.system_prompts) == 2
+    assert "面向教师" in client.system_prompts[1]
+    assert result["findings"][0]["claim"] == "当前节点记录展示了除法变形步骤。"
 
 
 def test_local_identifier_in_raw_text_is_redacted_and_alias_excerpt_validates(
