@@ -43,43 +43,45 @@ export function RadarChart({ axes, size = 260 }: { axes: Array<{ label: string; 
   </svg>;
 }
 
-export function ParetoChart({ items, height = 150 }: { items: Array<{ label: string; sublabel?: string; count: number }>; height?: number }) {
+export function ParetoChart({ items, height = 132 }: { items: Array<{ label: string; sublabel?: string; count: number }>; height?: number }) {
   const count = items.length;
   if (!count) return null;
-  const width = Math.max(320, count * 52);
-  const barArea = height - 46;
+  const width = Math.max(320, count * 56);
+  const plotBottom = height - 40;
+  const plotTop = 22;
+  const band = plotBottom - plotTop;
   const top = items[0].count || 1;
-  const cumulative: Array<{ label: string; percent: number }> = [];
   let running = 0;
   const total = items.reduce((sum, item) => sum + item.count, 0);
+  const cumulative: Array<{ label: string; percent: number }> = [];
   items.forEach(item => {
     running += item.count;
     cumulative.push({ label: item.label, percent: running / total });
   });
-  const x = (index: number) => 34 + (index + 0.5) * ((width - 60) / count);
-  const yFor = (value: number) => barArea - (value / top) * (barArea - 14);
-  const linePoints = cumulative.map((entry, index) => `${x(index)},${(barArea - 14) * (1 - entry.percent) + 14}`).join(' ');
+  const x = (index: number) => 30 + (index + 0.5) * ((width - 56) / count);
+  const lineFor = (percent: number) => plotTop + (1 - percent) * band;
+  const linePoints = cumulative.map((entry, index) => `${x(index)},${lineFor(entry.percent)}`).join(' ');
   return <svg viewBox={`0 0 ${width} ${height}`} width="100%" className="pareto-chart" role="img"
-    aria-label={`帕累托图：${items.map(item => `${item.label} ${item.count} 次`).join('，')}；累计占比 ${items.map((_, index) => `${PERCENT(cumulative[index].percent)}`).join('、')}`}>
-    <line x1={34} y1={barArea} x2={width - 26} y2={barArea} stroke="#c9d6e2" />
+    aria-label={`帕累托图：${items.map(item => `${item.label} ${item.count} 次`).join('，')}；累计占比 ${cumulative.map(entry => `${PERCENT(entry.percent)}`).join('、')}`}>
+    <line x1={28} y1={plotBottom} x2={width - 24} y2={plotBottom} stroke="#c9d6e2" />
     {items.map((item, index) => {
-      const barHeight = (item.count / top) * (barArea - 14);
+      const barHeight = Math.max(2, (item.count / top) * band);
       return <g key={item.label}>
-        <rect x={x(index) - 14} y={barArea - barHeight} width={28} height={barHeight} fill="#d8a13a" opacity={0.85} rx={2} />
-        <text x={x(index)} y={barArea - barHeight - 4} textAnchor="middle" fontSize={9} fill="#8a6d2f">{item.count}</text>
-        <text x={x(index)} y={barArea + 12} textAnchor="middle" fontSize={8} fill="#465b73">{item.label}</text>
-        {item.sublabel && <text x={x(index)} y={barArea + 22} textAnchor="middle" fontSize={8} fill="#8a94a3">{item.sublabel}</text>}
+        <rect x={x(index) - 13} y={plotBottom - barHeight} width={26} height={barHeight} fill="#b9cde3" rx={2} />
+        <text x={x(index)} y={plotBottom - barHeight + 14} textAnchor="middle" fontSize={10} fill="#ffffff">{item.count}</text>
+        <text x={x(index)} y={plotBottom + 13} textAnchor="middle" fontSize={9} fill="#465b73">{item.label}</text>
+        {item.sublabel && <text x={x(index)} y={plotBottom + 23} textAnchor="middle" fontSize={8} fill="#8a94a3">{item.sublabel}</text>}
       </g>;
     })}
-    <polyline points={linePoints} fill="none" stroke="#345d91" strokeWidth={1.5} />
+    <polyline points={linePoints} fill="none" stroke="#345d91" strokeWidth={2} />
     {cumulative.map((entry, index) => {
-      const [cx, cy] = [x(index), (barArea - 14) * (1 - entry.percent) + 14];
+      const cx = x(index);
+      const cy = lineFor(entry.percent);
       return <g key={`cum-${entry.label}`}>
-        <circle cx={cx} cy={cy} r={3} fill="#345d91" />
-        <text x={cx} y={cy - 7} textAnchor="middle" fontSize={8} fill="#345d91">{PERCENT(entry.percent)}</text>
+        <circle cx={cx} cy={cy} r={3.5} fill="#345d91" />
+        <text x={cx} y={cy - 8} textAnchor="middle" fontSize={9} fill="#345d91" stroke="#f7f9fc" strokeWidth={3} paintOrder="stroke">{PERCENT(entry.percent)}</text>
       </g>;
     })}
-    <text x={34} y={10} fontSize={9} fill="#6b7a8c">累计占比</text>
   </svg>;
 }
 

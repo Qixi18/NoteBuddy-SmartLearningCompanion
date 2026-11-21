@@ -433,7 +433,7 @@ h3 { margin-top: 18px; font-size: 15px; font-weight: 700; }
 .dumbbell-dot { position: absolute; top: 1px; width: 8px; height: 8px; border-radius: 999px; transform: translateX(-50%); }
 .dumbbell-dot.dot-0 { background: #345d91; }
 .dumbbell-dot.dot-1 { background: #3f8f5f; }
-.pareto-chart { width: 100%; height: auto; }
+.pareto-chart { display: block; width: 100%; max-width: 620px; height: auto; margin: 8px auto 0; }
 .overview-routes { margin: 0 0 16px; }
 .section-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 11px; }
 .section-heading > h2 { margin: 0; font-size: 18px; }
