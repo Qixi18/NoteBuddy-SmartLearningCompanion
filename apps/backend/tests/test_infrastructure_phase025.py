@@ -509,19 +509,23 @@ def test_backup_rejects_non_application_sqlite(tmp_path):
         backup_database(f"sqlite:///{unknown.as_posix()}", tmp_path / "copy.sqlite")
 
 
-def test_migration_rejects_symlinked_run_files(tmp_path):
+def test_migration_rejects_symlinked_run_files(tmp_path, monkeypatch):
     source = tmp_path / "source"
     source.mkdir()
     run_id = "0123456789abcdef"
-    outside = tmp_path / "outside.json"
-    outside.write_text(json.dumps(_minimal_snapshot(run_id)), encoding="utf-8")
     (source / "current.txt").write_text(run_id, encoding="utf-8")
     run_dir = source / run_id
     run_dir.mkdir()
-    try:
-        (run_dir / "analysis.json").symlink_to(outside)
-    except (OSError, NotImplementedError):
-        pytest.skip("当前 Windows 环境不允许创建符号链接")
+    linked_snapshot = run_dir / "analysis.json"
+    linked_snapshot.write_text(json.dumps(_minimal_snapshot(run_id)), encoding="utf-8")
+    original_is_symlink = Path.is_symlink
+
+    def is_symlink(path):
+        if path == linked_snapshot:
+            return True
+        return original_is_symlink(path)
+
+    monkeypatch.setattr(Path, "is_symlink", is_symlink)
     with pytest.raises(ValueError, match="不允许符号链接"):
         discover(source)
 

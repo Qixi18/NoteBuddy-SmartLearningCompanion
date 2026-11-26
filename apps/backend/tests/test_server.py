@@ -1,5 +1,6 @@
 import asyncio
 import csv
+import hashlib
 import io
 import json
 import re
@@ -122,6 +123,218 @@ def test_release_preflight_blocks_missing_cases_and_invalidates_changed_review_f
     )
     assert response.status_code == 400
     assert "预检后案例、复核、来源或报告已变化" in response.json()["error"]
+
+
+def test_submission_preflight_and_zip_export_success_roundtrip_with_synthetic_records(
+    tmp_path,
+):
+    tables = sample_tables()
+    template = next(row for row in tables["作答记录"] if row["记录编号"] == "R2")
+    for student_id, record_id, event_id, source_line in (
+        ("D02", "R5", "E4", 6),
+        ("D03", "R6", "E5", 7),
+    ):
+        tables["作答记录"].append(
+            {
+                **template,
+                "记录编号": record_id,
+                "学生编号": student_id,
+                "作答事件编号": event_id,
+                "_source_line": source_line,
+            }
+        )
+    client = client_for(tmp_path, tables=tables)
+    case_ids = ["D01", "D02", "D03"]
+    case_payloads = {}
+    reviewer = "Playwright 合成验收"
+    signoff = client.post(
+        "/api/source-verification",
+        json={
+            "indicator_id": "T01I1",
+            "status": "verified",
+            "curriculum_locator": "合成测试定位；不代表正式课标页码",
+            "textbook_locator": "合成测试定位；不代表正式教材页码",
+            "material_ids": ["Q001"],
+            "reviewer": reviewer,
+            "reason": "仅验证隔离测试数据库的发布流程。",
+        },
+    )
+    assert signoff.status_code == 200, signoff.text
+
+    for student_id in case_ids:
+        draft_response = client.get(
+            "/api/draft",
+            params={"student": student_id, "indicator": "T01I1", "node": "N01"},
+        )
+        assert draft_response.status_code == 200, draft_response.text
+        draft = draft_response.json()
+        evidence_ids = draft["evidence_record_ids"]
+        assert evidence_ids
+        review = client.post(
+            "/api/review",
+            json={
+                "student_id": student_id,
+                "indicator_id": "T01I1",
+                "status": "edited",
+                "diagnosis": "合成测试诊断；不代表真实学生结论",
+                "recommendation": "完成针对 Q001 的独立练习",
+                "adjustment_condition": "教师核对步骤",
+                "reason": "仅验证隔离测试数据库的发布流程。",
+                "source": "rule",
+                "evidence_record_ids": evidence_ids,
+                "original_draft": draft,
+                "structured_plan": {
+                    "material_ids": ["Q001"],
+                    "activity": "合成验收演示活动",
+                    "steps": ["读取题目", "独立完成"],
+                    "practice": ["完成 Q001 同型练习"],
+                    "observation_points": ["记录解题步骤"],
+                },
+                "reviewer": reviewer,
+            },
+        )
+        assert review.status_code == 200, review.text
+
+        bundle_response = client.get(
+            "/api/evidence-bundle",
+            params={"student": student_id, "indicator": "T01I1", "node": "N01"},
+        )
+        assert bundle_response.status_code == 200, bundle_response.text
+        bundle = bundle_response.json()
+        refs = [
+            {
+                "kind": "response",
+                "evidence_id": row["evidence_id"],
+                "record_id": row["record_id"],
+                "source_line": row["source_line"],
+                "scope": bundle["scope"],
+            }
+            for row in bundle["responses"]
+            if row["record_id"] in evidence_ids
+        ]
+        assert refs
+        case_payload = {
+            "student_id": student_id,
+            "status": "confirmed",
+            "need_type": "部分得分",
+            "selection_reason": "合成测试夹具；不代表正式案例遴选。",
+            "narrative": "合成案例叙述，仅用于验证 ZIP 生成流程。",
+            "limitations": "所有记录均为自动化合成测试数据。",
+            "evidence_record_ids": evidence_ids,
+            "evidence_refs": refs,
+            "review_refs": [
+                {
+                    "indicator_id": "T01I1",
+                    "node_id": "N01",
+                    "version": review.json()["version"],
+                }
+            ],
+            "reviewer": reviewer,
+        }
+        case = client.post(
+            "/api/teacher-case",
+            json=case_payload,
+        )
+        assert case.status_code == 200, case.text
+        case_payloads[student_id] = case_payload
+
+    preflight = client.get(
+        "/api/release-checks",
+        params=[("case_ids", student_id) for student_id in case_ids]
+        + [("node", "N01"), ("reviewer", reviewer), ("content_reviewed", "true")],
+    )
+    assert preflight.status_code == 200, preflight.text
+    prepared = preflight.json()
+    checks = {row["id"]: row for row in prepared["checks"]}
+    assert prepared["release_status"] == "ready_with_open_checks"
+    assert all(
+        checks[key]["status"] == "passed"
+        for key in (
+            "case_selection",
+            "confirmed_cases",
+            "case_selection_reason",
+            "evidence_references",
+            "teacher_reviews",
+            "source_signoffs",
+            "case_report",
+            "class_report",
+            "human_content_review",
+        )
+    ), checks
+    assert checks["independent_evaluation"]["status"] == "not_checked"
+
+    changed_case = {
+        **case_payloads["D01"],
+        "narrative": "合成案例已在预检后修改；应要求重新预检。",
+    }
+    changed = client.post("/api/teacher-case", json=changed_case)
+    assert changed.status_code == 200, changed.text
+    stale_export = client.post(
+        "/api/export-submission",
+        json={
+            "run_id": prepared["run_id"],
+            "case_ids": case_ids,
+            "node_id": "N01",
+            "preflight_fingerprint": prepared["fingerprint"],
+            "reviewer": reviewer,
+            "content_reviewed": True,
+        },
+    )
+    assert stale_export.status_code == 400
+    assert "预检后案例、复核、来源或报告已变化" in stale_export.json()["error"]
+
+    preflight = client.get(
+        "/api/release-checks",
+        params=[("case_ids", student_id) for student_id in case_ids]
+        + [("node", "N01"), ("reviewer", reviewer), ("content_reviewed", "true")],
+    )
+    assert preflight.status_code == 200, preflight.text
+    prepared = preflight.json()
+    checks = {row["id"]: row for row in prepared["checks"]}
+    assert prepared["release_status"] == "ready_with_open_checks"
+    assert checks["confirmed_cases"]["status"] == "passed"
+    assert checks["case_report"]["status"] == "passed"
+
+    exported = client.post(
+        "/api/export-submission",
+        json={
+            "run_id": prepared["run_id"],
+            "case_ids": case_ids,
+            "node_id": "N01",
+            "preflight_fingerprint": prepared["fingerprint"],
+            "reviewer": reviewer,
+            "content_reviewed": True,
+        },
+    )
+    assert exported.status_code == 200, exported.text
+    assert exported.headers["content-type"].startswith("application/zip")
+    with zipfile.ZipFile(io.BytesIO(exported.content)) as archive:
+        names = set(archive.namelist())
+        assert {
+            "manifest.json",
+            "release_checks.json",
+            "case_reports.json",
+            "class_report.json",
+            "checksums.json",
+            "submission-report.html",
+        }.issubset(names)
+        assert archive.testzip() is None
+        manifest = json.loads(archive.read("manifest.json"))
+        assert manifest["package_type"] == "competition_submission"
+        assert manifest["release_status"] == "ready_with_open_checks"
+        case_report = json.loads(archive.read("case_reports.json"))
+        assert case_report["status"] == "ready"
+        assert {
+            case["student_id"] for case in case_report["cases"]
+        } == set(case_ids)
+        archived_checks = {
+            row["id"]: row for row in json.loads(archive.read("release_checks.json"))
+        }
+        assert archived_checks["independent_evaluation"]["status"] == "not_checked"
+        checksums = json.loads(archive.read("checksums.json"))
+        assert set(checksums) == names - {"checksums.json"}
+        for name, expected in checksums.items():
+            assert hashlib.sha256(archive.read(name)).hexdigest() == expected
 
 
 def test_import_files_rejects_request_body_over_http_limit(tmp_path):
@@ -947,16 +1160,24 @@ def test_source_route_reads_configured_pdf_root_after_browser_style_import(tmp_p
     assert response.content == pdf_path.read_bytes()
 
 
-def test_source_route_rejects_allowlisted_symlink_outside_resource_root(tmp_path: Path):
+def test_source_route_rejects_allowlisted_symlink_outside_resource_root(
+    tmp_path: Path, monkeypatch
+):
     resources = tmp_path / "resources"
     resources.mkdir()
     outside = tmp_path / "outside.pdf"
     outside.write_bytes(b"%PDF-1.4 outside")
     link = resources / "allowed.pdf"
-    try:
-        link.symlink_to(outside)
-    except OSError as exc:
-        pytest.skip(f"当前 Windows 环境不允许创建符号链接：{exc}")
+    link.write_bytes(b"%PDF-1.4 in-root placeholder")
+    outside_resolved = outside.resolve()
+    original_resolve = Path.resolve
+
+    def resolve(path, *args, **kwargs):
+        if path == link:
+            return outside_resolved
+        return original_resolve(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", resolve)
 
     run = analyze(sample_tables(), {})
     run["source_index"][0]["source_check"]["textbook_slices"] = ["allowed.pdf"]

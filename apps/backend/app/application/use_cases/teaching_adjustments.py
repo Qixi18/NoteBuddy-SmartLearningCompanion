@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-import re
 from datetime import UTC, datetime
 
 from ...services.task02.evidence_reference_service import (
     validate_evidence_references,
 )
+from ...domain.assessment.evidence_bundle import AnalysisScope
+from ...services.shared.node_ordering import compare_node_dates, compare_nodes
+from ...services.task02.evidence_bundle_service import build_evidence_bundle
 
 
 class TeachingAdjustments:
@@ -26,6 +28,11 @@ class TeachingAdjustments:
                 payload["student_id"],
                 payload["indicator_id"],
                 payload["origin_node_id"],
+            )
+            origin_node = next(
+                node
+                for node in run.get("nodes", [])
+                if node.get("节点编号") == payload["origin_node_id"]
             )
             key = f"{payload['student_id']}:{payload['indicator_id']}"
             reviews = uow.reviews.list(run["run_id"]).get(key, [])
@@ -102,7 +109,10 @@ class TeachingAdjustments:
                         "review_version",
                     )
                 }
-                | {"origin_evidence_refs": origin_refs},
+                | {
+                    "origin_evidence_refs": origin_refs,
+                    "origin_node_date": str(origin_node.get("模拟测验日期") or "").strip(),
+                },
                 {
                     key: payload[key]
                     for key in (
@@ -121,6 +131,40 @@ class TeachingAdjustments:
             if record is None:
                 raise FileNotFoundError("教学调整记录不存在")
             followup = uow.runs.load(payload["followup_run_id"])
+            origin = uow.runs.load(record["origin_run_id"])
+            origin_node = next(
+                (
+                    node
+                    for node in origin.get("nodes", [])
+                    if node.get("节点编号") == record["origin_node_id"]
+                ),
+                None,
+            )
+            followup_node = next(
+                (
+                    node
+                    for node in followup.get("nodes", [])
+                    if node.get("节点编号") == payload["followup_node_id"]
+                ),
+                None,
+            )
+            if origin_node is None or followup_node is None:
+                raise ValueError("起始或复测节点不存在，无法确认测验先后")
+            chronology = (
+                compare_nodes(
+                    followup.get("nodes", []),
+                    record["origin_node_id"],
+                    payload["followup_node_id"],
+                )
+                if origin.get("run_id") == followup.get("run_id")
+                else compare_node_dates(origin_node, followup_node)
+            )
+            if chronology == 1:
+                raise ValueError("后续测验日期早于起始测验")
+            if chronology is None:
+                raise ValueError("后续测验日期缺失或与起始日期相同；请先核对测验日期")
+            if chronology == 0:
+                raise ValueError("后续测验必须晚于起始测验；不能复用起始节点的作答")
             self._validate_scope(
                 followup,
                 record["student_id"],
@@ -135,7 +179,7 @@ class TeachingAdjustments:
             )
             cited = payload["followup_evidence_record_ids"]
             if len(cited) != len(set(cited)) or not set(cited).issubset(allowed):
-                raise ValueError("后续证据必须来自同一学生、指标和测验节点")
+                raise ValueError("后续有效评分证据必须来自同一学生、指标和测验节点")
             followup_refs = validate_evidence_references(
                 followup, payload.get("followup_evidence_refs", [])
             )
@@ -184,26 +228,15 @@ class TeachingAdjustments:
     def _evidence_ids(
         run: dict, student_id: str, indicator_id: str, node_id: str
     ) -> set[str]:
-        node = next(
-            (row for row in run.get("nodes", []) if row.get("节点编号") == node_id),
-            None,
+        scope = AnalysisScope(
+            run_id=run.get("run_id", ""),
+            student_id=student_id,
+            indicator_id=indicator_id,
+            node_id=node_id,
         )
-        if node is None:
-            return set()
-        allowed_items = {
-            value.strip()
-            for value in re.split(r"[，,、;；\s]+", str(node.get("可用题目编号", "")))
-            if value.strip()
-        }
-        item_ids = {
-            row["材料编号"]
-            for row in run.get("items", [])
-            if row["指标编号"] == indicator_id and row["材料编号"] in allowed_items
-        }
+        bundle = build_evidence_bundle(run, scope, {})
         return {
-            row["记录编号"]
-            for row in run.get("responses", [])
-            if row["学生编号"] == student_id
-            and row["材料编号"] in item_ids
-            and row["节点编号"] == node_id
+            response["record_id"]
+            for response in bundle.get("responses", [])
+            if response.get("disposition") == "scored" and response.get("record_id")
         }

@@ -10,12 +10,13 @@ from pathlib import Path
 
 from ...config import settings
 from ...services.task01.source_index_service import build_source_index
+from ..shared.node_ordering import sort_nodes
 from .metrics_service import build_metrics, build_observations
 from .quality_service import build_rubric_observations, validate_records
 from .revision_service import select_revisions
 
 # Version covers the changed revision, disposition, node-observation and metric rules.
-RULE_VERSION = "3"
+RULE_VERSION = "4"
 
 
 def _unique_index(rows: list[dict], id_field: str, table_name: str) -> dict[str, dict]:
@@ -33,8 +34,15 @@ def _unique_index(rows: list[dict], id_field: str, table_name: str) -> dict[str,
 def analyze(tables: dict, files: dict, resources_dir: Path | None = None) -> dict:
     objectives = tables["课程要求"]
     items = _unique_index(tables["题目与材料"], "材料编号", "题目与材料")
+    if any(
+        not str(row.get("模拟班级编号") or "").strip()
+        for row in tables["模拟学生"]
+    ):
+        raise ValueError("模拟学生的 模拟班级编号 不能为空")
     students = _unique_index(tables["模拟学生"], "学生编号", "模拟学生")
     nodes = _unique_index(tables["测验节点"], "节点编号", "测验节点")
+    ordered_nodes, ambiguous_node_ids = sort_nodes(list(nodes.values()))
+    ordered_node_index = {row["节点编号"]: row for row in ordered_nodes}
     indicator_ids = {row["指标编号"] for row in objectives}
     findings: list[dict] = []
 
@@ -44,7 +52,7 @@ def analyze(tables: dict, files: dict, resources_dir: Path | None = None) -> dic
         tables["作答记录"],
         students,
         items,
-        nodes,
+        ordered_node_index,
         indicator_ids,
         findings,
         excluded,
@@ -79,7 +87,7 @@ def analyze(tables: dict, files: dict, resources_dir: Path | None = None) -> dic
         students,
         items,
         objectives,
-        nodes,
+        ordered_node_index,
         findings,
         tables["作答记录"],
     )
@@ -200,7 +208,8 @@ def analyze(tables: dict, files: dict, resources_dir: Path | None = None) -> dic
         "objectives": objectives,
         "items": list(items.values()),
         "students": list(students.values()),
-        "nodes": list(nodes.values()),
+        "nodes": ordered_nodes,
+        "node_ordering_ambiguous_ids": ambiguous_node_ids,
         "field_dictionary": tables["字段说明"],
         "source_index": source_index,
         "raw_responses": tables["作答记录"],

@@ -14,7 +14,9 @@ from app.services.shared import release_service
 def release_state():
     run = {
         "run_id": "run-1",
-        "students": [{"学生编号": f"D{i}"} for i in range(1, 4)],
+        "students": [
+            {"学生编号": f"D{i}", "模拟班级编号": "C1"} for i in range(1, 4)
+        ],
         "files": {"作答记录.csv": "sha256"},
     }
     case_ids = ["D1", "D2", "D3"]
@@ -101,6 +103,22 @@ def test_release_blocks_invalid_selection_stale_sources_and_missing_class_report
         next(item for item in invalid if item["id"] == "case_selection")["status"]
         == "blocked"
     )
+
+
+def test_release_blocks_legacy_roster_with_missing_class_id(monkeypatch):
+    monkeypatch.setattr(
+        release_service, "validate_evidence_references", lambda run, refs: refs
+    )
+    run, sources, cases, reviews, report, case_ids = release_state()
+    run["students"][0]["模拟班级编号"] = " "
+
+    checks = release_service.check_release(
+        run, sources, cases, reviews, report, case_ids, node_id="N1"
+    )
+
+    selection = next(item for item in checks if item["id"] == "case_selection")
+    assert selection["status"] == "blocked"
+    assert "班级编号" in selection["detail"]
 
 
 def test_release_keeps_open_human_evaluation_visible_and_fingerprint_binds_snapshots(

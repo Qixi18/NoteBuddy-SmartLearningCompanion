@@ -22,7 +22,7 @@ export function ClassDiagnosisPage() {
   const objectiveName = (id: string) => objectiveLabel(run.objectives, id);
   return <div className={styles.pageStack}>
     <div className={styles.classScopeBar} aria-label="班级诊断范围"><span><Users size={15}/><b>班级范围</b> {selectedClass || '未选择'}</span><span><BookOpen size={15}/><b>测验节点</b> {selectedNode}</span><span><Layers3 size={15}/><b>分析维度</b> 主题表现 · 共同题目比较</span></div>
-    <ClassDiagnosis insights={insights.data} cases={cases.data ?? []} classId={selectedClass} nodeId={selectedNode} run={run} objectiveName={objectiveName}/>
+    <ClassDiagnosis insights={insights.data} cases={cases.data ?? []} caseOrderingUnclear={!cases.isPending && !cases.isError && !(cases.data?.length) && Boolean(run.node_ordering_ambiguous_ids?.length)} classId={selectedClass} nodeId={selectedNode} run={run} objectiveName={objectiveName}/>
     {insights.data?.limitations.map((item, index) => <p className={styles.limitation} key={index}><CircleHelp size={14}/>{item}</p>)}
   </div>;
 }

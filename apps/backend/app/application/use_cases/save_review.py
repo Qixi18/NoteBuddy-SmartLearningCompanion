@@ -232,12 +232,17 @@ class SaveReview:
                     ):
                         raise ValueError("结构化方案缺少活动步骤、练习或观察点")
                 if not coverage_refs:
-                    histories = uow.stage2.list_sources(run_id)
+                    from .stage2 import Stage2Decisions
+
+                    histories = Stage2Decisions(
+                        self.uow_factory, self.source_service
+                    ).with_source_freshness(run, uow.stage2.list_sources(run_id))
                     latest = histories.get(indicator_id, [])[-1:]
                     verification = latest[0] if latest else None
                     if (
                         not verification
                         or verification["status"] != "verified"
+                        or verification.get("stale")
                         or not set(material_ids).issubset(verification["material_ids"])
                     ):
                         raise ValueError("所选教学材料尚未完成当前运行的指标来源签核")

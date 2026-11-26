@@ -2,8 +2,8 @@
   "run_id": "0123456789abcdef",
   "node_id": "N01",
   "classes": [
-    {"class_id": "C01", "student_count": 2, "student_ids": ["D01", "D02"], "scored_record_count": 2},
-    {"class_id": "C02", "student_count": 2, "student_ids": ["D03", "D04"], "scored_record_count": 2}
+    {"class_id": "C01", "student_count": 2, "student_ids": ["D01", "D02"], "scored_record_count": 2, "raw_record_count": 3},
+    {"class_id": "C02", "student_count": 2, "student_ids": ["D03", "D04"], "scored_record_count": 2, "raw_record_count": 2}
   ],
   "comparisons": [
     {

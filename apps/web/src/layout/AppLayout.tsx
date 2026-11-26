@@ -7,7 +7,7 @@ import {
 import { useRun } from '../api/queries';
 import { pageTitles, routes } from '../app/routes';
 import { useWorkbenchScope } from '../features/shared/useWorkbenchScope';
-import { text } from '../features/shared/scopeUtils';
+import { ambiguousNodeIds, text } from '../features/shared/scopeUtils';
 import styles from './AppLayout.module.css';
 
 const navGroups = [
@@ -41,9 +41,11 @@ export function AppLayout() {
 
   const page = pageTitles[location.pathname]
     ?? (location.pathname.startsWith(`${routes.itemEvidence}/`) ? pageTitles[routes.itemEvidence] : pageTitles[routes.dashboard]);
+  const ambiguousNodes = new Set(ambiguousNodeIds(nodes));
   const nodeOptions = nodes.map((row, index) => ({
     id: text(row['节点编号']) || String(index),
     name: text(row['节点名称']) || text(row['测验名称']) || text(row['节点编号']) || '测验节点',
+    ambiguous: ambiguousNodes.has(text(row['节点编号'])),
   }));
   const subject = run?.subject ?? nodes.find(row => text(row['学科']))?.['学科'];
 
@@ -98,9 +100,10 @@ export function AppLayout() {
           </label>
           <label className={styles.scopeField}><ClipboardList size={19}/><span>测验</span>
             <select aria-label="测验节点" value={scope.nodeId} onChange={event => setNode(event.target.value)} disabled={!nodeOptions.length}>
-              {!nodeOptions.length && <option value="">暂无测验</option>}{nodeOptions.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+              {!nodeOptions.length && <option value="">暂无测验</option>}{nodeOptions.map(item => <option key={item.id} value={item.id}>{item.name}{item.ambiguous ? ' · 日期待确认' : ''}</option>)}
             </select>
           </label>
+          {nodeOptions.some(item => item.ambiguous) && <span className={styles.nodeDateWarning} role="status">测验日期缺失或重复，相关节点的先后关系待确认</span>}
         </div>
         <div className={styles.topActions}>
           <button

@@ -90,6 +90,18 @@ def test_single_point_loss_is_local_fact_and_not_repeated_problem():
     assert claims[0]["limitations"]
 
 
+def test_non_finite_rubric_scores_do_not_become_student_insight_claims():
+    responses = [
+        _response("R1", "Q001", "Q001P1", float("nan")),
+        _response("R2", "Q002", "Q002P1", float("inf")),
+    ]
+    responses[1]["rubric_observation"]["points"][0]["maximum"] = float("inf")
+
+    claims = build_student_insights(_bundle(responses))
+
+    assert claims == []
+
+
 def test_two_similar_losses_need_verified_mapping_and_keep_success_counterexample():
     responses = [
         _response("R1", "Q001", "Q001P1", 0, line=10),

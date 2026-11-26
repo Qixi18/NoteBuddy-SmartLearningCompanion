@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import re
 
+from ..shared.node_ordering import sort_nodes
+
 
 def _sorted_nodes(run: dict) -> list[dict]:
     nodes = [
@@ -16,10 +18,8 @@ def _sorted_nodes(run: dict) -> list[dict]:
         for node in run.get("nodes", [])
         if node.get("节点编号")
     ]
-    return sorted(
-        nodes,
-        key=lambda node: str(node.get("模拟测验日期") or node["节点编号"]),
-    )
+    ordered, _ = sort_nodes(nodes)
+    return ordered
 
 
 def _topics_in_teaching_order(run: dict, nodes: list[dict]) -> list[str]:
@@ -66,6 +66,7 @@ def build_knowledge_link_candidates(
     topic_id = str(objective.get("主题编号", ""))
 
     nodes = _sorted_nodes(run)
+    _, ambiguous_node_ids = sort_nodes(nodes)
     topic_order = _topics_in_teaching_order(run, nodes)
     labels = {
         row.get("指标编号"): str(row.get("观察指标", ""))
@@ -88,7 +89,7 @@ def build_knowledge_link_candidates(
         )
 
     # 规则 2：教学顺序中前一个主题的末位指标
-    if topic_id in topic_order:
+    if not ambiguous_node_ids and topic_id in topic_order:
         topic_position = topic_order.index(topic_id)
         if topic_position > 0:
             previous_topic = topic_order[topic_position - 1]

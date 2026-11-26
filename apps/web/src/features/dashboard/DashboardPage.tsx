@@ -63,6 +63,7 @@ export function DashboardPage() {
   const classStats = insights.data?.classes.find(item => item.class_id === classId);
   const classStudents = useMemo(() => run?.students.filter(row => String(row['模拟班级编号'] ?? '') === classId) ?? [], [run, classId]);
   const classCases = cases.data?.filter(item => item.class_id === classId) ?? [];
+  const caseOrderingUnclear = !cases.isPending && !cases.isError && !cases.data?.length && Boolean(run?.node_ordering_ambiguous_ids?.length);
   const comparisons = insights.data?.comparisons ?? [];
   const ratios = comparisons.map(comparison => {
     const classResult = comparison.classes.find(row => row.class_id === classId);
@@ -120,12 +121,12 @@ export function DashboardPage() {
       <div className={styles.actions}><button className={styles.secondaryButton} onClick={() => window.print()}><ClipboardCheck size={17}/>打印当前工作台</button><Link className={styles.primaryButton} to={{ pathname: routes.classDiagnosis, search: search }}><Activity size={17}/>查看班级诊断</Link><Link className={styles.secondaryButton} to={{ pathname: routes.studentTeaching, search: search }}><Sparkles size={17}/>生成教学建议</Link></div></div>
     <div className={styles.metrics}>
       <Metric label="班级学生" value={classStats?.student_count ?? classStudents.length} hint={`当前班级 ${classId || '未选择'}`} icon={<Users size={27}/>}/>
-      <Metric label="有效评分记录" value={quality?.eligible_scored ?? 0} hint={`共 ${quality?.raw_rows ?? 0} 条原始记录`} icon={<ClipboardCheck size={27}/>}/>
+      <Metric label="当前班级有效评分" value={classStats?.scored_record_count ?? 0} hint={`本节点 ${classStats?.raw_record_count ?? 0} 条原始作答`} icon={<ClipboardCheck size={27}/>}/>
       <Metric label="当前优先指标" value={priority[0]?.label ?? '暂无可比数据'} hint={priority[0] ? `全题集得分率 ${pct(priority[0].ratio)}` : '当前范围没有有效评分'} icon={<Target size={27}/>}/>
       <Metric label="典型学生候选" value={classCases.length} hint="按案例证据类型列出，不代表能力等级" icon={<AlertTriangle size={27}/>} tone="amber"/>
     </div>
 
-    {quality && quality.raw_rows > 0 && <Notice tone={quality.findings.length ? 'warning' : 'info'}>口径说明：有效评分 {quality.eligible_scored} 条 / 原始作答记录 {quality.raw_rows} 条。未评分、异常或缺失记录不作为零分。</Notice>}
+    {quality && quality.raw_rows > 0 && <Notice tone={quality.findings.length ? 'warning' : 'info'}>顶部评分统计仅覆盖当前班级与测验节点；下方数据质量面板覆盖当前运行全部班级和节点。未评分、异常或缺失记录不作为零分。</Notice>}
     <div className={styles.contentGrid}>
       <Panel title="主题表现概览" icon={<Activity size={19}/>} action={<span className={styles.panelMeta}>基于当前测验 · 全题集得分率</span>} className={styles.performancePanel}>
         {insights.isFetching ? <Loading label="正在汇总当前班级表现…"/> : ratios.length ? <ReactECharts option={chartBar} notMerge lazyUpdate style={{ height: 245, width: '100%' }}/> : <EmptyState title="暂无可展示的指标表现" detail="当前测验没有可用的指标评分记录。"/>}
@@ -143,7 +144,7 @@ export function DashboardPage() {
       </Panel>
 
       <Panel title="典型学生候选" icon={<Users size={19}/>} action={<Link to={{ pathname: routes.classDiagnosis, search: search }}>全部候选 <ArrowRight size={14}/></Link>}>
-        <div className={styles.studentList}>{classCases.length ? classCases.slice(0, 4).map(item => <div className={styles.studentRow} key={`${item.class_id}-${item.student_id}`}><span className={styles.studentCode}>{item.student_id}</span><div><strong>{item.type}</strong><small>{item.reason || '可查看该案例的关联作答证据。'}</small></div><Link aria-label={`查看学生 ${item.student_id}`} to={{ pathname: routes.studentDiagnosis, search: applyScope(params, { student: item.student_id, class: item.class_id }).toString() }}><ArrowRight size={16}/></Link></div>) : <EmptyState title="当前班级暂无案例候选" detail="候选案例由后端按可用证据生成；没有候选不代表表现稳定。"/>}</div>
+        <div className={styles.studentList}>{classCases.length ? classCases.slice(0, 4).map(item => <div className={styles.studentRow} key={`${item.class_id}-${item.student_id}`}><span className={styles.studentCode}>{item.student_id}</span><div><strong>{item.type}</strong><small>{item.reason || '可查看该案例的关联作答证据。'}</small></div><Link aria-label={`查看学生 ${item.student_id}`} to={{ pathname: routes.studentDiagnosis, search: applyScope(params, { student: item.student_id, class: item.class_id }).toString() }}><ArrowRight size={16}/></Link></div>) : <EmptyState title={caseOrderingUnclear ? '案例候选暂不可用' : '当前班级暂无案例候选'} detail={caseOrderingUnclear ? '测验日期缺失、无效或重复，无法确定最新节点。核对日期并重新导入后再查看候选。' : '候选案例由后端按可用证据生成；没有候选不代表表现稳定。'}/>}</div>
       </Panel>
 
       <Panel title="班级学生分布" icon={<Layers3 size={19}/>} action={<span className={styles.panelMeta}>按导入数据中的班级编号</span>}>
@@ -166,7 +167,7 @@ function QualityPanel({ quality }: { quality: RunData['quality'] }) {
   const counts = quality.disposition_counts ?? {};
   const statusNames: Record<string, string> = { scored: '有效评分', pending: '待评分', unanswered: '未作答', superseded: '已被修订替代', excluded: '排除', unknown: '状态未知' };
   const findings = quality.findings ?? [];
-  return <Panel title="数据质量与导入核查" icon={<AlertTriangle size={19}/>} className={styles.qualityPanel}>
+  return <Panel title="当前运行整体数据质量" icon={<AlertTriangle size={19}/>} className={styles.qualityPanel}>
     <div className={styles.qualityMetrics}><span><b>{quality.raw_rows}</b> 原始行</span><span><b>{quality.events}</b> 作答事件</span><span><b>{quality.selected_revisions}</b> 当前修订</span><span><b>{quality.eligible_scored}</b> 有效评分</span><span><b>{quality.excluded_record_ids.length}</b> 排除记录</span></div>
     {Object.keys(counts).length > 0 && <div className={styles.dispositionSummary}>{Object.entries(counts).map(([state, count]) => <span key={state}>{statusNames[state] ?? state} <b>{count}</b></span>)}</div>}
     <p className={styles.qualityHint}>按修订与事件口径核查导入记录。待评分、未作答、已替代、排除和缺失记录均不转换为零分。</p>

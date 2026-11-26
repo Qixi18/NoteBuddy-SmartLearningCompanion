@@ -89,3 +89,73 @@ def test_insufficient_scores_and_single_class_are_stated_without_invented_eviden
     best = next(case for case in cases if case["type"] == "表现较好")
     assert best["evidence_record_ids"] == []
     assert "无法比较表现" in best["reason"]
+
+
+def test_case_candidates_are_withheld_for_legacy_roster_with_blank_class_id():
+    run = _run()
+    run["students"][0]["模拟班级编号"] = "   "
+
+    assert suggest_cases(run) == []
+
+
+def test_case_candidates_are_withheld_when_a_node_date_is_unknown_or_invalid():
+    for ambiguous_date in ("", "not-a-date"):
+        run = _run()
+        run["nodes"].append(
+            {
+                "节点编号": "N03",
+                "模拟测验日期": ambiguous_date,
+                "可用题目编号": "Q001",
+            }
+        )
+        run["responses"].append(
+            _response("R-D04-N03", "D04", "Q001", "N03", 1, 2, "新节点过程")
+        )
+        run["metrics"].append(
+            {"kind": "student", "key": "D04", "record_ids": ["R-D04-N03"]}
+        )
+
+        assert suggest_cases(run) == []
+
+
+def test_case_candidates_are_withheld_when_latest_node_dates_tie():
+    run = _run()
+    run["nodes"].append(
+        {
+            "节点编号": "N03",
+            "模拟测验日期": "2026-06-17",
+            "可用题目编号": "Q001",
+        }
+    )
+    run["responses"].append(
+        _response("R-D04-N03", "D04", "Q001", "N03", 1, 2, "同日节点过程")
+    )
+    run["metrics"].append(
+        {"kind": "student", "key": "D04", "record_ids": ["R-D04-N03"]}
+    )
+
+    assert suggest_cases(run) == []
+
+
+def test_case_candidates_allow_older_ties_when_the_latest_node_is_unique():
+    run = _run()
+    run["nodes"].append(
+        {"节点编号": "N01B", "模拟测验日期": "2026-01-20", "可用题目编号": "Q001"}
+    )
+
+    cases = suggest_cases(run)
+
+    assert len(cases) == 3
+    assert all("节点 N02" in case["reason"] for case in cases)
+
+
+def test_single_undated_node_can_still_supply_current_case_evidence():
+    run = _run()
+    run["nodes"] = [
+        {"节点编号": "N02", "模拟测验日期": "", "可用题目编号": "Q001、Q002"}
+    ]
+
+    cases = suggest_cases(run)
+
+    assert len(cases) == 3
+    assert all("节点 N02" in case["reason"] for case in cases)

@@ -48,6 +48,74 @@ def test_teacher_case_requires_traceable_refs_for_selected_response_ids(tmp_path
     assert "证据引用" in response.json()["error"]
 
 
+def test_student_followup_evidence_only_allows_effective_valid_scores():
+    from app.application.use_cases.teaching_adjustments import TeachingAdjustments
+    from app.services.analysis import analyze
+
+    run = analyze(sample_tables(), {})
+
+    assert TeachingAdjustments._evidence_ids(run, "D01", "T01I1", "N01") == {"R2"}
+
+
+def test_student_adjustment_cannot_reuse_origin_assessment_as_followup(tmp_path):
+    client = client_for(tmp_path)
+    run = client.get("/api/run").json()
+    draft = client.get(
+        "/api/draft", params={"student": "D01", "indicator": "T01I1", "node": "N01"}
+    ).json()
+    review = client.post(
+        "/api/review",
+        json={
+            "student_id": "D01",
+            "indicator_id": "T01I1",
+            "status": "accepted",
+            "diagnosis": "基线诊断",
+            "recommendation": "围绕证据安排练习",
+            "reason": "教师核对当前作答证据",
+            "evidence_record_ids": ["R2"],
+            "original_draft": draft,
+        },
+    )
+    assert review.status_code == 200, review.text
+    adjustment = client.post(
+        "/api/teaching-adjustments",
+        json={
+            "student_id": "D01",
+            "indicator_id": "T01I1",
+            "origin_run_id": run["run_id"],
+            "origin_node_id": "N01",
+            "review_version": review.json()["version"],
+            "planned_activity": "依据基线证据安排分步练习",
+            "planned_practice": ["Q001"],
+            "observation_points": ["记录学生独立步骤"],
+            "teacher": "教师甲",
+            "planned_at": "2026-11-26",
+        },
+    )
+    assert adjustment.status_code == 200, adjustment.text
+
+    response = client.patch(
+        f"/api/teaching-adjustments/{adjustment.json()['adjustment_id']}",
+        json={
+            "implementation": "已完成课堂练习",
+            "implementation_status": "completed",
+            "outcome_observations": "观察到学生能完成练习",
+            "followup_run_id": run["run_id"],
+            "followup_node_id": "N01",
+            "followup_evidence_record_ids": ["R2"],
+            "comparability": "comparable",
+            "comparability_reason": "试图复用起始节点证据",
+            "teacher_conclusion": "不能将基线作答当作干预后结果",
+            "reviewer": "教师甲",
+            "concluded_at": "2026-11-26",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "必须晚于起始测验" in response.json()["error"]
+    client.close()
+
+
 def _csv_files(tables):
     files = {}
     for name, rows in tables.items():
@@ -67,9 +135,11 @@ def _csv_files(tables):
 
 def test_no_record_coverage_to_diagnostic_plan_case_export_and_followup(tmp_path):
     tables = sample_tables()
+    tables["测验节点"][0]["模拟测验日期"] = "2026-01-20"
     tables["作答记录"] = [row for row in tables["作答记录"] if row["学生编号"] != "D01"]
     client = client_for(tmp_path, tables=tables)
     run = client.get("/api/run").json()
+    assert run["nodes"][0]["模拟测验日期"] == "2026-01-20"
     bundle = client.get(
         "/api/evidence-bundle",
         params={"student": "D01", "indicator": "T01I1", "node": "N01"},
@@ -179,6 +249,7 @@ def test_no_record_coverage_to_diagnostic_plan_case_export_and_followup(tmp_path
     assert cases[0]["evidence_refs"] == [ref]
 
     followup_tables = sample_tables()
+    followup_tables["测验节点"][0]["模拟测验日期"] = "2026-06-17"
     followup_tables["作答记录"] = [
         {
             **row,
@@ -192,6 +263,7 @@ def test_no_record_coverage_to_diagnostic_plan_case_export_and_followup(tmp_path
         "/api/import-files", json={"files": _csv_files(followup_tables)}
     )
     assert followup.status_code == 200, followup.text
+    assert client.get("/api/run").json()["nodes"][0]["模拟测验日期"] == "2026-06-17"
     followup_bundle = client.get(
         "/api/evidence-bundle",
         params={"student": "D01", "indicator": "T01I1", "node": "N01"},
@@ -227,4 +299,36 @@ def test_no_record_coverage_to_diagnostic_plan_case_export_and_followup(tmp_path
     assert completed.json()["origin_evidence_refs"] == [ref]
     assert completed.json()["followup_evidence_record_ids"] == ["F-R2"]
     assert completed.json()["followup_evidence_refs"] == [followup_ref]
+    for invalid_record_id in ("F-R3", "F-R4"):
+        invalid_response = next(
+            item
+            for item in followup_bundle["responses"]
+            if item["record_id"] == invalid_record_id
+        )
+        invalid_ref = {
+            "kind": "response",
+            "evidence_id": invalid_response["evidence_id"],
+            "record_id": invalid_response["record_id"],
+            "source_line": invalid_response["source_line"],
+            "scope": followup_bundle["scope"],
+        }
+        rejected = client.patch(
+            f"/api/teaching-adjustments/{adjustment.json()['adjustment_id']}",
+            json={
+                "implementation": "已执行诊断活动",
+                "implementation_status": "completed",
+                "outcome_observations": "仅用于验证无效证据不会写入结论",
+                "followup_run_id": followup.json()["run_id"],
+                "followup_node_id": "N01",
+                "followup_evidence_record_ids": [invalid_record_id],
+                "followup_evidence_refs": [invalid_ref],
+                "comparability": "undetermined",
+                "comparability_reason": "未使用无效记录作比较",
+                "teacher_conclusion": "无效后续记录不能支撑结论",
+                "reviewer": "教师甲",
+                "concluded_at": "2026-11-20",
+            },
+        )
+        assert rejected.status_code == 400
+        assert "有效" in rejected.json()["error"]
     client.close()

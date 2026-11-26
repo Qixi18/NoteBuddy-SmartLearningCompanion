@@ -6,6 +6,7 @@ import { api, patchJson, postJson } from '../api';
 import { str } from '../../shared/workbenchTypes';
 import type { Row } from '../../shared/workbenchTypes';
 import styles from '../../shared/WorkbenchPages.module.css';
+import { compareNodeChronology, orderedNodeRows } from '../../shared/scopeUtils';
 
 const STATUS_LABELS: Record<string, string> = {
   not_completed: '尚未完成',
@@ -42,7 +43,6 @@ export function ClassAdjustmentWorkflow({
   const nodeLabels = useMemo(() => new Map(nodes.map(item => [
     str(item['节点编号']), str(item['节点名称'], str(item['节点编号'])),
   ])), [nodes]);
-
   const create = useMutation({
     mutationFn: () => api<Row>('/api/class-teaching-adjustments', postJson({
       run_id: runId,
@@ -134,8 +134,18 @@ function ClassAdjustmentRecord({
     enabled: Boolean(record.run_id && record.class_id && followupNode),
   });
   const records = (evidence.data?.records as EvidenceRecord[] | undefined) ?? [];
-  const baseOrder = nodes.findIndex(node => str(node['节点编号']) === str(record.node_id));
-  const eligibleNodes = nodes.filter((_, index) => index >= baseOrder);
+  const comparisons = Array.isArray(record.followup_comparison)
+    ? record.followup_comparison as Row[]
+    : [];
+  const eligibleNodes = orderedNodeRows(nodes);
+  const followupOrder = compareNodeChronology(nodes, str(record.node_id), followupNode);
+  const hasLaterFollowupNode = eligibleNodes.some(item =>
+    compareNodeChronology(nodes, str(record.node_id), str(item['节点编号'])) === -1,
+  );
+  const hasOtherIneligibleNode = eligibleNodes.some(item => {
+    const id = str(item['节点编号']);
+    return id !== str(record.node_id) && compareNodeChronology(nodes, str(record.node_id), id) !== -1;
+  });
 
   const update = useMutation({
     mutationFn: () => api<Row>(`/api/class-teaching-adjustments/${encodeURIComponent(str(record.adjustment_id))}`, patchJson({
@@ -157,6 +167,7 @@ function ClassAdjustmentRecord({
   const disabled = update.isPending
     || !implementation.trim()
     || !selected.length
+    || followupOrder !== -1
     || (status === 'completed' && !conclusion.trim());
   const evidenceOptions = useMemo(
     () => records.filter(item => item.student_id),
@@ -186,9 +197,12 @@ function ClassAdjustmentRecord({
         <label>复测节点<select value={followupNode} onChange={event => { setFollowupNode(event.target.value); setSelected([]); }}>
           {eligibleNodes.map(item => {
             const id = str(item['节点编号']);
-            return <option key={id} value={id}>{id} · {nodeLabels.get(id) ?? id}</option>;
+            const comparison = compareNodeChronology(nodes, str(record.node_id), id);
+            const eligible = comparison === -1;
+            return <option key={id} value={id} disabled={!eligible}>{id} · {nodeLabels.get(id) ?? id}{comparison === 0 ? ' · 实施节点不可复测' : comparison === null ? ' · 日期待确认' : comparison === 1 ? ' · 早于实施节点' : ''}</option>;
           })}
         </select></label>
+        {(hasOtherIneligibleNode || !hasLaterFollowupNode) && <small className={styles.limitation}>复测只允许使用日期明确且晚于实施节点的测验；不能复用实施节点、同日节点或日期不明的节点。</small>}
       </div>
       <fieldset className={styles.followupEvidence}>
         <legend>复测作答证据（必选，{selected.length} 条）</legend>
@@ -204,6 +218,23 @@ function ClassAdjustmentRecord({
           <span>{option.record_id} · {option.student_id} · {option.material_id} · {str(option.score)}/{str(option.maximum)}</span>
         </label>) : <small>该节点没有本班有效作答记录；不能填写基于空证据的效果结论。</small>}
       </fieldset>
+      {comparisons.length > 0 && <section className={styles.retestComparison} aria-label="班级复测指标对照">
+        <header><b>同指标、共同题组复测对照</b><span>描述性统计</span></header>
+        {comparisons.map(comparison => {
+          const before = comparison.baseline as Row | undefined;
+          const after = comparison.followup as Row | undefined;
+          const formatRatio = (value: unknown) => typeof value === 'number' && Number.isFinite(value) ? `${(value * 100).toFixed(1)}%` : '不可比较';
+          const coverage = (value: Row | undefined) => `${str(value?.observed_student_count, '0')} / ${str(value?.student_count, '0')} 人`;
+          return <article key={str(comparison.indicator_id)}>
+            <strong>{str(comparison.indicator_id)} · {comparison.status === 'comparable' ? `变化 ${typeof comparison.delta_ratio === 'number' ? `${comparison.delta_ratio > 0 ? '+' : ''}${(comparison.delta_ratio * 100).toFixed(1)} 个百分点` : '不可计算'}` : '当前不可比较'}</strong>
+            {comparison.status === 'comparable' ? <>
+              <div><span>实施前 {formatRatio(before?.ratio)} · {str(before?.record_count, '0')} 条有效评分 · 覆盖 {coverage(before)}</span><span>复测 {formatRatio(after?.ratio)} · {str(after?.record_count, '0')} 条有效评分 · 覆盖 {coverage(after)}</span></div>
+              <small>共同题目：{Array.isArray(comparison.common_material_ids) ? comparison.common_material_ids.map(String).join('、') : '—'}</small>
+            </> : <small>{str(comparison.reason, '缺少可比较的共同题目或有效评分。')}</small>}
+            <small>{str(comparison.interpretation, '描述性分数变化不证明变化由教学实施导致。')}</small>
+          </article>;
+        })}
+      </section>}
       <label className={styles.adjustmentWideField}>教师结论<textarea rows={2} value={conclusion} onChange={event => setConclusion(event.target.value)} placeholder="结合所选复测证据记录结论与下一步"/></label>
       <div className={styles.reviewActions}>
         <button type="button" className={styles.adjustmentSubmit} disabled={disabled} onClick={() => { setMessage(''); update.mutate(); }}>

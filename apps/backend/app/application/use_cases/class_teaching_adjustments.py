@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from ...services.task02.quality_service import validate_records
+from ...services.shared.node_ordering import compare_nodes
 
 ADJUSTMENT_STATUSES = {"not_completed", "partial", "completed"}
 
@@ -117,12 +118,15 @@ class ClassTeachingAdjustments:
                 raise ValueError("请填写实施情况")
             followup_node = payload["followup_node_id"]
             self._validate_scope(run, record["class_id"], followup_node)
-            node_order = {
-                node.get("节点编号"): index
-                for index, node in enumerate(run.get("nodes", []))
-            }
-            if node_order[followup_node] < node_order[record["node_id"]]:
-                raise ValueError("复测节点必须与实施节点相同或在其后")
+            chronology = compare_nodes(
+                run.get("nodes", []), record["node_id"], followup_node
+            )
+            if chronology == 1:
+                raise ValueError("复测节点早于实施节点")
+            if chronology == 0:
+                raise ValueError("复测节点必须晚于实施节点；不能复用起始节点的作答")
+            if chronology is None:
+                raise ValueError("复测节点日期缺失或与实施节点日期相同；请先核对测验日期")
             cited = payload.get("followup_evidence_record_ids", [])
             allowed = self._class_evidence_ids(run, record["class_id"], followup_node)
             if (
@@ -158,6 +162,13 @@ class ClassTeachingAdjustments:
             conclusion = (payload.get("teacher_conclusion") or "").strip()
             if status == "completed" and not conclusion:
                 raise ValueError("完成实施时必须填写教师结论")
+            followup_comparison = self._compare_followup(
+                run,
+                record,
+                followup_node,
+                eligible_ids,
+                objective_ids,
+            )
             return uow.class_teaching_adjustments.update(
                 adjustment_id,
                 {
@@ -168,11 +179,103 @@ class ClassTeachingAdjustments:
                     ).strip(),
                     "followup_node_id": followup_node,
                     "followup_evidence_record_ids": cited,
+                    "followup_comparison": followup_comparison,
                     "teacher_conclusion": conclusion,
                     "concluded_at": payload.get("concluded_at")
                     or datetime.now(UTC).isoformat(),
                 },
             )
+
+    def _compare_followup(
+        self,
+        run: dict,
+        record: dict,
+        followup_node: str,
+        eligible_ids: set[str],
+        objective_ids: set[str],
+    ) -> list[dict]:
+        students = {
+            row.get("学生编号"): row.get("模拟班级编号")
+            for row in run.get("students", [])
+        }
+        class_student_count = sum(
+            class_id == record["class_id"] for class_id in students.values()
+        )
+        item_indicator = {
+            row.get("材料编号"): row.get("指标编号") for row in run.get("items", [])
+        }
+        baseline_all = self._available_class_evidence(
+            run, record["class_id"], record["node_id"]
+        )
+        followup_all = self._available_class_evidence(
+            run, record["class_id"], followup_node
+        )
+        results = []
+        for indicator_id in sorted(objective_ids):
+            baseline_target = [
+                row
+                for row in baseline_all
+                if row["record_id"] in eligible_ids
+                and item_indicator.get(row["material_id"]) == indicator_id
+            ]
+            followup_target = [
+                row
+                for row in followup_all
+                if item_indicator.get(row["material_id"]) == indicator_id
+            ]
+            baseline_materials = {row["material_id"] for row in baseline_target}
+            followup_materials = {row["material_id"] for row in followup_target}
+            common_materials = sorted(baseline_materials & followup_materials)
+            baseline_rows = [
+                row for row in baseline_target if row["material_id"] in common_materials
+            ]
+            followup_rows = [
+                row for row in followup_target if row["material_id"] in common_materials
+            ]
+
+            def metrics(rows: list[dict]) -> dict:
+                score = sum(float(row["score"]) for row in rows)
+                maximum = sum(float(row["maximum"]) for row in rows)
+                return {
+                    "score": score,
+                    "maximum": maximum,
+                    "ratio": score / maximum if maximum else None,
+                    "record_count": len(rows),
+                    "observed_student_count": len(
+                        {row["student_id"] for row in rows}
+                    ),
+                    "student_count": class_student_count,
+                }
+
+            baseline_metrics = metrics(baseline_rows)
+            followup_metrics = metrics(followup_rows)
+            same_node = record["node_id"] == followup_node
+            comparable = bool(common_materials) and not same_node
+            results.append(
+                {
+                    "indicator_id": indicator_id,
+                    "status": "comparable" if comparable else "not_comparable",
+                    "reason": (
+                        "同一测验节点不能构成前后复测"
+                        if same_node
+                        else None
+                        if common_materials
+                        else "基线与复测没有相同且有效的目标指标题目"
+                    ),
+                    "common_material_ids": common_materials,
+                    "baseline": baseline_metrics,
+                    "followup": followup_metrics,
+                    "delta_ratio": (
+                        followup_metrics["ratio"] - baseline_metrics["ratio"]
+                        if comparable
+                        and baseline_metrics["ratio"] is not None
+                        and followup_metrics["ratio"] is not None
+                        else None
+                    ),
+                    "interpretation": "描述性分数变化不证明变化由教学实施导致。",
+                }
+            )
+        return results
     # -- 校验 ---------------------------------------------------------------
 
     @staticmethod

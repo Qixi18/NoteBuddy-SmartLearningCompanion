@@ -358,7 +358,9 @@ class Stage2Decisions:
             ):
                 raise ValueError("作答证据不属于所选案例学生与当前运行")
             history = uow.reviews.list(run["run_id"])
-            source_history = uow.stage2.list_sources(run["run_id"])
+            source_history = self.with_source_freshness(
+                run, uow.stage2.list_sources(run["run_id"])
+            )
             for ref in payload["review_refs"]:
                 reviews = history.get(f"{student_id}:{ref['indicator_id']}", [])
                 match = next(
@@ -415,6 +417,7 @@ class Stage2Decisions:
                         not plan
                         or not latest_source
                         or latest_source["status"] != "verified"
+                        or latest_source.get("stale")
                         or match.get("source_verification_versions", {}).get(
                             ref["indicator_id"]
                         )

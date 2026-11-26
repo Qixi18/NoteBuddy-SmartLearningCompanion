@@ -19,6 +19,7 @@ export interface RunData {
   items: Array<Record<string, unknown>>;
   students: Array<Record<string, unknown>>;
   nodes: Array<Record<string, unknown>>;
+  node_ordering_ambiguous_ids?: string[];
   responses: Array<Record<string, unknown>>;
   metrics: Array<Record<string, unknown>>;
   observations: Array<Record<string, unknown>>;
@@ -29,6 +30,7 @@ export interface ClassSummary {
   student_count: number;
   student_ids: string[];
   scored_record_count: number;
+  raw_record_count: number;
 }
 
 export interface ClassComparison {

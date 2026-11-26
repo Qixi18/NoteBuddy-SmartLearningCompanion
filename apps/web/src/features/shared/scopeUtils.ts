@@ -30,8 +30,57 @@ export function studentRows(run: RunData | undefined): Row[] {
   return run?.students ?? [];
 }
 
+function nodeDate(row: Row): string | null {
+  const value = text(row['模拟测验日期']).trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const parsed = Date.parse(`${value}T00:00:00Z`);
+  return Number.isFinite(parsed) && new Date(parsed).toISOString().slice(0, 10) === value ? value : null;
+}
+
+export function orderedNodeRows(nodes: Row[]): Row[] {
+  return nodes.map((row, index) => ({ row, index, date: nodeDate(row) }))
+    .sort((left, right) => {
+      if (left.date && right.date) return left.date.localeCompare(right.date) || left.index - right.index;
+      if (left.date) return -1;
+      if (right.date) return 1;
+      return left.index - right.index;
+    })
+    .map(entry => entry.row);
+}
+
+export function ambiguousNodeIds(nodes: Row[]): string[] {
+  const dates = new Map<string, string[]>();
+  const ambiguous = new Set<string>();
+  for (const row of nodes) {
+    const id = text(row['节点编号']);
+    const date = nodeDate(row);
+    if (!date) ambiguous.add(id);
+    else dates.set(date, [...(dates.get(date) ?? []), id]);
+  }
+  for (const ids of dates.values()) if (ids.length > 1) ids.forEach(id => ambiguous.add(id));
+  return [...ambiguous];
+}
+
+/** Same node is a valid same-scope comparison; distinct nodes need unique valid dates. */
+export function compareNodeChronology(nodes: Row[], firstId: string, secondId: string): -1 | 0 | 1 | null {
+  const first = nodes.find(row => text(row['节点编号']) === firstId);
+  const second = nodes.find(row => text(row['节点编号']) === secondId);
+  if (!first || !second) return null;
+  if (firstId === secondId) return 0;
+  const firstDate = nodeDate(first);
+  const secondDate = nodeDate(second);
+  return compareNodeDates(firstDate, secondDate);
+}
+
+export function compareNodeDates(firstDate: string | null | undefined, secondDate: string | null | undefined): -1 | 0 | 1 | null {
+  const validFirst = firstDate ? nodeDate({ '模拟测验日期': firstDate }) : null;
+  const validSecond = secondDate ? nodeDate({ '模拟测验日期': secondDate }) : null;
+  if (!validFirst || !validSecond || validFirst === validSecond) return null;
+  return validFirst < validSecond ? -1 : 1;
+}
+
 export function nodeRows(run: RunData | undefined): Row[] {
-  return run?.nodes ?? [];
+  return orderedNodeRows(run?.nodes ?? []);
 }
 
 export function objectiveRows(run: RunData | undefined): Row[] {

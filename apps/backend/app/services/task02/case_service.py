@@ -4,22 +4,35 @@ from __future__ import annotations
 
 import re
 
+from ..shared.node_ordering import node_date
+
 
 def _current_node(nodes: list[dict]) -> dict | None:
     if not nodes:
         return None
-    dated = [node for node in nodes if node.get("模拟测验日期")]
-    if dated:
-        return max(dated, key=lambda node: str(node["模拟测验日期"]))
-    return nodes[-1]
+    identified = [node for node in nodes if node.get("节点编号")]
+    if len(identified) == 1:
+        return identified[0]
+    if not identified or any(node_date(node) is None for node in identified):
+        return None
+    latest_date = max(node_date(node) for node in identified)
+    latest = [node for node in identified if node_date(node) == latest_date]
+    return latest[0] if len(latest) == 1 else None
 
 
 def suggest_cases(run: dict) -> list[dict]:
     students = run.get("students", [])
     if len(students) < 3:
         return []
+    if any(
+        not str(student.get("模拟班级编号") or "").strip()
+        for student in students
+    ):
+        return []
 
     node = _current_node(run.get("nodes", []))
+    if node is None:
+        return []
     node_id = node.get("节点编号") if node else None
     available_items = set(
         re.findall(r"[A-Z]+\d+", (node or {}).get("可用题目编号", ""))

@@ -622,6 +622,7 @@ class ClassSummaryResponse(BaseModel):
     student_count: int
     student_ids: list[str]
     scored_record_count: int
+    raw_record_count: int
 
 
 class ClassComparisonMetricsResponse(BaseModel):

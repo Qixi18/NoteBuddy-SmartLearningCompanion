@@ -57,16 +57,28 @@ test('refuses a generated-looking symlink without touching its external target',
   const databasePath = path.join(dataRoot, `playwright-${runId}.sqlite`);
   const external = path.join(root, 'valuable.db');
   fs.writeFileSync(external, 'keep external data');
+  fs.mkdirSync(dataDir);
+  fs.writeFileSync(databasePath, 'link placeholder');
+  const originalLstatSync = fs.lstatSync;
+  let inspectedSymlink = false;
+  fs.lstatSync = function(target, ...args) {
+    if (path.resolve(String(target)) === databasePath) {
+      inspectedSymlink = true;
+      return { isSymbolicLink: () => true };
+    }
+    return originalLstatSync.call(this, target, ...args);
+  };
+  let result;
   try {
-    fs.symlinkSync(external, databasePath, 'file');
-  } catch (error) {
-    if (['EPERM', 'EACCES', 'ENOTSUP'].includes(error.code)) return t.skip('symlink creation is unavailable');
-    throw error;
+    result = cleanupGeneratedPlaywrightData({ root, dataDir, databasePath, runId });
+  } finally {
+    fs.lstatSync = originalLstatSync;
   }
 
-  const result = cleanupGeneratedPlaywrightData({ root, dataDir, databasePath, runId });
-
   assert.equal(result.cleaned, false);
+  assert.equal(result.reason, 'target-is-symlink');
+  assert.equal(inspectedSymlink, true);
+  assert.equal(fs.existsSync(dataDir), true);
+  assert.equal(fs.readFileSync(databasePath, 'utf8'), 'link placeholder');
   assert.equal(fs.readFileSync(external, 'utf8'), 'keep external data');
-  assert.equal(fs.lstatSync(databasePath).isSymbolicLink(), true);
 });

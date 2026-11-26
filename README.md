@@ -31,11 +31,17 @@ pwsh -File scripts/demo/check-demo.ps1
 # 构建前端并用 data/demo 独立数据库启动
 pwsh -File scripts/demo/start-demo.ps1
 
-# 重置演示数据（只允许操作 data/demo）
+# 可选：使用仓库 data 下的其他隔离目录进行演示或验收
+pwsh -File scripts/demo/start-demo.ps1 -Rebuild -DemoDataDir data\demo-acceptance
+
+# 重置默认演示数据
 pwsh -File scripts/demo/reset-demo.ps1
+
+# 重置自定义隔离目录（必须是 data 下的直接子目录）
+pwsh -File scripts/demo/reset-demo.ps1 -DemoDataDir data\demo-acceptance
 ```
 
-打开 `http://127.0.0.1:8765`，在教学工作台一次性导入 `demo-data/csv` 中的六份 CSV。
+启动脚本会先将所选演示数据库迁移到当前版本，再启动服务。打开 `http://localhost:8765`，在教学工作台一次性导入 `demo-data/csv` 中的六份 CSV。默认端口已被占用时，可通过 `SMART_LEARNING_PORT` 指定空闲端口；脚本会在输出中显示实际端口。`-DemoDataDir` 与重置脚本的同名参数都只允许使用仓库 `data` 目录的直接子目录。
 
 ## 构建与部署
 
@@ -51,10 +57,10 @@ npm run web:build
 python -m pytest apps/backend/tests          # 后端单元与 API 契约
 python scripts/demo/verify-demo-data.py      # 演示数据与 manifest 对账
 npm run web:build                            # 前端类型检查与构建
-npx playwright test                          # 九页 E2E（需要 Edge 或设置 PLAYWRIGHT_BROWSER_CHANNEL）
+npm run test:e2e                             # 九页 E2E（需要 Edge 或设置 PLAYWRIGHT_BROWSER_CHANNEL）
 ```
 
-Playwright 会自行启动隔离的 8876 后端与 5174 前端，并使用临时数据库。视觉验收覆盖 1920/1440/1280/768/390 五档分辨率，截图输出到 `artifacts/frontend-acceptance/`（desktop 与 mobile 各九张）。
+Playwright 会自行启动隔离的 8876 后端与 5174 前端，并使用临时数据库。视觉验收覆盖 1920/1440/1280/768/390 五档分辨率，截图输出到 `artifacts/frontend-acceptance/`（desktop 与 mobile 各九张）。最近一次验收的命令、实测结果与尚未完成的外部验收项见 [`docs/frontend/final-acceptance-report.md`](docs/frontend/final-acceptance-report.md)。
 
 ## 前端结构
 

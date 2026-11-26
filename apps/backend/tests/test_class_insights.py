@@ -38,6 +38,7 @@ def _run():
             for item in ("Q1", "Q2", "Q3")
         ],
         "responses": responses,
+        "raw_responses": responses,
         "rubric_observations": [
             {
                 "record_id": row["记录编号"],
@@ -149,6 +150,38 @@ def test_class_comparison_recomputes_only_on_common_observed_items():
     assert "不输出班级能力排名" in result["limitations"][0]
 
 
+def test_non_finite_scores_are_excluded_even_if_snapshot_marks_them_scored():
+    run = _run()
+    run["responses"][0]["得分"] = "NaN"
+    run["responses"][1]["得分"] = "Infinity"
+
+    result = build_class_insights(run, "N01", {})
+
+    comparison = result["comparisons"][0]
+    class_one = next(row for row in comparison["classes"] if row["class_id"] == "C1")
+    assert class_one["scored_record_count"] == 2
+    assert class_one["score"] == 2
+    assert class_one["ratio"] == 0.5
+
+
+def test_class_summaries_scope_raw_and_eligible_counts_to_class_and_node():
+    run = _run()
+    run["raw_responses"] = [
+        *run["responses"],
+        {"记录编号": "R7", "学生编号": "D1", "节点编号": "N02"},
+        {"记录编号": "R8", "学生编号": "D3", "节点编号": "N01"},
+    ]
+
+    summaries = {
+        row["class_id"]: row for row in build_class_insights(run, "N01", {})["classes"]
+    }
+
+    assert summaries["C1"]["raw_record_count"] == 4
+    assert summaries["C1"]["scored_record_count"] == 4
+    assert summaries["C2"]["raw_record_count"] == 3
+    assert summaries["C2"]["scored_record_count"] == 2
+
+
 def test_no_common_questions_is_explicitly_unavailable():
     run = _run()
     run["responses"] = [
@@ -202,6 +235,7 @@ def test_class_insights_endpoint_returns_scoped_comparison(tmp_path):
     assert payload["run_id"]
     assert payload["node_id"] == "N01"
     assert all("student_count" in item for item in payload["classes"])
+    assert all("raw_record_count" in item for item in payload["classes"])
     assert "不输出班级能力排名或显著性结论。" in payload["limitations"]
     assert (
         client.get("/api/class-insights", params={"node": "UNKNOWN"}).status_code == 400

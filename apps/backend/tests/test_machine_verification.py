@@ -238,6 +238,34 @@ def test_knowledge_link_candidates_same_topic_and_cross_topic():
         build_knowledge_link_candidates(run, "NOPE")
 
 
+def test_knowledge_link_candidates_do_not_infer_cross_topic_order_from_ambiguous_dates():
+    from app.services.task01.knowledge_link_service import (
+        build_knowledge_link_candidates,
+    )
+
+    run = {
+        "objectives": [
+            {"指标编号": "A1", "观察指标": "认识整式", "主题编号": "T1"},
+            {"指标编号": "B1", "观察指标": "解方程", "主题编号": "T2"},
+        ],
+        "nodes": [
+            {"节点编号": "N01", "模拟测验日期": "2026-01-20", "已教及测量主题": "T1"},
+            {"节点编号": "N02", "模拟测验日期": "2026-01-20", "已教及测量主题": "T1、T2"},
+        ],
+    }
+
+    assert build_knowledge_link_candidates(run, "B1") == []
+
+    # Curriculum ordering is explicit and remains usable for same-topic suggestions.
+    run["objectives"].append(
+        {"指标编号": "B2", "观察指标": "方程应用", "主题编号": "T2"}
+    )
+    same_topic = build_knowledge_link_candidates(run, "B2")
+    assert [(row["target_indicator_id"], row["rule"]) for row in same_topic] == [
+        ("B1", "same_topic_previous")
+    ]
+
+
 def test_teacher_confirmation_flow_after_machine_verification(tmp_path, monkeypatch):
     pdf_root = tmp_path / "pdfs"
     pdf_root.mkdir()

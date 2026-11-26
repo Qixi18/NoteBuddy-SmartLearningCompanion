@@ -1,11 +1,13 @@
 """Deduplicated class observations with explicit coverage and common-item bounds."""
 
 import re
+from math import isfinite
 
 
 def _number(value) -> float | None:
     try:
-        return float(value)
+        parsed = float(value)
+        return parsed if isfinite(parsed) else None
     except (TypeError, ValueError):
         return None
 
@@ -58,6 +60,7 @@ def build_class_insights(
         )
         for row in run.get("quality", {}).get("record_dispositions", [])
     }
+    raw_responses = run.get("raw_responses", run.get("responses", []))
     rubric_by_row = {
         (
             row.get("record_id"),
@@ -262,6 +265,11 @@ def build_class_insights(
                 "student_ids": class_students,
                 "scored_record_count": sum(
                     row["class_id"] == class_id for row in scored_rows
+                ),
+                "raw_record_count": sum(
+                    student_class.get(row.get("学生编号")) == class_id
+                    and row.get("节点编号") == node_id
+                    for row in raw_responses
                 ),
             }
         )

@@ -33,11 +33,19 @@ def check_release(
     reviewer: str = "",
     ai_mappings: dict[str, list[dict]] | None = None,
 ) -> list[dict]:
-    students = {row.get("学生编号") for row in run.get("students", [])}
+    student_rows = run.get("students", [])
+    student_ids = [str(row.get("学生编号") or "").strip() for row in student_rows]
+    students = set(student_ids)
+    valid_roster = (
+        len(student_ids) == len(set(student_ids))
+        and all(student_ids)
+        and all(str(row.get("模拟班级编号") or "").strip() for row in student_rows)
+    )
     valid_selection = (
         len(case_ids) == 3
         and len(set(case_ids)) == 3
         and set(case_ids).issubset(students)
+        and valid_roster
     )
     checks = [
         _check(
@@ -46,6 +54,8 @@ def check_release(
             "passed" if valid_selection else "blocked",
             "已选择当前运行中的三名不同学生。"
             if valid_selection
+            else "名单存在缺失/重复学生编号或空班级编号，或未选择三名不同的当前运行学生；请修复名单后重新导入。"
+            if not valid_roster
             else "必须选择三名不同且属于当前运行的学生。",
         )
     ]

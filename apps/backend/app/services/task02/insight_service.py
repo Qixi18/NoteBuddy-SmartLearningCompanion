@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+from math import isfinite
 
 
 def _claim_id(scope: dict, kind: str, text: str, refs: list[dict]) -> str:
@@ -101,7 +102,12 @@ def build_student_insights(bundle: dict) -> list[dict]:
                 maximum = float(point.get("maximum"))
             except (TypeError, ValueError):
                 continue
-            if maximum <= 0 or not 0 <= earned <= maximum:
+            if (
+                not isfinite(earned)
+                or not isfinite(maximum)
+                or maximum <= 0
+                or not 0 <= earned <= maximum
+            ):
                 continue
             description = definition.get("description", point_id)
             ref = _reference(

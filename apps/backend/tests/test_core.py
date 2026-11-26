@@ -126,7 +126,7 @@ def test_settings_repr_redacts_model_api_keys():
 
 def test_version_and_denominator():
     run = analyze(sample_tables(), {})
-    assert run["rule_version"] == "3"
+    assert run["rule_version"] == "4"
     assert run["quality"]["raw_rows"] == 4
     assert run["quality"]["events"] == 3
     assert run["quality"]["eligible_scored"] == 1
@@ -141,6 +141,20 @@ def test_version_and_denominator():
         observation["pending_count"],
         observation["excluded_count"],
     ) == (3, 1, 1, 2)
+
+
+def test_analysis_returns_nodes_in_date_order_and_marks_ambiguous_nodes():
+    tables = sample_tables()
+    tables["测验节点"] = [
+        {"节点编号": "N99", "可用题目编号": "Q001", "模拟测验日期": "2026-06-17"},
+        {"节点编号": "N01", "可用题目编号": "Q001", "模拟测验日期": "2026-01-20"},
+        {"节点编号": "N00", "可用题目编号": "Q001", "模拟测验日期": ""},
+    ]
+
+    run = analyze(tables, {})
+
+    assert [node["节点编号"] for node in run["nodes"]] == ["N01", "N99", "N00"]
+    assert run["node_ordering_ambiguous_ids"] == ["N00"]
 
 
 def test_event_identity_conflict_is_excluded():
@@ -595,6 +609,14 @@ def _task03_run_without_unrelated_invalid_record():
         if row["记录编号"] == "R2":
             row["评分点得分"] = ""
     return analyze(tables, {})
+
+
+def test_analysis_rejects_student_without_class_id():
+    tables = sample_tables()
+    tables["模拟学生"][0]["模拟班级编号"] = "   "
+
+    with pytest.raises(ValueError, match="模拟学生的 模拟班级编号 不能为空"):
+        analyze(tables, {})
 
 
 def test_deepseek_returns_tr08_without_calling_model_for_conflicted_scope():

@@ -477,7 +477,9 @@ def test_teaching_adjustment_links_origin_and_followup_runs_with_teacher_compara
     from test_core import make_store, persist_run, sample_tables
 
     store = make_store(tmp_path)
-    first_run = analyze(sample_tables(), {})
+    first_tables = sample_tables()
+    first_tables["测验节点"][0]["模拟测验日期"] = "2026-01-20"
+    first_run = analyze(first_tables, {})
     persist_run(store, first_run)
     client = TestClient(create_app(store))
     first_draft = client.get(
@@ -513,8 +515,10 @@ def test_teaching_adjustment_links_origin_and_followup_runs_with_teacher_compara
         },
     )
     assert created.status_code == 200, created.text
+    assert created.json()["origin_node_date"] == "2026-01-20"
 
     followup_tables = sample_tables()
+    followup_tables["测验节点"][0]["模拟测验日期"] = "2026-06-17"
     followup_tables["作答记录"][1]["得分"] = "2"
     followup_tables["模拟学生"].append({"学生编号": "D04", "模拟班级编号": "C3"})
     followup_tables["作答记录"].append(
@@ -915,6 +919,139 @@ def test_verified_source_becomes_stale_when_allowlisted_pdf_changes(tmp_path):
     assert renewed.status_code == 200, renewed.text
     assert renewed.json()["version"] == latest["version"] + 1
     assert renewed.json()["stale"] is False
+    client.close()
+
+
+def test_stale_source_cannot_be_used_for_a_new_accepted_structured_review(tmp_path):
+    source_dir = tmp_path / "source_files"
+    source_dir.mkdir()
+    source_pdf = source_dir / "B05_相关资料切片.pdf"
+    source_pdf.write_bytes(b"synthetic source before review")
+    client = client_for(
+        tmp_path,
+        config=replace(settings, source_files_dir=source_dir),
+    )
+    signoff = {
+        "indicator_id": "T01I1",
+        "status": "verified",
+        "curriculum_locator": "合成测试课标定位",
+        "textbook_locator": "合成测试教材定位",
+        "material_ids": ["Q001"],
+        "reviewer": "合成测试教师",
+        "reason": "只用于验证来源过期保护。",
+    }
+    signed = client.post("/api/source-verification", json=signoff)
+    assert signed.status_code == 200, signed.text
+    draft = client.get(
+        "/api/draft", params={"student": "D01", "indicator": "T01I1", "node": "N01"}
+    ).json()
+    source_pdf.write_bytes(b"synthetic source changed before review")
+
+    response = client.post(
+        "/api/review",
+        json={
+            "student_id": "D01",
+            "indicator_id": "T01I1",
+            "status": "edited",
+            "diagnosis": "合成测试诊断",
+            "recommendation": "完成同型练习",
+            "adjustment_condition": "教师核对步骤",
+            "reason": "只用于验证过期来源不能继续复核。",
+            "evidence_record_ids": draft["evidence_record_ids"],
+            "original_draft": draft,
+            "structured_plan": {
+                "material_ids": ["Q001"],
+                "activity": "合成测试活动",
+                "steps": ["阅读题目", "独立完成"],
+                "practice": ["Q001 同型练习"],
+                "observation_points": ["记录关键步骤"],
+            },
+            "reviewer": "合成测试教师",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "来源签核" in response.json()["error"]
+    assert client.get("/api/reviews").json() == {}
+    client.close()
+
+
+def test_stale_source_cannot_be_used_to_confirm_a_new_teacher_case(tmp_path):
+    source_dir = tmp_path / "source_files"
+    source_dir.mkdir()
+    source_pdf = source_dir / "B05_相关资料切片.pdf"
+    source_pdf.write_bytes(b"synthetic source before case")
+    client = client_for(
+        tmp_path,
+        config=replace(settings, source_files_dir=source_dir),
+    )
+    signoff = {
+        "indicator_id": "T01I1",
+        "status": "verified",
+        "curriculum_locator": "合成测试课标定位",
+        "textbook_locator": "合成测试教材定位",
+        "material_ids": ["Q001"],
+        "reviewer": "合成测试教师",
+        "reason": "只用于验证来源过期保护。",
+    }
+    signed = client.post("/api/source-verification", json=signoff)
+    assert signed.status_code == 200, signed.text
+    draft = client.get(
+        "/api/draft", params={"student": "D01", "indicator": "T01I1", "node": "N01"}
+    ).json()
+    review = client.post(
+        "/api/review",
+        json={
+            "student_id": "D01",
+            "indicator_id": "T01I1",
+            "status": "edited",
+            "diagnosis": "合成测试诊断",
+            "recommendation": "完成同型练习",
+            "adjustment_condition": "教师核对步骤",
+            "reason": "只用于验证过期来源不能确认案例。",
+            "evidence_record_ids": draft["evidence_record_ids"],
+            "original_draft": draft,
+            "structured_plan": {
+                "material_ids": ["Q001"],
+                "activity": "合成测试活动",
+                "steps": ["阅读题目", "独立完成"],
+                "practice": ["Q001 同型练习"],
+                "observation_points": ["记录关键步骤"],
+            },
+            "reviewer": "合成测试教师",
+        },
+    )
+    assert review.status_code == 200, review.text
+    evidence = response_refs(
+        client, "D01", "T01I1", "N01", draft["evidence_record_ids"]
+    )
+    source_pdf.write_bytes(b"synthetic source changed before case")
+
+    confirmed = client.post(
+        "/api/teacher-case",
+        json={
+            "student_id": "D01",
+            "status": "confirmed",
+            "need_type": "部分得分",
+            "selection_reason": "合成测试样例，不用于正式遴选。",
+            "narrative": "合成案例叙述。",
+            "limitations": "所有数据均为合成数据。",
+            "evidence_record_ids": draft["evidence_record_ids"],
+            "evidence_refs": evidence,
+            "review_refs": [
+                {
+                    "indicator_id": "T01I1",
+                    "node_id": "N01",
+                    "version": review.json()["version"],
+                }
+            ],
+            "reviewer": "合成测试教师",
+        },
+    )
+
+    assert confirmed.status_code == 400
+    assert "来源签核" in confirmed.json()["error"]
+    assert client.get("/api/teacher-cases").json() == {}
     client.close()
 
 
