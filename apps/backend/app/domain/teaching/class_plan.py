@@ -165,6 +165,11 @@ class ClassTeachingPlan:
             raise InvalidReview("请填写审核人")
         if not reason.strip():
             raise InvalidReview("请填写审核说明")
+        changed = plan is not None and plan != self.plan
+        if status == "accepted" and changed:
+            raise InvalidReview("方案正文已修改，请使用教师修改状态保存")
+        if status == "edited" and not changed:
+            raise InvalidReview("方案正文没有变化，请使用直接采纳状态保存")
         now = datetime.now(UTC).isoformat()
         return replace(
             self,

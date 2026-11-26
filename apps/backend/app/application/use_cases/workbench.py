@@ -744,7 +744,9 @@ class WorkbenchUseCases:
         self.class_teaching_plans = ClassTeachingPlanUseCases(
             uow_factory, self.stage2, source_service, self.ai_analysis
         )
-        self.class_teaching_adjustments = ClassTeachingAdjustments(uow_factory)
+        self.class_teaching_adjustments = ClassTeachingAdjustments(
+            uow_factory, self.class_teaching_plans
+        )
         self.prepare_submission = PrepareSubmission(uow_factory, self.stage2)
         self.export_submission = ExportSubmission(
             self.prepare_submission, uow_factory, self.stage2

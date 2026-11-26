@@ -76,7 +76,15 @@ class ClassTeachingPlanUseCases:
         run, sources, mappings = self._snapshot()
         self._validate_class(run, class_id, node_id)
         report, _ = self._report(run, node_id, sources, mappings)
-        fingerprint = current_class_plan_fingerprint(run, class_id, node_id, report, sources)
+        analysis = self._class_analysis(node_id, class_id)
+        fingerprint = current_class_plan_fingerprint(
+            run,
+            class_id,
+            node_id,
+            report,
+            sources,
+            (analysis or {}).get("analysis_id", ""),
+        )
         with self.uow_factory(immediate=False) as uow:
             plans = uow.class_teaching_plans.list(run["run_id"], class_id, node_id)
         return {
@@ -90,6 +98,19 @@ class ClassTeachingPlanUseCases:
                 for plan in plans
             ],
         }
+
+    def current_fingerprint(self, class_id: str, node_id: str) -> str:
+        run, sources, mappings = self._snapshot()
+        self._validate_class(run, class_id, node_id)
+        report, _ = self._report(run, node_id, sources, mappings)
+        return current_class_plan_fingerprint(
+            run,
+            class_id,
+            node_id,
+            report,
+            sources,
+            self._current_analysis_id(node_id, class_id),
+        )
 
     # -- 生成草稿 ------------------------------------------------------------
     def draft(self, class_id: str, node_id: str, reviewer: str = "") -> dict:
@@ -167,6 +188,7 @@ class ClassTeachingPlanUseCases:
             existing["node_id"],
             report,
             sources,
+            self._current_analysis_id(existing["node_id"], existing["class_id"]),
         )
         if existing["source_fingerprint"] != current:
             raise ValueError("方案已过期：来源核验或作答数据已变化，请重新生成后再审核")
@@ -204,3 +226,6 @@ class ClassTeachingPlanUseCases:
             )
             saved = uow.class_teaching_plans.create(record)
         return {**saved, "stale": False}
+
+    def _current_analysis_id(self, node_id: str, class_id: str) -> str:
+        return (self._class_analysis(node_id, class_id) or {}).get("analysis_id", "")

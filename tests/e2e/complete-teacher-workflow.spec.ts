@@ -35,6 +35,8 @@ test('a teacher can run the whole class workflow end to end', async ({ page }) =
   await gotoRoute(page, '/teaching/class', '班级教学建议');
   await page.getByRole('button', { name: /生成规则方案|按当前证据重新生成/ }).click();
   await expect(page.getByText(/已生成第 \d+ 版规则草稿|已存在同一版草稿/).first()).toBeVisible({ timeout: 30_000 });
+  await page.getByLabel('审核人').fill('演示教师');
+  await page.getByLabel('审核说明').fill('已核对当前班级证据。');
   await page.getByRole('button', { name: '采纳并保存' }).click();
   await expect(page.getByText(/已保存第 \d+ 版：已采纳/)).toBeVisible({ timeout: 30_000 });
 
@@ -47,10 +49,16 @@ test('a teacher can run the whole class workflow end to end', async ({ page }) =
   await expect(panel.getByText('班级教学实施计划已保存')).toBeVisible({ timeout: 30_000 });
 
   await panel.locator('summary').first().click();
+  const followupNode = panel.getByLabel('复测节点');
+  await followupNode.selectOption('N02');
+  await expect(panel.getByText(/R0145/)).toBeAttached({ timeout: 20_000 });
+  await expect(panel.getByRole('checkbox', { name: /R0101/ })).toHaveCount(0);
+  await followupNode.selectOption('N01');
+  await expect(panel.getByRole('checkbox', { name: /R0001/ })).toBeAttached({ timeout: 20_000 });
   await panel.getByLabel('实施记录').fill('已完成第一节：典型错误归类与示范');
   await panel.getByLabel('效果观察').fill('学生能说出移项依据');
   await panel.getByLabel('实施状态').selectOption('partial');
-  await panel.getByRole('checkbox').first().check();
+  await panel.getByRole('checkbox', { name: /R0004/ }).check();
   await panel.getByRole('button', { name: /保存实施与复测/ }).click();
   await expect(panel.getByText(/实施情况与复测证据已保存/)).toBeVisible({ timeout: 30_000 });
 

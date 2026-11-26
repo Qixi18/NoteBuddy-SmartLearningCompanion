@@ -91,8 +91,9 @@ export function ClassTeachingPage() {
   const latestPlanId = str(latestPlan?.plan_id, '');
 
   const [text, setText] = useState<PlanText>(emptyText);
-  const [reviewer, setReviewer] = useState('教师');
-  const [reason, setReason] = useState('已核对班级诊断证据与方案内容。');
+  const [reviewBaseline, setReviewBaseline] = useState<PlanText>(emptyText);
+  const [reviewer, setReviewer] = useState('');
+  const [reason, setReason] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [consent, setConsent] = useState(false);
@@ -100,6 +101,7 @@ export function ClassTeachingPage() {
   useEffect(() => {
     // 方案版本变化时只同步编辑区内容；成功/失败提示保留到下一次操作，避免刚显示就被清空。
     setText(bodyToText(latestPlan?.plan as Row | undefined));
+    setReviewBaseline(bodyToText(latestPlan?.plan as Row | undefined));
   }, [latestPlanId]);
 
   const draft = useMutation({
@@ -129,8 +131,8 @@ export function ClassTeachingPage() {
         postJson({
           run_id: runId,
           status: input.status,
-          reviewer: reviewer.trim() || '教师',
-          reason: reason.trim() || '教师已核对班级诊断证据与方案内容。',
+          reviewer: reviewer.trim(),
+          reason: reason.trim(),
           plan: body,
         }),
       );
@@ -170,7 +172,10 @@ export function ClassTeachingPage() {
     onError: cause => { setMessage(''); setError((cause as Error).message); },
   });
 
-  const canReview = Boolean(latestPlan) && Boolean(reviewer.trim()) && !latestPlan?.stale;
+  const normalizeText = (value: string) => value.split('\n').map(line => line.trim()).filter(Boolean).join('\n');
+  const bodyChanged = SECTIONS.some(section => normalizeText(text[section.key]) !== normalizeText(reviewBaseline[section.key]));
+  const canReview = Boolean(latestPlan) && Boolean(latestPlanId)
+    && Boolean(reviewer.trim()) && Boolean(reason.trim()) && !latestPlan?.stale;
   const busy = draft.isPending || review.isPending;
   const findings = useMemo(() => {
     const analysis = aiPreview.data?.analysis;
@@ -265,12 +270,12 @@ export function ClassTeachingPage() {
               <div className={styles.reviewActions}>
                 <button
                   type="button"
-                  disabled={!canReview || busy}
+                  disabled={!canReview || bodyChanged || busy}
                   onClick={() => { setError(''); review.mutate({ status: 'accepted', withPlan: true }); }}
                 ><CheckCircle2 size={15}/>采纳并保存</button>
                 <button
                   type="button"
-                  disabled={!canReview || busy}
+                  disabled={!canReview || !bodyChanged || busy}
                   onClick={() => { setError(''); review.mutate({ status: 'edited', withPlan: true }); }}
                 ><ShieldCheck size={15}/>保存教师修改</button>
                 <button
@@ -313,7 +318,7 @@ export function ClassTeachingPage() {
           </details>)}</div>}
     </Panel>
 
-    <ClassAdjustmentWorkflow runId={runId} classId={classId} nodeId={nodeId} plan={latestPlan}/>
+    <ClassAdjustmentWorkflow runId={runId} classId={classId} nodeId={nodeId} plan={latestPlan} nodes={run?.nodes ?? []}/>
 
     <Panel
       title="班级 AI 分析（可选）"

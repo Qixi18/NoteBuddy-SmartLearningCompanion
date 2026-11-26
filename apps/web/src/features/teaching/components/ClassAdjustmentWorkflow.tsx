@@ -23,8 +23,8 @@ interface EvidenceRecord {
 }
 
 export function ClassAdjustmentWorkflow({
-  runId, classId, nodeId, plan,
-}: { runId: string; classId: string; nodeId: string; plan: Row | undefined }) {
+  runId, classId, nodeId, plan, nodes,
+}: { runId: string; classId: string; nodeId: string; plan: Row | undefined; nodes: Row[] }) {
   const queryClient = useQueryClient();
   const planAccepted = Boolean(plan) && ['accepted', 'edited'].includes(str(plan?.status));
   const canCreate = planAccepted && !plan?.stale;
@@ -34,16 +34,14 @@ export function ClassAdjustmentWorkflow({
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
-  const evidence = useQuery({
-    queryKey: ['class-evidence', runId, classId, nodeId],
-    queryFn: () => api<Row>(`/api/class-evidence?class=${encodeURIComponent(classId)}&node=${encodeURIComponent(nodeId)}`),
-    enabled: Boolean(runId && classId && nodeId),
-  });
   const adjustments = useQuery({
     queryKey: ['class-adjustments', runId, classId, nodeId],
     queryFn: () => api<Row[]>(`/api/class-teaching-adjustments?class=${encodeURIComponent(classId)}&node=${encodeURIComponent(nodeId)}`),
     enabled: Boolean(runId && classId && nodeId),
   });
+  const nodeLabels = useMemo(() => new Map(nodes.map(item => [
+    str(item['节点编号']), str(item['节点名称'], str(item['节点编号'])),
+  ])), [nodes]);
 
   const create = useMutation({
     mutationFn: () => api<Row>('/api/class-teaching-adjustments', postJson({
@@ -92,10 +90,10 @@ export function ClassAdjustmentWorkflow({
       : adjustments.isError ? <ErrorBox message={(adjustments.error as Error).message}/>
       : !adjustments.data?.length ? <EmptyState title="暂无班级实施记录" detail="采纳方案后可登记一次班级教学实施与复测。"/>
       : <div className={styles.adjustmentList}>{adjustments.data.map(record => <ClassAdjustmentRecord
-            key={`${str(record.adjustment_id)}-${str(record.updated_at)}`}
+            key={str(record.adjustment_id)}
             record={record}
-            records={(evidence.data?.records as EvidenceRecord[] | undefined) ?? []}
-            nodeId={nodeId}
+            nodes={nodes}
+            nodeLabels={nodeLabels}
           />)}</div>}
 
     {message && <p role="status" className={styles.limitation}>{message}</p>}
@@ -104,14 +102,14 @@ export function ClassAdjustmentWorkflow({
 }
 
 function ClassAdjustmentRecord({
-  record, records, nodeId,
-}: { record: Row; records: EvidenceRecord[]; nodeId: string }) {
+  record, nodes, nodeLabels,
+}: { record: Row; nodes: Row[]; nodeLabels: Map<string, string> }) {
   const queryClient = useQueryClient();
   const [implementation, setImplementation] = useState(str(record.implementation, ''));
   const [outcome, setOutcome] = useState(str(record.outcome_observations, ''));
   const [status, setStatus] = useState(str(record.implementation_status, 'not_completed'));
   const [conclusion, setConclusion] = useState(str(record.teacher_conclusion, ''));
-  const [followupNode, setFollowupNode] = useState(str(record.followup_node_id, nodeId));
+  const [followupNode, setFollowupNode] = useState(str(record.followup_node_id, str(record.node_id)));
   const [selected, setSelected] = useState<string[]>(
     Array.isArray(record.followup_evidence_record_ids)
       ? record.followup_evidence_record_ids.map(String)
@@ -126,9 +124,18 @@ function ClassAdjustmentRecord({
     setOutcome(str(record.outcome_observations, ''));
     setStatus(str(record.implementation_status, 'not_completed'));
     setConclusion(str(record.teacher_conclusion, ''));
-    setFollowupNode(str(record.followup_node_id, nodeId));
+    setFollowupNode(str(record.followup_node_id, str(record.node_id)));
     setSelected(Array.isArray(record.followup_evidence_record_ids) ? record.followup_evidence_record_ids.map(String) : []);
-  }, [record.adjustment_id, record.updated_at, nodeId]);
+  }, [record.adjustment_id, record.updated_at]);
+
+  const evidence = useQuery({
+    queryKey: ['class-evidence', str(record.run_id), str(record.class_id), followupNode],
+    queryFn: () => api<Row>(`/api/class-evidence?class=${encodeURIComponent(str(record.class_id))}&node=${encodeURIComponent(followupNode)}`),
+    enabled: Boolean(record.run_id && record.class_id && followupNode),
+  });
+  const records = (evidence.data?.records as EvidenceRecord[] | undefined) ?? [];
+  const baseOrder = nodes.findIndex(node => str(node['节点编号']) === str(record.node_id));
+  const eligibleNodes = nodes.filter((_, index) => index >= baseOrder);
 
   const update = useMutation({
     mutationFn: () => api<Row>(`/api/class-teaching-adjustments/${encodeURIComponent(str(record.adjustment_id))}`, patchJson({
@@ -177,12 +184,16 @@ function ClassAdjustmentRecord({
           <option value="completed">已完成</option>
         </select></label>
         <label>复测节点<select value={followupNode} onChange={event => { setFollowupNode(event.target.value); setSelected([]); }}>
-          <option value={nodeId}>{nodeId} · 当前节点</option>
+          {eligibleNodes.map(item => {
+            const id = str(item['节点编号']);
+            return <option key={id} value={id}>{id} · {nodeLabels.get(id) ?? id}</option>;
+          })}
         </select></label>
       </div>
       <fieldset className={styles.followupEvidence}>
         <legend>复测作答证据（必选，{selected.length} 条）</legend>
-        {evidenceOptions.length ? evidenceOptions.map(option => <label key={option.record_id}>
+        {evidence.isPending ? <small>正在读取所选复测节点的作答证据…</small>
+          : evidenceOptions.length ? evidenceOptions.map(option => <label key={option.record_id}>
           <input
             type="checkbox"
             checked={selected.includes(option.record_id)}
@@ -191,7 +202,7 @@ function ClassAdjustmentRecord({
               : current.filter(id => id !== option.record_id))}
           />
           <span>{option.record_id} · {option.student_id} · {option.material_id} · {str(option.score)}/{str(option.maximum)}</span>
-        </label>) : <small>该节点没有本班作答记录；不能填写基于空证据的效果结论。</small>}
+        </label>) : <small>该节点没有本班有效作答记录；不能填写基于空证据的效果结论。</small>}
       </fieldset>
       <label className={styles.adjustmentWideField}>教师结论<textarea rows={2} value={conclusion} onChange={event => setConclusion(event.target.value)} placeholder="结合所选复测证据记录结论与下一步"/></label>
       <div className={styles.reviewActions}>
