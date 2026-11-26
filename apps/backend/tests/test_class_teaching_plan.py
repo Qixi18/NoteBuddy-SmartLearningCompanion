@@ -236,3 +236,57 @@ def test_repository_persists_every_version_in_order(tmp_path):
     assert [plan["version"] for plan in plans] == [1, 2]
     assert latest["status"] == "accepted"
     assert next_version == 3
+
+
+def test_rule_plan_marks_ai_source_only_when_findings_are_used():
+    plan = build_rule_plan(
+        _run(),
+        "C1",
+        "N01",
+        _report(),
+        _sources(),
+        ai_findings=[
+            {"claim": "方程类共同问题集中在移项", "support_level": "supported"}
+        ],
+        ai_analysis_id="analysis-1",
+        ai_fingerprint="f" * 64,
+    )
+
+    assert plan["generation_source"] == "ai"
+    assert plan["analysis_id"] == "analysis-1"
+    assert any("AI 参考观察" in line for line in plan["plan"]["key_problems"])
+    assert any(ref["kind"] == "ai_analysis" for ref in plan["evidence_refs"])
+
+
+def test_rule_plan_keeps_rule_source_without_ai_findings():
+    plan = build_rule_plan(_run(), "C1", "N01", _report(), _sources())
+    assert plan["generation_source"] == "rule"
+    assert plan["analysis_id"] == ""
+
+
+def test_rule_plan_includes_record_level_issue_evidence():
+    issues = [
+        {
+            "indicator_id": "I1",
+            "issue_id": "step",
+            "label": "步骤依据缺失",
+            "by_class": [
+                {
+                    "class_id": "C1",
+                    "affected_count": 1,
+                    "observed_student_count": 2,
+                    "evidence_refs": [
+                        {"record_id": "R9", "source_line": 7, "material_id": "Q001"}
+                    ],
+                }
+            ],
+        }
+    ]
+
+    plan = build_rule_plan(_run(), "C1", "N01", _report(), _sources(), issues=issues)
+
+    assert any(
+        ref["kind"] == "response" and ref.get("record_id") == "R9"
+        for ref in plan["evidence_refs"]
+    )
+    assert any(ref["kind"] == "class_issue" for ref in plan["evidence_refs"])

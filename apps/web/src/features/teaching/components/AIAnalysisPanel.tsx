@@ -19,6 +19,7 @@ export function AIAnalysisPanel({ runId, studentId, indicatorId, nodeId }: { run
     mutationFn: () => api<Row>('/api/ai-analysis', postJson({
       task: 'task03', action: preview.data?.analysis ? 'refresh' : 'generate',
       run_id: runId, student_id: studentId, indicator_id: indicatorId, node_id: nodeId,
+      preview_fingerprint: preview.data?.source_fingerprint,
       request_id: crypto.randomUUID(), transmission_confirmed: true,
     })),
     onSuccess: async () => {

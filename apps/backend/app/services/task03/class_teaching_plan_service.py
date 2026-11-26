@@ -85,6 +85,7 @@ def class_plan_fingerprint(
     node_id: str,
     rows: list[dict],
     source_versions: dict,
+    analysis_id: str = "",
 ) -> str:
     payload = {
         "run_id": run.get("run_id", ""),
@@ -92,6 +93,7 @@ def class_plan_fingerprint(
         "class_id": class_id,
         "node_id": node_id,
         "template_version": PLAN_TEMPLATE_VERSION,
+        "analysis_id": analysis_id,
         "indicators": [
             {
                 "indicator_id": row["indicator_id"],
@@ -210,6 +212,56 @@ def build_evidence_refs(class_id: str, node_id: str, rows: list[dict]) -> list[d
     return refs
 
 
+def build_issue_evidence_refs(
+    issues: list[dict] | None, class_id: str, node_id: str
+) -> list[dict]:
+    """把已核验共性问题及其原始作答记录纳入方案证据（记录级可追溯）。"""
+    refs: list[dict] = []
+    for issue in issues or []:
+        for row in issue.get("by_class", []):
+            if row.get("class_id") != class_id or not row.get("affected_count"):
+                continue
+            refs.append(
+                {
+                    "kind": "class_issue",
+                    "class_id": class_id,
+                    "node_id": node_id,
+                    "indicator_id": issue.get("indicator_id", ""),
+                    "issue_id": issue.get("issue_id", ""),
+                    "label": issue.get("label", ""),
+                    "affected_count": row.get("affected_count", 0),
+                    "observed_student_count": row.get("observed_student_count", 0),
+                }
+            )
+            for evidence in row.get("evidence_refs", []):
+                refs.append(
+                    {
+                        "kind": "response",
+                        "class_id": class_id,
+                        "node_id": node_id,
+                        "indicator_id": issue.get("indicator_id", ""),
+                        "record_id": evidence.get("record_id"),
+                        "source_line": evidence.get("source_line"),
+                        "material_id": evidence.get("material_id"),
+                    }
+                )
+    return refs
+
+
+def _ai_reference_lines(findings: list[dict] | None) -> list[str]:
+    lines: list[str] = []
+    for finding in findings or []:
+        claim = str(finding.get("claim") or "").strip()
+        if not claim:
+            continue
+        support = str(finding.get("support_level") or "").strip()
+        suffix = f"（支持程度 {support}）" if support else ""
+        lines.append(f"AI 参考观察，需教师核对{suffix}：{claim}")
+        if len(lines) >= 3:
+            break
+    return lines
+
+
 def build_rule_plan(
     run: dict,
     class_id: str,
@@ -217,9 +269,18 @@ def build_rule_plan(
     report: dict,
     sources: dict | None,
     *,
-    analysis_id: str = "",
+    issues: list[dict] | None = None,
+    ai_findings: list[dict] | None = None,
+    ai_analysis_id: str = "",
+    ai_fingerprint: str = "",
 ) -> dict:
-    """生成规则型班级方案草稿。没有有效证据时直接报错，不生成空话方案。"""
+    """生成班级方案草稿。没有有效证据时直接报错，不生成空话方案。
+
+    - 当前班级证据构成方案主体（规则）；
+    - 若存在当前指纹一致的班级 AI 分析，则把其结论作为「AI 参考观察」写入方案，
+      并标记 generation_source=ai、记录 analysis_id；
+    - 已核验共性问题及其原始作答记录进入 evidence_refs，保证记录级可追溯。
+    """
     rows = class_indicator_rows(run, report, class_id)
     if not rows:
         raise ValueError(
@@ -229,29 +290,52 @@ def build_rule_plan(
     source_versions = source_versions_for(
         run, sources, [row["indicator_id"] for row in rows]
     )
+    body = build_plan_body(run, class_id, node_id, rows)
+    ai_lines = _ai_reference_lines(ai_findings)
+    if ai_lines:
+        body["key_problems"] = [*body["key_problems"], *ai_lines]
+    evidence_refs = build_evidence_refs(class_id, node_id, rows)
+    evidence_refs.extend(build_issue_evidence_refs(issues, class_id, node_id))
+    if ai_analysis_id:
+        evidence_refs.append(
+            {
+                "kind": "ai_analysis",
+                "class_id": class_id,
+                "node_id": node_id,
+                "analysis_id": ai_analysis_id,
+                "source_fingerprint": ai_fingerprint,
+            }
+        )
     return {
         "run_id": run["run_id"],
         "class_id": class_id,
         "node_id": node_id,
         "status": "draft",
-        "generation_source": "rule",
+        "generation_source": "ai" if ai_lines else "rule",
         "source_fingerprint": class_plan_fingerprint(
-            run, class_id, node_id, rows, source_versions
+            run, class_id, node_id, rows, source_versions, ai_analysis_id
         ),
-        "analysis_id": analysis_id,
+        "analysis_id": ai_analysis_id,
         "reviewer": "",
         "review_reason": "",
-        "plan": build_plan_body(run, class_id, node_id, rows),
-        "evidence_refs": build_evidence_refs(class_id, node_id, rows),
+        "plan": body,
+        "evidence_refs": evidence_refs,
         "source_versions": source_versions,
     }
 
 
 def current_class_plan_fingerprint(
-    run: dict, class_id: str, node_id: str, report: dict, sources: dict | None
+    run: dict,
+    class_id: str,
+    node_id: str,
+    report: dict,
+    sources: dict | None,
+    analysis_id: str = "",
 ) -> str:
     rows = class_indicator_rows(run, report, class_id)
     source_versions = source_versions_for(
         run, sources, [row["indicator_id"] for row in rows]
     )
-    return class_plan_fingerprint(run, class_id, node_id, rows, source_versions)
+    return class_plan_fingerprint(
+        run, class_id, node_id, rows, source_versions, analysis_id
+    )

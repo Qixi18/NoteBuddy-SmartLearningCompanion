@@ -296,10 +296,17 @@ def build_class_report(
             for row in rows
             if row.get("common_ratio") is not None
         ]
+        cross_class_available = (
+            item.get("status") == "available" and len(rows) >= 2
+        )
         comparisons.append(
             {
                 "indicator_id": item.get("indicator_id", ""),
                 "status": item.get("status", "unavailable_no_common_questions"),
+                "scope_mode": "single_class" if class_id else "all_classes",
+                "comparable": cross_class_available,
+                "single_class_only": bool(class_id),
+                "single_class_ratio": rows[0].get("ratio") if len(rows) == 1 else None,
                 "common_material_ids": item.get("common_material_ids", []),
                 "classes": rows,
                 "difference": max(ratios) - min(ratios) if len(ratios) >= 2 else None,
@@ -334,6 +341,7 @@ def build_class_report(
         "run_id": run.get("run_id", ""),
         "node_id": node_id,
         "scope": {"class_id": class_id} if class_id else None,
+        "scope_mode": "single_class" if class_id else "all_classes",
         "status": "ready" if classes else "incomplete",
         "classes": classes,
         "comparisons": comparisons,

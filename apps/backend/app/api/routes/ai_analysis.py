@@ -32,6 +32,7 @@ def generate_ai_analysis(payload: AIAnalysisRequest, use_cases: UseCases) -> dic
         request_id=payload.request_id,
         analysis_id=payload.analysis_id,
         class_id=payload.class_id,
+        preview_fingerprint=payload.preview_fingerprint,
     )
 
 

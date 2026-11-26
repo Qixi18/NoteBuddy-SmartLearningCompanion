@@ -95,22 +95,25 @@
     "Q006",
     "Q007",
     "Q008",
-    "Q009"
+    "Q009",
+    "Q010",
+    "Q011",
+    "Q012"
   ],
   "expected": {
     "student_count": 24,
     "class_count": 2,
     "node_count": 2,
-    "item_count": 9,
+    "item_count": 12,
     "indicator_count": 9,
-    "raw_rows": 292,
-    "scored_rows": 281,
+    "raw_rows": 364,
+    "scored_rows": 353,
     "pending_rows": 6,
     "unanswered_rows": 5,
     "over_maximum_rows": 2,
     "revised_events": 4,
-    "total_maximum": 703,
-    "total_score": 349
+    "total_maximum": 871,
+    "total_score": 433
   },
   "design_notes": [
     "C1 在 T02（方程）上偏弱，C2 在 T03（不等式）上偏弱，用于演示班级共同问题。",

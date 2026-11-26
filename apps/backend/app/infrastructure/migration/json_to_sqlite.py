@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import hashlib
 import json
@@ -15,7 +15,7 @@ from ..database import models as database_models
 
 RUN_ID = re.compile(r"^[0-9a-f]{16,64}$")
 REVIEW_STATUSES = {"accepted", "edited", "rejected", "needs_observation"}
-ALEMBIC_HEAD = "f1c4b7a9d2e0"
+ALEMBIC_HEAD = "a7d2e6c4b901"
 
 
 class MigrationTargetError(ValueError):

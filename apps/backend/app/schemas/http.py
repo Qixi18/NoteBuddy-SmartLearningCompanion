@@ -76,6 +76,7 @@ class AIAnalysisRequest(BaseModel):
     student_id: str | None = Field(default=None, min_length=1, max_length=128)
     indicator_id: str | None = Field(default=None, min_length=1, max_length=128)
     analysis_id: str | None = Field(default=None, min_length=1, max_length=64)
+    preview_fingerprint: str | None = Field(default=None, min_length=8, max_length=128)
     request_id: str = Field(min_length=1, max_length=128)
     transmission_confirmed: Literal[True]
 
@@ -734,7 +735,38 @@ class ClassTeachingPlanDraftRequest(BaseModel):
 class ClassTeachingPlanReviewRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    run_id: str = Field(min_length=1, max_length=64)
     status: Literal["accepted", "edited", "rejected", "needs_observation"]
     reviewer: str = Field(min_length=1, max_length=200)
     reason: str = Field(min_length=1, max_length=4000)
     plan: ClassPlanBodyPayload | None = None
+
+
+class ClassTeachingAdjustmentCreateRequest(BaseModel):
+    """班级级教学实施记录：必须基于当前已采纳的班级方案。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    run_id: str = Field(min_length=1, max_length=64)
+    class_id: str = Field(min_length=1, max_length=128)
+    node_id: str = Field(min_length=1, max_length=128)
+    plan_id: str = Field(min_length=1, max_length=64)
+    planned_activity: str = Field(min_length=1, max_length=4000)
+    planned_practice: list[str] = Field(default_factory=list, max_length=20)
+    observation_points: list[str] = Field(default_factory=list, max_length=20)
+    teacher: str = Field(default="", max_length=200)
+    planned_at: str | None = Field(default=None, max_length=64)
+
+
+class ClassTeachingAdjustmentUpdateRequest(BaseModel):
+    """记录实施情况与复测证据；后续效果必须引用本班该节点的实际作答。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    implementation: str = Field(min_length=1, max_length=4000)
+    implementation_status: Literal["not_completed", "partial", "completed"]
+    outcome_observations: str = Field(default="", max_length=4000)
+    followup_node_id: str = Field(min_length=1, max_length=128)
+    followup_evidence_record_ids: list[str] = Field(min_length=1, max_length=200)
+    teacher_conclusion: str = Field(default="", max_length=4000)
+    concluded_at: str | None = Field(default=None, max_length=64)

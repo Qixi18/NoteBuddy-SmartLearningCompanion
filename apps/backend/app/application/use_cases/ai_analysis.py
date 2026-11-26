@@ -6,12 +6,18 @@ import hashlib
 import json
 import uuid
 from datetime import UTC, datetime
+from urllib.parse import quote
 
 from ...services.ai_analysis.analysis_service import analyze_packets
 from ...services.ai_analysis.evidence_pack_service import build_task_packets
 
 PROMPT_VERSION = "1"
 SCHEMA_VERSION = "1"
+
+
+def _segment(value: str | None) -> str:
+    """转义范围标识，避免冒号/竖线等分隔符造成缓存键碰撞。"""
+    return quote(str(value or ""), safe="")
 
 
 def scope_key(
@@ -24,16 +30,19 @@ def scope_key(
     if task == "task01":
         return "run"
     if task == "task02":
-        suffix = f"|class:{class_id}" if class_id else ""
-        return f"node:{node_id}{suffix}"
+        suffix = f"|class:{_segment(class_id)}" if class_id else ""
+        return f"node:{_segment(node_id)}{suffix}"
     if task == "task03" and node_id is None:
-        return f"student:{student_id or ''}|indicator:{indicator_id or ''}|all-nodes"
+        return (
+            f"student:{_segment(student_id)}"
+            f"|indicator:{_segment(indicator_id)}|all-nodes"
+        )
     suffix = (
-        f"|student:{student_id}|indicator:{indicator_id}"
+        f"|student:{_segment(student_id)}|indicator:{_segment(indicator_id)}"
         if student_id and indicator_id
         else ""
     )
-    return f"node:{node_id}{suffix}"
+    return f"node:{_segment(node_id)}{suffix}"
 
 
 class GenerateAIAnalysis:
@@ -221,6 +230,7 @@ class GenerateAIAnalysis:
         request_id=None,
         analysis_id=None,
         class_id=None,
+        preview_fingerprint=None,
     ) -> dict:
         if (
             self.client is None
@@ -230,6 +240,11 @@ class GenerateAIAnalysis:
         run, key, fingerprint, packets, scope, _ = self._load_scope(
             task, run_id, node_id, student_id, indicator_id, class_id
         )
+        if action != "retry_failed":
+            if not preview_fingerprint:
+                raise ValueError("请先预览当前数据范围，并确认传输内容")
+            if preview_fingerprint != fingerprint:
+                raise ValueError("数据范围或来源已变化，请重新预览并确认")
         if action == "retry_failed":
             with self.uow_factory(immediate=False) as uow:
                 previous = uow.ai_analyses.get(analysis_id)

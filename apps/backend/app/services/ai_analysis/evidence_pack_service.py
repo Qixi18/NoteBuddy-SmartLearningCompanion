@@ -188,6 +188,28 @@ def _task02_03_units(
         student_key: f"学生{index}"
         for index, student_key in enumerate(sorted(students), 1)
     }
+    class_aliases = {
+        class_key: f"班级{index}"
+        for index, class_key in enumerate(
+            sorted(
+                {
+                    row.get("模拟班级编号")
+                    for row in students.values()
+                    if row.get("模拟班级编号")
+                }
+            ),
+            1,
+        )
+    }
+    disposition_by_record = {
+        (row.get("record_id"), row.get("source_line")): row.get(
+            "disposition", "unknown"
+        )
+        for row in run.get("quality", {}).get("record_dispositions", [])
+    }
+    selected_records = {
+        row.get("记录编号") for row in run.get("responses", []) if row.get("记录编号")
+    }
     item_by_id = {
         row.get("材料编号"): row for row in run.get("items", []) if row.get("材料编号")
     }
@@ -232,12 +254,16 @@ def _task02_03_units(
         evidence_id = record_aliases.get(row.get("记录编号"), f"evidence{index}")
         evidence_id = evidence_id.replace("证据", "evidence")
         student_alias = student_aliases.get(current_student, "未关联学生")
+        student_class = (students.get(current_student) or {}).get("模拟班级编号")
+        record_id = row.get("记录编号")
+        source_line = row.get("_source_line")
         text = str(row.get("解答过程", "") or "")
         response = str(row.get("学生最终作答", "") or "")
         units.append(
             {
                 "evidence_id": evidence_id,
                 "student": student_alias,
+                "class": class_aliases.get(student_class, "未分班"),
                 "indicator": indicator_aliases.get(current_indicator, "指标未知"),
                 "node": node_aliases.get(row.get("节点编号"), "测验节点未知"),
                 "item": {
@@ -249,10 +275,14 @@ def _task02_03_units(
                 },
                 "score": row.get("得分"),
                 "score_status": row.get("评分状态", "未知"),
-                "disposition": row.get("处置", "未知"),
+                "disposition": disposition_by_record.get(
+                    (record_id, source_line), "unknown"
+                ),
+                "revision": row.get("修订版本"),
+                "revision_selected": record_id in selected_records,
                 "response": response,
                 "steps": text,
-                "source_line": row.get("_source_line"),
+                "source_line": source_line,
             }
         )
         reference_map[evidence_id] = {

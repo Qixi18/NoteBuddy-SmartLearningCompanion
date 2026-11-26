@@ -27,6 +27,7 @@ from ...services.task03.teaching_plan_service import build_teaching_plan
 from ..ports.llm import LLMClient
 from .ai_analysis import GenerateAIAnalysis
 from .class_teaching import ClassTeachingPlanUseCases
+from .class_teaching_adjustments import ClassTeachingAdjustments
 from .stage2 import Stage2Decisions
 from .teaching_adjustments import TeachingAdjustments
 
@@ -741,8 +742,9 @@ class WorkbenchUseCases:
             uow_factory, self.stage2, source_service
         )
         self.class_teaching_plans = ClassTeachingPlanUseCases(
-            uow_factory, self.stage2, source_service
+            uow_factory, self.stage2, source_service, self.ai_analysis
         )
+        self.class_teaching_adjustments = ClassTeachingAdjustments(uow_factory)
         self.prepare_submission = PrepareSubmission(uow_factory, self.stage2)
         self.export_submission = ExportSubmission(
             self.prepare_submission, uow_factory, self.stage2

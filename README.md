@@ -49,11 +49,12 @@ npm run web:build
 
 ```powershell
 python -m pytest apps/backend/tests          # 后端单元与 API 契约
+python scripts/demo/verify-demo-data.py      # 演示数据与 manifest 对账
 npm run web:build                            # 前端类型检查与构建
 npx playwright test                          # 九页 E2E（需要 Edge 或设置 PLAYWRIGHT_BROWSER_CHANNEL）
 ```
 
-Playwright 会自行启动隔离的 8876 后端与 5174 前端，并使用临时数据库。
+Playwright 会自行启动隔离的 8876 后端与 5174 前端，并使用临时数据库。视觉验收覆盖 1920/1440/1280/768/390 五档分辨率，截图输出到 `artifacts/frontend-acceptance/`（desktop 与 mobile 各九张）。
 
 ## 前端结构
 
@@ -75,6 +76,8 @@ Playwright 会自行启动隔离的 8876 后端与 5174 前端，并使用临时
 
 - `GET /api/class-teaching-plans?class=&node=`：当前班级的方案与全部历史版本。
 - `POST /api/class-teaching-plans/draft`：基于 TASK 02 班级证据生成规则草稿；没有有效评分记录时直接报错。
-- `POST /api/class-teaching-plans/{plan_id}/review`：教师采纳、修改、驳回或继续观察；每次审核产生新版本。
+- `POST /api/class-teaching-plans/{plan_id}/review`：教师采纳、修改、驳回或继续观察；每次审核产生新版本。请求必须携带 `run_id`，且只能审核当前最新版本；来源或数据变化的过期方案会被拒绝。
+- `GET/POST /api/class-teaching-adjustments`、`PATCH /api/class-teaching-adjustments/{id}`：班级级教学实施与复测记录，与学生级教学调整相互独立，必须基于已采纳的方案并引用本班该节点的实际作答。
+- `GET /api/class-evidence?class=&node=`：本班该节点可引用的作答记录，用于实施与复测选择。
 
-每份方案绑定 `run_id + class_id + node_id`、来源指纹、分析 ID 与证据引用；来源或数据变化后旧版本标记为过期（`stale`）。TASK 02 的 AI 分析支持可选 `class_id`，缓存键与证据包都按班级隔离；未配置模型服务时规则方案仍可完整演示。
+每份方案绑定 `run_id + class_id + node_id`、来源指纹、分析 ID 与证据引用；来源或数据变化后旧版本标记为过期（`stale`）。班级 AI 分析存在且指纹一致时，方案会引用其结论并标记 `generation_source=ai`，否则保持规则方案。TASK 02 的 AI 分析支持可选 `class_id`，缓存键与证据包都按班级隔离；`POST /api/ai-analysis` 必须携带预览指纹（`preview_fingerprint`），数据范围变化后要求重新确认。

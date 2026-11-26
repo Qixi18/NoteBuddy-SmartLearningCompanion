@@ -48,6 +48,20 @@ def client_for(tmp_path, *, legacy_key=False):
     return TestClient(app), model
 
 
+def ai_fingerprint(client, **params):
+    params.setdefault("task", "task01")
+    preview = client.get("/api/ai-analysis", params=params)
+    assert preview.status_code == 200, preview.text
+    return preview.json()["source_fingerprint"]
+
+
+def ai_fingerprint(client, **params):
+    params.setdefault("task", "task01")
+    preview = client.get("/api/ai-analysis", params=params)
+    assert preview.status_code == 200, preview.text
+    return preview.json()["source_fingerprint"]
+
+
 def test_ai_analysis_post_returns_and_get_restores_direct_result(tmp_path):
     client, model = client_for(tmp_path)
 
@@ -57,6 +71,7 @@ def test_ai_analysis_post_returns_and_get_restores_direct_result(tmp_path):
             "task": "task01",
             "action": "generate",
             "request_id": "req-1",
+            "preview_fingerprint": ai_fingerprint(client),
             "transmission_confirmed": True,
         },
     )
@@ -85,6 +100,7 @@ def test_ai_analysis_supports_legacy_provider_key_without_exposing_it(tmp_path):
         json={
             "task": "task01",
             "request_id": "legacy-key",
+            "preview_fingerprint": preview.json()["source_fingerprint"],
             "transmission_confirmed": True,
         },
     )
@@ -98,6 +114,7 @@ def test_ai_analysis_reuses_current_result_and_refreshes_on_request(tmp_path):
         "task": "task01",
         "action": "generate",
         "request_id": "req-1",
+        "preview_fingerprint": ai_fingerprint(client),
         "transmission_confirmed": True,
     }
     first = client.post("/api/ai-analysis", json=request).json()
@@ -153,6 +170,7 @@ def test_source_verification_change_marks_saved_analysis_stale(tmp_path):
             "task": "task01",
             "action": "generate",
             "request_id": "req-stale",
+            "preview_fingerprint": ai_fingerprint(client),
             "transmission_confirmed": True,
         },
     ).json()
@@ -222,6 +240,7 @@ def test_partial_analysis_retries_only_failed_packet_and_keeps_prior_findings(tm
         "task": "task01",
         "action": "generate",
         "request_id": "req-partial",
+        "preview_fingerprint": ai_fingerprint(client),
         "transmission_confirmed": True,
     }
 
@@ -242,3 +261,46 @@ def test_partial_analysis_retries_only_failed_packet_and_keeps_prior_findings(tm
     assert retried["coverage"]["packet_succeeded"] == 2
     assert retried["coverage"]["failed_packet_ids"] == []
     assert model.calls == 4
+
+
+def test_ai_analysis_requires_preview_fingerprint_and_rejects_changed_scope(tmp_path):
+    client, model = client_for(tmp_path)
+    fingerprint = ai_fingerprint(client)
+
+    missing = client.post(
+        "/api/ai-analysis",
+        json={
+            "task": "task01",
+            "action": "generate",
+            "request_id": "req-no-preview",
+            "transmission_confirmed": True,
+        },
+    )
+    assert missing.status_code == 400
+    assert "预览" in missing.json()["error"]
+
+    changed = client.post(
+        "/api/ai-analysis",
+        json={
+            "task": "task01",
+            "action": "generate",
+            "request_id": "req-changed",
+            "preview_fingerprint": "0" * 64,
+            "transmission_confirmed": True,
+        },
+    )
+    assert changed.status_code == 400
+    assert "变化" in changed.json()["error"]
+
+    accepted = client.post(
+        "/api/ai-analysis",
+        json={
+            "task": "task01",
+            "action": "generate",
+            "request_id": "req-ok",
+            "preview_fingerprint": fingerprint,
+            "transmission_confirmed": True,
+        },
+    )
+    assert accepted.status_code == 200, accepted.text
+    assert model.calls == 1

@@ -10,6 +10,7 @@ import { routes } from '../../../app/routes';
 import {
   api, postJson, useClassReport, useClassTeachingPlans,
 } from '../api';
+import { ClassAdjustmentWorkflow } from '../components/ClassAdjustmentWorkflow';
 import { ClassTeachingReport } from '../components/ClassTeachingReport';
 import { useWorkbenchScope } from '../../shared/useWorkbenchScope';
 import { str } from '../../shared/workbenchTypes';
@@ -126,6 +127,7 @@ export function ClassTeachingPage() {
       return api<Row>(
         `/api/class-teaching-plans/${encodeURIComponent(String(latestPlan.plan_id))}/review`,
         postJson({
+          run_id: runId,
           status: input.status,
           reviewer: reviewer.trim() || '教师',
           reason: reason.trim() || '教师已核对班级诊断证据与方案内容。',
@@ -152,9 +154,10 @@ export function ClassTeachingPage() {
   const aiRun = useMutation({
     mutationFn: () => api<Row>('/api/ai-analysis', postJson({
       task: 'task02',
-      action: 'generate',
+      action: aiPreview.data?.analysis ? 'refresh' : 'generate',
       node_id: nodeId,
       class_id: classId,
+      preview_fingerprint: aiPreview.data?.source_fingerprint,
       request_id: `${runId}-${classId}-${nodeId}-${Date.now()}`,
       transmission_confirmed: true,
     })),
@@ -167,7 +170,7 @@ export function ClassTeachingPage() {
     onError: cause => { setMessage(''); setError((cause as Error).message); },
   });
 
-  const canReview = Boolean(latestPlan) && Boolean(reviewer.trim());
+  const canReview = Boolean(latestPlan) && Boolean(reviewer.trim()) && !latestPlan?.stale;
   const busy = draft.isPending || review.isPending;
   const findings = useMemo(() => {
     const analysis = aiPreview.data?.analysis;
@@ -176,6 +179,7 @@ export function ClassTeachingPage() {
     return Array.isArray(list) ? list as Row[] : [];
   }, [aiPreview.data]);
   const modelConfigured = Boolean((aiPreview.data as Row | undefined)?.model_configured);
+  const aiAnalysis = (aiPreview.data?.analysis ?? aiRun.data) as Row | undefined;
 
   if (runQuery.isPending) return <Loading/>;
   if (!run) {
@@ -242,7 +246,7 @@ export function ClassTeachingPage() {
                 </Notice>}
               </div>
 
-              <div className={styles.caseForm}>
+              <div className={styles.caseForm} data-testid="class-plan-editor">
                 {SECTIONS.map(section => <label key={section.key}>
                   {section.label}
                   <textarea
@@ -309,6 +313,8 @@ export function ClassTeachingPage() {
           </details>)}</div>}
     </Panel>
 
+    <ClassAdjustmentWorkflow runId={runId} classId={classId} nodeId={nodeId} plan={latestPlan}/>
+
     <Panel
       title="班级 AI 分析（可选）"
       icon={<Bot size={18}/>}
@@ -322,6 +328,7 @@ export function ClassTeachingPage() {
               没有配置模型时，规则方案与审核流程仍可完整演示。
             </p>
             {!modelConfigured && <Notice tone="warning">未配置模型服务：本页不会调用外部模型，规则方案仍可正常生成与审核。</Notice>}
+            {aiAnalysis && <p className={styles.limitation}>分析状态：{aiAnalysis.status === 'complete' ? '已完成' : aiAnalysis.status === 'partial' ? '部分完成' : aiAnalysis.status === 'failed' ? '失败' : str(aiAnalysis.status)} · 第 {str(aiAnalysis.generation, '1')} 次 · 模型 {str(aiAnalysis.model)}</p>}
             {findings.length ? <div className={styles.issueList}>{findings.map((finding, index) => <article key={`${str(finding.category, 'finding')}-${index}`}>
               <span className={styles.issueRank}>{index + 1}</span>
               <div>

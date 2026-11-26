@@ -5,6 +5,9 @@ from sqlalchemy.orm import Session
 from ...application.ports.unit_of_work import UnitOfWork
 from ...repositories.ai_analysis_repository import AIAnalysisRepository
 from ...repositories.analysis_run_repository import AnalysisRunRepository
+from ...repositories.class_teaching_adjustment_repository import (
+    ClassTeachingAdjustmentRepository,
+)
 from ...repositories.class_teaching_plan_repository import ClassTeachingPlanRepository
 from ...repositories.response_repository import ResponseRepository
 from ...repositories.review_repository import ReviewRepository
@@ -45,6 +48,9 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
                 self.sessions, session=session
             )
             self.class_teaching_plans = ClassTeachingPlanRepository(
+                self.sessions, session=session
+            )
+            self.class_teaching_adjustments = ClassTeachingAdjustmentRepository(
                 self.sessions, session=session
             )
             self.students = StudentRepository(self.sessions, session=session)

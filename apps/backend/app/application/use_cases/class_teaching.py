@@ -16,12 +16,15 @@ from ...services.task03.class_teaching_plan_service import (
     current_class_plan_fingerprint,
 )
 
+AI_REFERENCE_STATUSES = {"complete", "partial"}
+
 
 class ClassTeachingPlanUseCases:
-    def __init__(self, uow_factory, stage2, source_service):
+    def __init__(self, uow_factory, stage2, source_service, ai_analysis=None):
         self.uow_factory = uow_factory
         self.stage2 = stage2
         self.source_service = source_service
+        self.ai_analysis = ai_analysis
 
     # -- 内部 ---------------------------------------------------------------
     def _snapshot(self) -> tuple[dict, dict, dict]:
@@ -31,7 +34,7 @@ class ClassTeachingPlanUseCases:
             mappings = uow.stage2.list_ai_mappings(run["run_id"])
         return run, self.stage2.with_source_freshness(run, sources), mappings
 
-    def _report(self, run: dict, node_id: str, sources: dict, mappings: dict) -> dict:
+    def _report(self, run: dict, node_id: str, sources: dict, mappings: dict) -> tuple[dict, dict]:
         # 延迟导入：workbench 在模块层导入本用例，避免循环依赖。
         from .workbench import _ai_mapping_summaries
 
@@ -41,7 +44,7 @@ class ClassTeachingPlanUseCases:
             sources,
             _ai_mapping_summaries(run, mappings, self.source_service),
         )
-        return build_class_report(run, node_id, insights)
+        return build_class_report(run, node_id, insights), insights
 
     def _validate_class(self, run: dict, class_id: str, node_id: str) -> None:
         classes = {
@@ -52,18 +55,27 @@ class ClassTeachingPlanUseCases:
         if node_id not in {row.get("节点编号") for row in run.get("nodes", [])}:
             raise ValueError("测验节点不存在")
 
-    def _latest_class_analysis(self, uow, run_id: str, node_id: str, class_id: str) -> dict | None:
-        key = f"node:{node_id}|class:{class_id}"
-        latest = uow.ai_analyses.latest(run_id, "task02", key)
-        if latest and latest.get("status") == "complete":
-            return latest
-        return None
+    def _class_analysis(self, node_id: str, class_id: str) -> dict | None:
+        """只有当前指纹一致且状态为 complete/partial 的班级 AI 分析才能参与方案。"""
+        if self.ai_analysis is None:
+            return None
+        preview = self.ai_analysis.preview("task02", node_id=node_id, class_id=class_id)
+        analysis = preview.get("analysis")
+        if not analysis or preview.get("stale"):
+            return None
+        if analysis.get("status") not in AI_REFERENCE_STATUSES:
+            return None
+        return {
+            "analysis_id": analysis.get("analysis_id", ""),
+            "fingerprint": preview.get("source_fingerprint", ""),
+            "findings": analysis.get("findings") or [],
+        }
 
     # -- 查询 ---------------------------------------------------------------
     def list(self, class_id: str, node_id: str) -> dict:
         run, sources, mappings = self._snapshot()
         self._validate_class(run, class_id, node_id)
-        report = self._report(run, node_id, sources, mappings)
+        report, _ = self._report(run, node_id, sources, mappings)
         fingerprint = current_class_plan_fingerprint(run, class_id, node_id, report, sources)
         with self.uow_factory(immediate=False) as uow:
             plans = uow.class_teaching_plans.list(run["run_id"], class_id, node_id)
@@ -83,30 +95,39 @@ class ClassTeachingPlanUseCases:
     def draft(self, class_id: str, node_id: str, reviewer: str = "") -> dict:
         run, sources, mappings = self._snapshot()
         self._validate_class(run, class_id, node_id)
-        report = self._report(run, node_id, sources, mappings)
-        record = build_rule_plan(run, class_id, node_id, report, sources)
+        report, insights = self._report(run, node_id, sources, mappings)
+        ai = self._class_analysis(node_id, class_id)
+        record = build_rule_plan(
+            run,
+            class_id,
+            node_id,
+            report,
+            sources,
+            issues=insights.get("issues"),
+            ai_findings=(ai or {}).get("findings"),
+            ai_analysis_id=(ai or {}).get("analysis_id", ""),
+            ai_fingerprint=(ai or {}).get("fingerprint", ""),
+        )
         now = datetime.now(UTC).isoformat()
 
         with self.uow_factory() as uow:
             existing = uow.class_teaching_plans.latest(run["run_id"], class_id, node_id)
-            analysis = self._latest_class_analysis(uow, run["run_id"], node_id, class_id)
-            analysis_id = analysis["analysis_id"] if analysis else ""
             if (
                 existing
                 and existing["status"] != "rejected"
                 and existing["source_fingerprint"] == record["source_fingerprint"]
             ):
-                return {**existing, "stale": False, "reused": True, "analysis_id": existing.get("analysis_id") or analysis_id}
+                return {**existing, "stale": False, "reused": True}
             plan = ClassTeachingPlan(
                 plan_id="",
                 scope=ClassPlanScope(run["run_id"], class_id, node_id),
                 version=1,
                 status="draft",
-                generation_source="rule",
+                generation_source=record["generation_source"],
                 source_fingerprint=record["source_fingerprint"],
                 plan=ClassPlanBody.from_payload(record["plan"]),
                 evidence_refs=tuple(record["evidence_refs"]),
-                analysis_id=analysis_id,
+                analysis_id=record.get("analysis_id", ""),
                 reviewer="",
                 review_reason="",
                 created_at=now,
@@ -125,10 +146,31 @@ class ClassTeachingPlanUseCases:
 
     # -- 教师审核 ------------------------------------------------------------
     def review(self, plan_id: str, payload: dict) -> dict:
-        with self.uow_factory() as uow:
+        run, sources, mappings = self._snapshot()
+        with self.uow_factory(immediate=False) as uow:
             existing = uow.class_teaching_plans.get(plan_id)
             if existing is None:
                 raise ValueError("班级教学方案不存在")
+            if existing["run_id"] != run["run_id"]:
+                raise ValueError("当前运行已变化；请刷新页面后重新生成方案")
+            if payload.get("run_id") and payload["run_id"] != run["run_id"]:
+                raise ValueError("当前运行已变化；请刷新页面后重新生成方案")
+            latest = uow.class_teaching_plans.latest(
+                existing["run_id"], existing["class_id"], existing["node_id"]
+            )
+            if latest and latest["plan_id"] != existing["plan_id"]:
+                raise ValueError("该方案已被更新的版本取代；只能审核当前最新版本")
+        report, _ = self._report(run, existing["node_id"], sources, mappings)
+        current = current_class_plan_fingerprint(
+            run,
+            existing["class_id"],
+            existing["node_id"],
+            report,
+            sources,
+        )
+        if existing["source_fingerprint"] != current:
+            raise ValueError("方案已过期：来源核验或作答数据已变化，请重新生成后再审核")
+        with self.uow_factory() as uow:
             plan = ClassTeachingPlan(
                 plan_id=existing["plan_id"],
                 scope=ClassPlanScope(

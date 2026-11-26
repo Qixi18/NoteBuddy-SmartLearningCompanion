@@ -3,6 +3,7 @@ from typing import Protocol
 from .ai_analysis_repository import AIAnalyses
 from .repositories import (
     AnalysisRuns,
+    ClassTeachingAdjustments,
     ClassTeachingPlans,
     Responses,
     ReviewHistories,
@@ -20,6 +21,7 @@ class UnitOfWork(Protocol):
     stage2: Stage2Records
     teaching_adjustments: TeachingAdjustments
     class_teaching_plans: ClassTeachingPlans
+    class_teaching_adjustments: ClassTeachingAdjustments
     students: Students
     subjects: Subjects
     responses: Responses

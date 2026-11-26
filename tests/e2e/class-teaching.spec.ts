@@ -11,7 +11,7 @@ test('generating a class plan produces an editable rule draft', async ({ page })
   await page.getByRole('button', { name: /生成规则方案|按当前证据重新生成/ }).click();
   await expect(page.getByText(/已生成第 \d+ 版规则草稿|已存在同一版草稿/).first()).toBeVisible({ timeout: 20_000 });
 
-  const editor = page.locator('textarea');
+  const editor = page.getByTestId('class-plan-editor').locator('textarea');
   await expect(editor).toHaveCount(7);
   expect((await editor.first().inputValue()).length).toBeGreaterThan(0);
   await expect(page.getByRole('button', { name: '采纳并保存' })).toBeEnabled();
@@ -22,7 +22,7 @@ test('teacher edits and accepts the class plan without losing history', async ({
   await page.getByRole('button', { name: /生成规则方案|按当前证据重新生成/ }).click();
   await expect(page.getByText(/已生成第 \d+ 版规则草稿|已存在同一版草稿/).first()).toBeVisible({ timeout: 20_000 });
 
-  const firstSection = page.locator('textarea').first();
+  const firstSection = page.getByTestId('class-plan-editor').locator('textarea').first();
   await firstSection.fill('演示：先集中处理方程类共同问题，再做一次同型题重练。');
   await page.getByRole('button', { name: '采纳并保存' }).click();
 

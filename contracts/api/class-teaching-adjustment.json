@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "class-teaching-adjustment.json",
+  "title": "班级教学实施与复测记录",
+  "description": "POST /api/class-teaching-adjustments 与 PATCH /api/class-teaching-adjustments/{id}。必须基于当前已采纳的班级方案；后续效果必须引用本班该测验节点的实际作答记录。",
+  "type": "object",
+  "required": [
+    "run_id", "class_id", "node_id", "plan_id", "planned_activity"
+  ],
+  "properties": {
+    "adjustment_id": { "type": "string" },
+    "run_id": { "type": "string", "minLength": 1 },
+    "class_id": { "type": "string", "minLength": 1 },
+    "node_id": { "type": "string", "minLength": 1 },
+    "plan_id": { "type": "string", "minLength": 1 },
+    "plan_version": { "type": "integer", "minimum": 1 },
+    "planned_activity": { "type": "string", "minLength": 1 },
+    "planned_practice": { "type": "array", "items": { "type": "string" } },
+    "observation_points": { "type": "array", "items": { "type": "string" } },
+    "teacher": { "type": "string" },
+    "planned_at": { "type": "string" },
+    "implementation": { "type": "string" },
+    "implementation_status": {
+      "type": "string",
+      "enum": ["not_completed", "partial", "completed"]
+    },
+    "outcome_observations": { "type": "string" },
+    "followup_node_id": { "type": ["string", "null"] },
+    "followup_evidence_record_ids": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "teacher_conclusion": { "type": "string" },
+    "concluded_at": { "type": ["string", "null"] },
+    "created_at": { "type": "string" },
+    "updated_at": { "type": "string" },
+    "history": { "type": "array", "items": { "type": "object" } }
+  }
+}
