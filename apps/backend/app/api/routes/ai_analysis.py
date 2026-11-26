@@ -31,6 +31,7 @@ def generate_ai_analysis(payload: AIAnalysisRequest, use_cases: UseCases) -> dic
         action=payload.action,
         request_id=payload.request_id,
         analysis_id=payload.analysis_id,
+        class_id=payload.class_id,
     )
 
 
@@ -46,7 +47,8 @@ def latest_ai_analysis(
     node_id: str | None = Query(default=None, min_length=1),
     student_id: str | None = Query(default=None, min_length=1),
     indicator_id: str | None = Query(default=None, min_length=1),
+    class_id: str | None = Query(default=None, alias="class", min_length=1),
 ) -> dict:
     return use_cases.ai_analysis.preview(
-        task, run_id, node_id, student_id, indicator_id
+        task, run_id, node_id, student_id, indicator_id, class_id
     )

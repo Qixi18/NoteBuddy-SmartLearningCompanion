@@ -23,6 +23,7 @@ from ..repositories.store import Store
 from .routes import (
     ai_analysis,
     analysis,
+    class_teaching,
     exports,
     health,
     imports,
@@ -243,6 +244,7 @@ def create_app(store: Store | None = None, config: Settings = settings) -> FastA
     application.include_router(recommendations.router)
     application.include_router(reviews.router)
     application.include_router(stage2.router)
+    application.include_router(class_teaching.router)
     application.include_router(reports.router)
     application.include_router(release.router)
     application.include_router(exports.router)

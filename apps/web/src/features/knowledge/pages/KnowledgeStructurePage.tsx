@@ -1,9 +1,12 @@
 import { ArrowRight, BookOpen, Check, FileSearch, Layers3, Link2, Target } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { EmptyState, Loading, Panel } from '../../components/PageBits';
-import type { RunData } from '../../types/api';
-import { routes } from '../../app/routes';
-import styles from './ContentPage.module.css';
+import { EmptyState, Loading, Notice, Panel } from '../../../components/PageBits';
+import { routes } from '../../../app/routes';
+import type { RunData } from '../../../types/api';
+import { useKnowledgeCandidates, useSourceVerifications } from '../api';
+import { KnowledgeModuleHeader } from '../components/KnowledgeModuleHeader';
+import { useWorkbenchScope } from '../../shared/useWorkbenchScope';
+import styles from '../../shared/WorkbenchPages.module.css';
 
 type Row = Record<string, unknown>;
 function isSyntheticVerification(row: Row | undefined) { return Boolean(row && ['reason', 'curriculum_locator', 'textbook_locator'].some(key => /合成|模拟验收|synthetic|mock/i.test(String(row[key] ?? '')))); }
@@ -112,4 +115,18 @@ export function KnowledgeStructurePage({ run, selectedIndicator, search, verific
       <Panel title="已核验的前置关系" icon={<Check size={18}/> }>{verifiedRelations.length ? <div className={styles.confirmedRelationList}>{verifiedRelations.map((relation, index) => <article key={`${String(relation.sourceId)}-${String(relation.target_indicator_id)}-${index}`}><span>{String(relation.target_indicator_id ?? '未知指标')}</span><ArrowRight size={14}/><b>{String(relation.sourceId)}</b><small>{text(relation.relation, '前置知识')} · {text(relation.evidence, '未提供核验依据')}{relation.synthetic ? ' · 合成验收记录' : ''}</small></article>)}</div> : <EmptyState title="暂无已核验前置关系" detail="教师完成课程关系核验后，确认关系会显示在这里。"/>}</Panel>
     </div>
   </>;
+}
+
+export function KnowledgeStructurePageRoute() {
+  const { run, runQuery, scope, search, setIndicator } = useWorkbenchScope();
+  const selectedIndicator = scope.indicatorId || String(run?.objectives[0]?.['指标编号'] ?? '');
+  const verifications = useSourceVerifications(run?.run_id ?? '');
+  const candidates = useKnowledgeCandidates(run?.run_id ?? '', selectedIndicator);
+  if (runQuery.isPending) return <Loading/>;
+  if (!run) return <EmptyState title="当前没有分析运行" detail="请先在教学工作台导入课程与学情数据。" action={<Link className={styles.linkButton} to={routes.dashboard}>前往教学工作台 <ArrowRight size={15}/></Link>}/>;
+  return <div className={styles.pageStack}>
+    <KnowledgeModuleHeader kind="structure" search={search}/>
+    <Notice>主题与指标层级来自当前课程要求。中部连线只表示主题归属；前置关系只有教师已核验后才会显示为已确认。候选关系单独标记，不作为既定知识依赖。</Notice>
+    <KnowledgeStructurePage run={run} selectedIndicator={selectedIndicator} search={search} verifications={verifications.data ?? {}} candidates={candidates.data} candidatesPending={candidates.isPending} onSelectIndicator={setIndicator}/>
+  </div>;
 }

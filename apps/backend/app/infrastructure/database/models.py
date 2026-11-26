@@ -268,6 +268,33 @@ class TeachingAdjustmentOriginRow(Base):
     )
 
 
+class ClassTeachingPlanRow(Base):
+    """班级教学方案：每个版本一行，历史不覆盖。"""
+
+    __tablename__ = "class_teaching_plans"
+    plan_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    run_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    class_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    node_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    generation_source: Mapped[str] = mapped_column(String(16), nullable=False)
+    source_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    analysis_id: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    reviewer: Mapped[str] = mapped_column(String(200), default="", nullable=False)
+    review_reason: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    plan_json: Mapped[str] = mapped_column(Text, nullable=False)
+    evidence_refs_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[str] = mapped_column(String(64), nullable=False)
+    updated_at: Mapped[str] = mapped_column(String(64), nullable=False)
+    __table_args__ = (
+        ForeignKeyConstraint(["run_id"], ["analysis_runs.run_id"], ondelete="CASCADE"),
+        UniqueConstraint(
+            "run_id", "class_id", "node_id", "version", name="uq_class_teaching_plan_version"
+        ),
+    )
+
+
 class AppStateRow(Base):
     __tablename__ = "app_state"
     key: Mapped[str] = mapped_column(String(128), primary_key=True)

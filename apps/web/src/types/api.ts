@@ -12,6 +12,8 @@ export interface QualityReport {
 export interface RunData {
   run_id: string;
   created_at: string;
+  /** 学科名称：由导入数据提供时展示，缺失时界面显示“未提供”。 */
+  subject?: string;
   quality: QualityReport;
   objectives: Array<Record<string, unknown>>;
   items: Array<Record<string, unknown>>;

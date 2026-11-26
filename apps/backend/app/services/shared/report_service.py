@@ -277,7 +277,9 @@ def build_case_reports(
     }
 
 
-def build_class_report(run: dict, node_id: str, insights: dict) -> dict:
+def build_class_report(
+    run: dict, node_id: str, insights: dict, class_id: str | None = None
+) -> dict:
     if (
         insights.get("run_id") != run.get("run_id")
         or insights.get("node_id") != node_id
@@ -287,6 +289,8 @@ def build_class_report(run: dict, node_id: str, insights: dict) -> dict:
     comparisons = []
     for item in insights.get("comparisons", []):
         rows = item.get("classes", [])
+        if class_id:
+            rows = [row for row in rows if row.get("class_id") == class_id]
         ratios = [
             row.get("common_ratio")
             for row in rows
@@ -302,20 +306,38 @@ def build_class_report(run: dict, node_id: str, insights: dict) -> dict:
             }
         )
     issues = insights.get("issues", [])
-    return {
-        "run_id": run.get("run_id", ""),
-        "node_id": node_id,
-        "status": "ready" if classes else "incomplete",
-        "classes": classes,
-        "comparisons": comparisons,
-        "source_mappings": insights.get("source_mappings", {}),
-        "common_observations": [
+    scoped_issues = []
+    for issue in issues:
+        by_class = issue.get("by_class", [])
+        if class_id:
+            by_class = [row for row in by_class if row.get("class_id") == class_id]
+        if not by_class:
+            continue
+        scoped_issues.append({**issue, "by_class": by_class})
+    if class_id:
+        classes = [row for row in classes if row.get("class_id") == class_id]
+        common_observations = [
             issue
-            for issue in issues
+            for issue in scoped_issues
+            if any(row.get("affected_count", 0) > 0 for row in issue["by_class"])
+        ]
+    else:
+        common_observations = [
+            issue
+            for issue in scoped_issues
             if sum(
                 row.get("affected_count", 0) > 0 for row in issue.get("by_class", [])
             )
             > 1
-        ],
+        ]
+    return {
+        "run_id": run.get("run_id", ""),
+        "node_id": node_id,
+        "scope": {"class_id": class_id} if class_id else None,
+        "status": "ready" if classes else "incomplete",
+        "classes": classes,
+        "comparisons": comparisons,
+        "source_mappings": insights.get("source_mappings", {}),
+        "common_observations": common_observations,
         "limitations": insights.get("limitations", []),
     }

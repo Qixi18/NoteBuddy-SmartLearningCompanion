@@ -33,6 +33,22 @@
 .topDivider { width:1px; height:25px; background:#e6ebe7; }
 .profile { display:flex; align-items:center; gap:9px; border:0; color:#34473b; background:transparent; font-size:12px; font-weight:700; }
 .profileAvatar { width:30px; height:30px; color:#fff; background:#559a73; }
+.collapseButton { display:grid; width:26px; height:26px; flex:0 0 auto; place-items:center; border:1px solid rgb(255 255 255 / 18%); border-radius:7px; color:#cfe6d8; background:rgb(255 255 255 / 6%); cursor:pointer; transition:background .18s ease,color .18s ease; }
+.collapseButton:hover { color:#fff; background:rgb(255 255 255 / 16%); }
+.collapseButton:focus-visible { outline:2px solid #bce4c4; outline-offset:2px; }
+.iconButton:disabled { color:#a7b3aa; cursor:not-allowed; }
+.shellCollapsed .sidebar { width:64px; }
+.shellCollapsed .brand { justify-content:center; padding:0; }
+.shellCollapsed .brand>span:last-child,
+.shellCollapsed .sideCaption,
+.shellCollapsed .navItem>span,
+.shellCollapsed .navChevron,
+.shellCollapsed .subNav,
+.shellCollapsed .sideFooter>div { display:none; }
+.shellCollapsed .nav { padding:12px 8px; }
+.shellCollapsed .navItem { justify-content:center; padding:0; }
+.shellCollapsed .sideFooter { justify-content:center; padding:10px 0; }
+.shellCollapsed .workspace { margin-left:64px; }
 .main { width:min(100%,1700px); margin:0 auto; padding:26px clamp(20px,2.4vw,38px) 40px; }
 .pageHeading { display:flex; align-items:flex-end; justify-content:space-between; gap:18px; margin-bottom:20px; }
 .eyebrow { margin-bottom:8px; color:#85938a; font-size:11px; }

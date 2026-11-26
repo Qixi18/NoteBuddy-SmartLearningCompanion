@@ -16,7 +16,7 @@ mkdirSync(path.dirname(path.resolve(databasePath)), { recursive: true });
 mkdirSync(path.resolve(dataPath), { recursive: true });
 
 export default defineConfig({
-  testDir: './tests',
+  testDir: './tests/e2e',
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: 0,
@@ -25,13 +25,15 @@ export default defineConfig({
   outputDir: 'test-results',
   use: {
     ...devices['Desktop Chrome'],
+    // 本机没有 Chrome 时使用已安装的 Edge；可用环境变量覆盖。
+    channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL ?? 'msedge',
     baseURL: `http://127.0.0.1:${frontendPort}`,
     viewport: { width: Number(process.env.PLAYWRIGHT_VIEWPORT_WIDTH ?? 1440), height: Number(process.env.PLAYWRIGHT_VIEWPORT_HEIGHT ?? 900) },
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL ?? 'msedge' } }],
   webServer: [
     {
       command: `python -m app.cli db-upgrade --database-url sqlite:///${databasePath.replaceAll('\\', '/')} && python -m app.main`,

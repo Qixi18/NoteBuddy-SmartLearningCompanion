@@ -15,12 +15,17 @@ SCHEMA_VERSION = "1"
 
 
 def scope_key(
-    task: str, node_id: str | None, student_id: str | None, indicator_id: str | None
+    task: str,
+    node_id: str | None,
+    student_id: str | None,
+    indicator_id: str | None,
+    class_id: str | None = None,
 ) -> str:
     if task == "task01":
         return "run"
     if task == "task02":
-        return f"node:{node_id}"
+        suffix = f"|class:{class_id}" if class_id else ""
+        return f"node:{node_id}{suffix}"
     if task == "task03" and node_id is None:
         return f"student:{student_id or ''}|indicator:{indicator_id or ''}|all-nodes"
     suffix = (
@@ -38,14 +43,18 @@ class GenerateAIAnalysis:
         self.config = config
         self.client = client
 
-    def _load_scope(self, task, run_id, node_id, student_id, indicator_id):
+    def _load_scope(
+        self, task, run_id, node_id, student_id, indicator_id, class_id=None
+    ):
         if task == "task02" and not node_id:
             raise ValueError("TASK 02 必须指定测验节点")
         if task == "task03" and not node_id and not student_id:
             raise ValueError("整体学习建议必须指定学生")
-        if task == "task01" and any((node_id, student_id, indicator_id)):
+        if task == "task01" and any((node_id, student_id, indicator_id, class_id)):
             raise ValueError("TASK 01 使用整次运行范围")
-        key = scope_key(task, node_id, student_id, indicator_id)
+        if class_id and task != "task02":
+            raise ValueError("class_id 仅用于 TASK 02 班级范围分析")
+        key = scope_key(task, node_id, student_id, indicator_id, class_id)
         with self.uow_factory(immediate=False) as uow:
             run = uow.runs.current() if run_id is None else uow.runs.load(run_id)
             if (
@@ -63,6 +72,10 @@ class GenerateAIAnalysis:
                 item.get("指标编号") for item in run.get("objectives", [])
             }:
                 raise ValueError("学科指标不存在")
+            if class_id and class_id not in {
+                item.get("模拟班级编号") for item in run.get("students", [])
+            }:
+                raise ValueError("班级不存在")
             verifications = uow.stage2.list_sources(run["run_id"])
             latest = {
                 indicator: history[-1]
@@ -150,15 +163,22 @@ class GenerateAIAnalysis:
             sources,
             student_id=student_id,
             indicator_id=indicator_id,
+            class_id=class_id,
         )
         scope = packets[0]["scope"] if packets else {"task": task}
         return run, key, fingerprint, packets, scope, latest
 
     def preview(
-        self, task, run_id=None, node_id=None, student_id=None, indicator_id=None
+        self,
+        task,
+        run_id=None,
+        node_id=None,
+        student_id=None,
+        indicator_id=None,
+        class_id=None,
     ):
         run, key, fingerprint, packets, scope, _ = self._load_scope(
-            task, run_id, node_id, student_id, indicator_id
+            task, run_id, node_id, student_id, indicator_id, class_id
         )
         with self.uow_factory(immediate=False) as uow:
             latest = uow.ai_analyses.latest(run["run_id"], task, key)
@@ -200,6 +220,7 @@ class GenerateAIAnalysis:
         action="generate",
         request_id=None,
         analysis_id=None,
+        class_id=None,
     ) -> dict:
         if (
             self.client is None
@@ -207,7 +228,7 @@ class GenerateAIAnalysis:
         ):
             raise ValueError("尚未配置可用的 AI 模型服务")
         run, key, fingerprint, packets, scope, _ = self._load_scope(
-            task, run_id, node_id, student_id, indicator_id
+            task, run_id, node_id, student_id, indicator_id, class_id
         )
         if action == "retry_failed":
             with self.uow_factory(immediate=False) as uow:

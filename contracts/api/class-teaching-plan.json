@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "class-teaching-plan.json",
+  "title": "班级教学方案（单版本）",
+  "description": "GET /api/class-teaching-plans 返回的 plans[] 元素，以及 draft/review 的响应体。stale 由当前来源指纹与方案指纹比较得到。",
+  "type": "object",
+  "required": [
+    "plan_id", "run_id", "class_id", "node_id", "version", "status",
+    "generation_source", "source_fingerprint", "plan", "evidence_refs"
+  ],
+  "properties": {
+    "plan_id": { "type": "string" },
+    "run_id": { "type": "string" },
+    "class_id": { "type": "string" },
+    "node_id": { "type": "string" },
+    "version": { "type": "integer", "minimum": 1 },
+    "status": { "type": "string", "enum": ["draft", "accepted", "edited", "rejected", "needs_observation"] },
+    "generation_source": { "type": "string", "enum": ["rule", "ai"] },
+    "source_fingerprint": { "type": "string" },
+    "analysis_id": { "type": "string" },
+    "reviewer": { "type": "string" },
+    "review_reason": { "type": "string" },
+    "created_at": { "type": "string" },
+    "updated_at": { "type": "string" },
+    "schema_version": { "type": "integer", "const": 1 },
+    "teacher_review_required": { "type": "boolean", "const": true },
+    "stale": { "type": "boolean" },
+    "plan": {
+      "type": "object",
+      "required": ["teaching_objectives", "key_problems", "teaching_actions", "observation_points", "adjustment_conditions"],
+      "properties": {
+        "teaching_objectives": { "type": "array", "items": { "type": "string" } },
+        "key_problems": { "type": "array", "items": { "type": "string" } },
+        "teaching_actions": { "type": "array", "items": { "type": "string" } },
+        "differentiated_actions": { "type": "array", "items": { "type": "string" } },
+        "resource_recommendations": { "type": "array", "items": { "type": "string" } },
+        "observation_points": { "type": "array", "items": { "type": "string" } },
+        "adjustment_conditions": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["kind", "class_id", "node_id"],
+        "properties": {
+          "kind": { "type": "string", "enum": ["class_indicator", "material"] },
+          "class_id": { "type": "string" },
+          "node_id": { "type": "string" },
+          "indicator_id": { "type": "string" },
+          "material_id": { "type": "string" },
+          "ratio": { "type": ["number", "null"] },
+          "common_ratio": { "type": ["number", "null"] },
+          "scored_record_count": { "type": "integer" },
+          "observed_student_count": { "type": "integer" },
+          "student_count": { "type": "integer" },
+          "common_material_ids": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  }
+}

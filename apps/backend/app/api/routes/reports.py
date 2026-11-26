@@ -19,5 +19,9 @@ def case_report(
 
 
 @router.get("/api/reports/class", tags=["reports"])
-def class_report(node: str, use_cases: UseCases) -> dict:
-    return use_cases.competition_reports.class_report(node)
+def class_report(
+    node: str,
+    use_cases: UseCases,
+    class_id: str | None = Query(default=None, alias="class", min_length=1, max_length=128),
+) -> dict:
+    return use_cases.competition_reports.class_report(node, class_id)

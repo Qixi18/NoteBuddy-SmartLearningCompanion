@@ -26,6 +26,7 @@ from ...services.task03.resource_selection_service import select_resources
 from ...services.task03.teaching_plan_service import build_teaching_plan
 from ..ports.llm import LLMClient
 from .ai_analysis import GenerateAIAnalysis
+from .class_teaching import ClassTeachingPlanUseCases
 from .stage2 import Stage2Decisions
 from .teaching_adjustments import TeachingAdjustments
 
@@ -524,7 +525,7 @@ class GetCompetitionReports:
             run, student_ids, cases, reviews, sources, adjustments
         )
 
-    def class_report(self, node_id: str) -> dict:
+    def class_report(self, node_id: str, class_id: str | None = None) -> dict:
         with self.uow_factory(immediate=False) as uow:
             run = uow.runs.current()
             sources = uow.stage2.list_sources(run["run_id"])
@@ -536,7 +537,7 @@ class GetCompetitionReports:
             sources,
             _ai_mapping_summaries(run, ai_mappings, self.source_service),
         )
-        return build_class_report(run, node_id, insights)
+        return build_class_report(run, node_id, insights, class_id=class_id)
 
 
 class PrepareSubmission:
@@ -737,6 +738,9 @@ class WorkbenchUseCases:
             self.current_run, self.stage2, source_service
         )
         self.competition_reports = GetCompetitionReports(
+            uow_factory, self.stage2, source_service
+        )
+        self.class_teaching_plans = ClassTeachingPlanUseCases(
             uow_factory, self.stage2, source_service
         )
         self.prepare_submission = PrepareSubmission(uow_factory, self.stage2)

@@ -1,0 +1,121 @@
+{
+  "dataset": "smart-learning-demo",
+  "version": "2026.11.1",
+  "generator": "scripts/demo/build-demo-data.py",
+  "seed": 20261126,
+  "synthetic": true,
+  "note": "全部学生与作答均为合成数据，不含真实学生个人信息。",
+  "classes": {
+    "C1": [
+      "D01",
+      "D02",
+      "D03",
+      "D04",
+      "D05",
+      "D06",
+      "D07",
+      "D08",
+      "D09",
+      "D10",
+      "D11",
+      "D12"
+    ],
+    "C2": [
+      "D13",
+      "D14",
+      "D15",
+      "D16",
+      "D17",
+      "D18",
+      "D19",
+      "D20",
+      "D21",
+      "D22",
+      "D23",
+      "D24"
+    ]
+  },
+  "indicators": [
+    {
+      "topic_id": "T01",
+      "indicator_id": "I011",
+      "name": "列代数式与代入求值"
+    },
+    {
+      "topic_id": "T01",
+      "indicator_id": "I012",
+      "name": "同类项合并与去括号"
+    },
+    {
+      "topic_id": "T01",
+      "indicator_id": "I013",
+      "name": "用整式解释具体问题"
+    },
+    {
+      "topic_id": "T02",
+      "indicator_id": "I021",
+      "name": "等式性质解一元一次方程"
+    },
+    {
+      "topic_id": "T02",
+      "indicator_id": "I022",
+      "name": "消元法解二元一次方程组"
+    },
+    {
+      "topic_id": "T02",
+      "indicator_id": "I023",
+      "name": "列方程解决实际问题"
+    },
+    {
+      "topic_id": "T03",
+      "indicator_id": "I031",
+      "name": "不等式性质求解"
+    },
+    {
+      "topic_id": "T03",
+      "indicator_id": "I032",
+      "name": "负数乘除变号"
+    },
+    {
+      "topic_id": "T03",
+      "indicator_id": "I033",
+      "name": "解集交集与实际范围"
+    }
+  ],
+  "nodes": [
+    "N01",
+    "N02"
+  ],
+  "items": [
+    "Q001",
+    "Q002",
+    "Q003",
+    "Q004",
+    "Q005",
+    "Q006",
+    "Q007",
+    "Q008",
+    "Q009"
+  ],
+  "expected": {
+    "student_count": 24,
+    "class_count": 2,
+    "node_count": 2,
+    "item_count": 9,
+    "indicator_count": 9,
+    "raw_rows": 292,
+    "scored_rows": 281,
+    "pending_rows": 6,
+    "unanswered_rows": 5,
+    "over_maximum_rows": 2,
+    "revised_events": 4,
+    "total_maximum": 703,
+    "total_score": 349
+  },
+  "design_notes": [
+    "C1 在 T02（方程）上偏弱，C2 在 T03（不等式）上偏弱，用于演示班级共同问题。",
+    "N02 相对 N01 在薄弱主题上有提升，用于演示教学调整后的复测比较。",
+    "含待评分、未作答、超满分与多版本修订记录；这些记录不按 0 分处理。",
+    "至少 6 名学生有足够证据可完成案例确认。"
+  ]
+}

@@ -24,8 +24,13 @@ def _filtered_metrics(
     node_id: str | None,
     student_id: str | None,
     indicator_id: str | None,
+    class_id: str | None = None,
 ) -> list[dict]:
     rows = []
+    student_class = {
+        row.get("学生编号"): row.get("模拟班级编号", "")
+        for row in run.get("students", [])
+    }
     for metric in run.get("metrics", []):
         if not isinstance(metric, dict):
             continue
@@ -42,6 +47,13 @@ def _filtered_metrics(
                 continue
         if indicator_id and metric.get("indicator_id") not in {None, indicator_id}:
             continue
+        metric_class = metric.get("class_id")
+        if not metric_class and kind.startswith("class_"):
+            metric_class = key.split(":", 1)[0]
+        if not metric_class and kind.startswith("student_"):
+            metric_class = student_class.get(str(metric.get("student_id") or key.split(":", 1)[0]))
+        if class_id and metric_class != class_id:
+            continue
         row = {
             name: value
             for name, value in metric.items()
@@ -55,10 +67,7 @@ def _filtered_metrics(
                 "class_id",
             }
         }
-        class_id = metric.get("class_id")
-        if not class_id and kind.startswith("class_"):
-            class_id = key.split(":", 1)[0]
-        if class_id:
+        if metric_class:
             classes = sorted(
                 {
                     student.get("模拟班级编号")
@@ -67,7 +76,7 @@ def _filtered_metrics(
                 }
             )
             row["class"] = (
-                f"班级{classes.index(class_id) + 1}" if class_id in classes else "班级"
+                f"班级{classes.index(metric_class) + 1}" if metric_class in classes else "班级"
             )
         rows.append(row)
     return rows
@@ -158,6 +167,7 @@ def _task02_03_units(
     node_id: str | None,
     student_id: str | None,
     indicator_id: str | None,
+    class_id: str | None = None,
 ) -> tuple[list[dict], dict[str, dict]]:
     node = (
         next(
@@ -207,6 +217,8 @@ def _task02_03_units(
         if node_id and row.get("节点编号") != node_id:
             continue
         if student_id and current_student != student_id:
+            continue
+        if class_id and students.get(current_student, {}).get("模拟班级编号") != class_id:
             continue
         if indicator_id and current_indicator != indicator_id:
             continue
@@ -264,6 +276,7 @@ def build_task_packets(
     *,
     student_id: str | None = None,
     indicator_id: str | None = None,
+    class_id: str | None = None,
     max_chars: int = 8000,
 ) -> list[EvidencePacket]:
     """Build complete prompt packets; identifiers stay in local reference maps."""
@@ -283,16 +296,17 @@ def build_task_packets(
         total_records = 0
     else:
         units, reference_map = _task02_03_units(
-            run, task, node_id, student_id, indicator_id
+            run, task, node_id, student_id, indicator_id, class_id
         )
         scope = {
             "task": task,
             "node": node_id,
             "indicator": indicator_id,
             "student": "指定学生" if student_id else None,
+            "class_scope": "指定班级" if class_id else None,
         }
         facts = []
-        metrics = _filtered_metrics(run, node_id, student_id, indicator_id)
+        metrics = _filtered_metrics(run, node_id, student_id, indicator_id, class_id)
         for index, metric in enumerate(metrics, 1):
             fact_id = f"fact{index}"
             facts.append({"fact_id": fact_id, "kind": "deterministic_metric", **metric})
@@ -328,6 +342,18 @@ def build_task_packets(
             for row in (run.get("raw_responses") or run.get("responses", []))
             if (not node_id or row.get("节点编号") == node_id)
             and (not student_id or row.get("学生编号") == student_id)
+            and (
+                not class_id
+                or next(
+                    (
+                        student.get("模拟班级编号")
+                        for student in run.get("students", [])
+                        if student.get("学生编号") == row.get("学生编号")
+                    ),
+                    None,
+                )
+                == class_id
+            )
             and (
                 not indicator_id
                 or row.get("指标编号") == indicator_id

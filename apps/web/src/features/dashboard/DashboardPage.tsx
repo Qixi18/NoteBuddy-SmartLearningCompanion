@@ -1,13 +1,16 @@
 import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Activity, AlertTriangle, ArrowRight, BookOpen, Bot, CheckCircle2, CircleHelp, ClipboardCheck, Download, FileUp, GraduationCap, Layers3, Lightbulb, RefreshCw, Sparkles, Target, Users } from 'lucide-react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { api, postJson } from '../../api/client';
-import { useCases, useClassInsights, useReadiness, useRun } from '../../api/queries';
+import { useCases, useClassInsights, useReadiness } from '../../api/queries';
+import { useWorkbenchScope } from '../shared/useWorkbenchScope';
+import { applyScope } from '../shared/scopeUtils';
 import type { ApiProblem, RunData } from '../../types/api';
 import { EmptyState, ErrorBox, Loading, Metric, Notice, Panel } from '../../components/PageBits';
 import { ReactECharts } from '../../components/ReactECharts';
 import { routes } from '../../app/routes';
+import { MAX_TOTAL_BYTES, formatBytes, validateImportFiles } from './importValidation';
 import styles from './DashboardPage.module.css';
 
 function nameOf(row: Record<string, unknown>, fields: string[], fallback: string) {
@@ -18,22 +21,23 @@ function pct(value: number | null | undefined) { return value == null || !Number
 
 export function DashboardPage() {
   const queryClient = useQueryClient();
-  const [params] = useSearchParams();
   const [importMessage, setImportMessage] = useState('');
   const [importError, setImportError] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
-  const runQuery = useRun();
+  const { run, runQuery, scope, search, params } = useWorkbenchScope();
   const readiness = useReadiness();
-  const run = runQuery.data;
-  const nodeId = params.get('node') ?? String(run?.nodes[0]?.['节点编号'] ?? '');
-  const classId = params.get('class') ?? String(run?.students[0]?.['模拟班级编号'] ?? '');
+  const { classId, nodeId } = scope;
   const insights = useClassInsights(run?.run_id ?? '', nodeId);
-  const cases = useCases(Boolean(run));
+  const cases = useCases(run?.run_id ?? '', Boolean(run));
   const importMutation = useMutation({
     mutationFn: async (files: FileList) => {
+      const selected = Array.from(files);
+      const validation = validateImportFiles(selected);
+      if (!validation.ok) throw new Error(validation.errors.join(' '));
+      if (validation.selection.pdf.length) setImportMessage(`正在读取 ${formatBytes(validation.selection.totalBytes)} 数据（含 PDF 编码）…`);
       const csv: Record<string, string> = {};
       const pdf: Record<string, string> = {};
-      for (const file of Array.from(files)) {
+      for (const file of selected) {
         if (file.name.toLowerCase().endsWith('.csv')) csv[file.name] = await file.text();
         if (file.name.toLowerCase().endsWith('.pdf')) {
           const bytes = new Uint8Array(await file.arrayBuffer());
@@ -93,7 +97,7 @@ export function DashboardPage() {
       {!notImported && runQuery.error && <ErrorBox message={(runQuery.error as Error).message} onRetry={() => void runQuery.refetch()}/>}
       <Panel title="选择数据文件" icon={<FileUp size={19}/> }>
         <div className={styles.importBody}>
-          <div className={styles.importCopy}><strong>导入 CSV 数据包</strong><p>选择同一数据包中的 CSV 文件。若同时有教材 PDF，可一并选择。</p><button className={styles.primaryButton} disabled={importMutation.isPending} onClick={() => inputRef.current?.click()}><FileUp size={17}/>{importMutation.isPending ? '正在校验并导入…' : '选择 CSV / PDF 文件'}</button>
+          <div className={styles.importCopy}><strong>导入 CSV 数据包</strong><p>选择同一数据包中的 CSV 文件。若同时有教材 PDF，可一并选择；单次导入原始文件总量不超过 {formatBytes(MAX_TOTAL_BYTES)}（PDF 会按 Base64 计入请求体）。</p><button className={styles.primaryButton} disabled={importMutation.isPending} onClick={() => inputRef.current?.click()}><FileUp size={17}/>{importMutation.isPending ? '正在校验并导入…' : '选择 CSV / PDF 文件'}</button>
             <input ref={inputRef} hidden type="file" multiple accept=".csv,.pdf" onChange={event => event.currentTarget.files && importMutation.mutate(event.currentTarget.files)}/>
             {importMessage && <p className={styles.successText} role="status"><CheckCircle2 size={16}/>{importMessage}</p>}{importError && <p className={styles.importError} role="alert">{importError}</p>}
           </div>
@@ -107,8 +111,11 @@ export function DashboardPage() {
 
   if (insights.isError) return <ErrorBox message={(insights.error as Error).message} onRetry={() => void insights.refetch()}/>;
   return <div className={styles.dashboard}>
+    <input ref={inputRef} hidden type="file" multiple accept=".csv,.pdf" onChange={event => event.currentTarget.files && importMutation.mutate(event.currentTarget.files)}/>
+    {importMessage && <Notice>{importMessage}</Notice>}
+    {importError && <ErrorBox message={importError}/>}
     <div className={styles.actionRow}><div className={styles.scopePill}><span className={styles.pillDot}/>{classId || '尚无班级'}<span>·</span>{run.nodes.find(item => item['节点编号'] === nodeId)?.['节点名称'] as string ?? nodeId}</div>
-      <div className={styles.actions}><button className={styles.secondaryButton} onClick={() => window.print()}><ClipboardCheck size={17}/>打印当前工作台</button><Link className={styles.primaryButton} to={{ pathname: routes.classDiagnosis, search: params.toString() }}><Activity size={17}/>查看班级诊断</Link><Link className={styles.secondaryButton} to={{ pathname: routes.studentTeaching, search: params.toString() }}><Sparkles size={17}/>生成教学建议</Link></div></div>
+      <div className={styles.actions}><button className={styles.secondaryButton} onClick={() => window.print()}><ClipboardCheck size={17}/>打印当前工作台</button><Link className={styles.primaryButton} to={{ pathname: routes.classDiagnosis, search: search }}><Activity size={17}/>查看班级诊断</Link><Link className={styles.secondaryButton} to={{ pathname: routes.studentTeaching, search: search }}><Sparkles size={17}/>生成教学建议</Link></div></div>
     <div className={styles.metrics}>
       <Metric label="班级学生" value={classStats?.student_count ?? classStudents.length} hint={`当前班级 ${classId || '未选择'}`} icon={<Users size={27}/>}/>
       <Metric label="有效评分记录" value={quality?.eligible_scored ?? 0} hint={`共 ${quality?.raw_rows ?? 0} 条原始记录`} icon={<ClipboardCheck size={27}/>}/>
@@ -123,18 +130,18 @@ export function DashboardPage() {
         {ratios.some(item => !item.comparable) && <p className={styles.chartFootnote}>部分指标没有共同题目，班级间不可比；图中仅展示当前班级全题集口径。</p>}
       </Panel>
 
-      <Panel title="本周优先处理事项" icon={<ClipboardCheck size={19}/>} action={<Link to={{ pathname: routes.classDiagnosis, search: params.toString() }}>查看诊断 <ArrowRight size={14}/></Link>}>
+      <Panel title="本周优先处理事项" icon={<ClipboardCheck size={19}/>} action={<Link to={{ pathname: routes.classDiagnosis, search: search }}>查看诊断 <ArrowRight size={14}/></Link>}>
         <div className={styles.priorityList}>{priority.length ? priority.map((item, index) => <div className={styles.priorityItem} key={item.indicator}><span className={`${styles.priorityNumber} ${index === 0 ? styles.priorityHigh : ''}`}>{index + 1}</span><div><strong>{item.label}</strong><small>当前班级全题集得分率 {pct(item.ratio)}{item.comparable ? ` · 共同题目 ${pct(item.common)}` : ' · 班级间不可比较'}</small></div><span className={styles.priorityTag}>{index === 0 ? '优先关注' : '持续观察'}</span></div>) : <EmptyState title="暂无优先项" detail="有效评分记录出现后，将按观察指标汇总表现。"/>}</div>
       </Panel>
 
       <Panel title="AI 教学助手" icon={<Bot size={19}/>} className={styles.assistantPanel}>
         <div className={styles.assistantMessage}><span className={styles.assistantDot}/><p>{readiness.data?.model?.configured ? '模型服务已就绪。生成分析前会展示数据范围并请求确认。' : '本机未配置模型服务，可先使用已有规则分析和教学建议。'}</p></div>
         <small className={styles.assistantFoot}>AI 外部传输需要教师明确确认。生成结果需结合证据核对。</small>
-        <Link to={{ pathname: routes.classDiagnosis, search: params.toString() }} className={styles.assistantLink}><Lightbulb size={16}/>查看诊断依据<ArrowRight size={15}/></Link>
+        <Link to={{ pathname: routes.classDiagnosis, search: search }} className={styles.assistantLink}><Lightbulb size={16}/>查看诊断依据<ArrowRight size={15}/></Link>
       </Panel>
 
-      <Panel title="典型学生候选" icon={<Users size={19}/>} action={<Link to={{ pathname: routes.classDiagnosis, search: params.toString() }}>全部候选 <ArrowRight size={14}/></Link>}>
-        <div className={styles.studentList}>{classCases.length ? classCases.slice(0, 4).map(item => <div className={styles.studentRow} key={`${item.class_id}-${item.student_id}`}><span className={styles.studentCode}>{item.student_id}</span><div><strong>{item.type}</strong><small>{item.reason || '可查看该案例的关联作答证据。'}</small></div><Link aria-label={`查看学生 ${item.student_id}`} to={{ pathname: routes.studentDiagnosis, search: new URLSearchParams({ ...Object.fromEntries(params), student: item.student_id }).toString() }}><ArrowRight size={16}/></Link></div>) : <EmptyState title="当前班级暂无案例候选" detail="候选案例由后端按可用证据生成；没有候选不代表表现稳定。"/>}</div>
+      <Panel title="典型学生候选" icon={<Users size={19}/>} action={<Link to={{ pathname: routes.classDiagnosis, search: search }}>全部候选 <ArrowRight size={14}/></Link>}>
+        <div className={styles.studentList}>{classCases.length ? classCases.slice(0, 4).map(item => <div className={styles.studentRow} key={`${item.class_id}-${item.student_id}`}><span className={styles.studentCode}>{item.student_id}</span><div><strong>{item.type}</strong><small>{item.reason || '可查看该案例的关联作答证据。'}</small></div><Link aria-label={`查看学生 ${item.student_id}`} to={{ pathname: routes.studentDiagnosis, search: applyScope(params, { student: item.student_id, class: item.class_id }).toString() }}><ArrowRight size={16}/></Link></div>) : <EmptyState title="当前班级暂无案例候选" detail="候选案例由后端按可用证据生成；没有候选不代表表现稳定。"/>}</div>
       </Panel>
 
       <Panel title="班级学生分布" icon={<Layers3 size={19}/>} action={<span className={styles.panelMeta}>按导入数据中的班级编号</span>}>
@@ -142,7 +149,7 @@ export function DashboardPage() {
       </Panel>
 
       <Panel title="快捷入口" icon={<BookOpen size={19}/>}>
-        <div className={styles.quickLinks}><Link to={{ pathname: routes.topicOverview, search: params.toString() }}><span><BookOpen size={19}/></span><strong>课程知识</strong><ArrowRight size={15}/></Link><Link to={{ pathname: routes.classDiagnosis, search: params.toString() }}><span><Activity size={19}/></span><strong>班级诊断</strong><ArrowRight size={15}/></Link><Link to={{ pathname: routes.studentDiagnosis, search: params.toString() }}><span><Users size={19}/></span><strong>学生诊断</strong><ArrowRight size={15}/></Link><Link to={{ pathname: routes.studentTeaching, search: params.toString() }}><span><Lightbulb size={19}/></span><strong>教学建议</strong><ArrowRight size={15}/></Link><button onClick={() => inputRef.current?.click()}><span><FileUp size={19}/></span><strong>导入新数据</strong><ArrowRight size={15}/></button></div>
+        <div className={styles.quickLinks}><Link to={{ pathname: routes.topicOverview, search: search }}><span><BookOpen size={19}/></span><strong>课程知识</strong><ArrowRight size={15}/></Link><Link to={{ pathname: routes.classDiagnosis, search: search }}><span><Activity size={19}/></span><strong>班级诊断</strong><ArrowRight size={15}/></Link><Link to={{ pathname: routes.studentDiagnosis, search: search }}><span><Users size={19}/></span><strong>学生诊断</strong><ArrowRight size={15}/></Link><Link to={{ pathname: routes.studentTeaching, search: search }}><span><Lightbulb size={19}/></span><strong>教学建议</strong><ArrowRight size={15}/></Link><button onClick={() => inputRef.current?.click()}><span><FileUp size={19}/></span><strong>导入新数据</strong><ArrowRight size={15}/></button></div>
       </Panel>
       {quality && quality.raw_rows > 0 && <QualityPanel quality={quality}/>}
       <ExportPanel key={`${run.run_id}:${classId}`} runId={run.run_id} classId={classId} students={classStudents.map(row => String(row['学生编号'] ?? '')).filter(Boolean)}/>

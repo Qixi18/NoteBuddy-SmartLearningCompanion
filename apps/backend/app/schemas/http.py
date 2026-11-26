@@ -72,6 +72,7 @@ class AIAnalysisRequest(BaseModel):
     action: Literal["generate", "refresh", "retry_failed"] = "generate"
     run_id: str | None = Field(default=None, min_length=1, max_length=64)
     node_id: str | None = Field(default=None, min_length=1, max_length=128)
+    class_id: str | None = Field(default=None, min_length=1, max_length=128)
     student_id: str | None = Field(default=None, min_length=1, max_length=128)
     indicator_id: str | None = Field(default=None, min_length=1, max_length=128)
     analysis_id: str | None = Field(default=None, min_length=1, max_length=64)
@@ -80,6 +81,8 @@ class AIAnalysisRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_scope(self):
+        if self.class_id and self.task != "task02":
+            raise ValueError("class_id 仅用于 TASK 02 班级范围分析")
         if bool(self.student_id) != bool(self.indicator_id) and not (
             self.task == "task03" and self.student_id and not self.indicator_id
         ):
@@ -696,3 +699,42 @@ class ReadinessResponse(BaseModel):
     model: dict[str, Any]
     deepseek_ocr: dict[str, bool]
     checks: list[dict[str, str]]
+
+
+class ClassPlanBodyPayload(BaseModel):
+    """班级教学方案正文；与前端编辑器一一对应。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    teaching_objectives: list[str] = Field(min_length=1, max_length=20)
+    key_problems: list[str] = Field(min_length=1, max_length=20)
+    teaching_actions: list[str] = Field(min_length=1, max_length=20)
+    differentiated_actions: list[str] = Field(default_factory=list, max_length=20)
+    resource_recommendations: list[str] = Field(default_factory=list, max_length=20)
+    observation_points: list[str] = Field(min_length=1, max_length=20)
+    adjustment_conditions: list[str] = Field(min_length=1, max_length=20)
+
+    @model_validator(mode="after")
+    def validate_items(self):
+        for name in type(self).model_fields:
+            for value in getattr(self, name):
+                if not str(value).strip():
+                    raise ValueError("方案内容不能为空行")
+        return self
+
+
+class ClassTeachingPlanDraftRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    class_id: str = Field(min_length=1, max_length=128)
+    node_id: str = Field(min_length=1, max_length=128)
+    reviewer: str = Field(default="", max_length=200)
+
+
+class ClassTeachingPlanReviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["accepted", "edited", "rejected", "needs_observation"]
+    reviewer: str = Field(min_length=1, max_length=200)
+    reason: str = Field(min_length=1, max_length=4000)
+    plan: ClassPlanBodyPayload | None = None

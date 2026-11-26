@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "class-teaching-plan-review.json",
+  "title": "班级教学方案教师审核请求",
+  "description": "POST /api/class-teaching-plans/{plan_id}/review。审核产生新版本，不覆盖历史；AI 与规则引擎不能自行把方案标记为已采纳。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["status", "reviewer", "reason"],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["accepted", "edited", "rejected", "needs_observation"]
+    },
+    "reviewer": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "reason": { "type": "string", "minLength": 1, "maxLength": 4000 },
+    "plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["teaching_objectives", "key_problems", "teaching_actions", "observation_points", "adjustment_conditions"],
+      "properties": {
+        "teaching_objectives": { "type": "array", "minItems": 1, "maxItems": 20, "items": { "type": "string" } },
+        "key_problems": { "type": "array", "minItems": 1, "maxItems": 20, "items": { "type": "string" } },
+        "teaching_actions": { "type": "array", "minItems": 1, "maxItems": 20, "items": { "type": "string" } },
+        "differentiated_actions": { "type": "array", "maxItems": 20, "items": { "type": "string" } },
+        "resource_recommendations": { "type": "array", "maxItems": 20, "items": { "type": "string" } },
+        "observation_points": { "type": "array", "minItems": 1, "maxItems": 20, "items": { "type": "string" } },
+        "adjustment_conditions": { "type": "array", "minItems": 1, "maxItems": 20, "items": { "type": "string" } }
+      }
+    }
+  }
+}

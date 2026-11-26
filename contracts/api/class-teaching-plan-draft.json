@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "class-teaching-plan-draft.json",
+  "title": "班级教学方案草稿请求",
+  "description": "POST /api/class-teaching-plans/draft。方案只基于当前班级与测验节点的真实证据生成；没有有效评分记录时接口返回 400，不生成空话方案。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["class_id", "node_id"],
+  "properties": {
+    "class_id": { "type": "string", "minLength": 1, "maxLength": 128, "examples": ["C1"] },
+    "node_id": { "type": "string", "minLength": 1, "maxLength": 128, "examples": ["N01"] },
+    "reviewer": { "type": "string", "maxLength": 200, "default": "" }
+  }
+}
