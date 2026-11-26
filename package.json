@@ -7,6 +7,8 @@
     "doc": "docs"
   },
   "scripts": {
+    "web:dev": "npm --prefix apps/web run dev",
+    "web:build": "npm --prefix apps/web run build",
     "test:e2e": "node run-playwright.cjs"
   },
   "repository": {

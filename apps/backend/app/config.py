@@ -118,7 +118,7 @@ class Settings:
             or os.getenv("SMART_LEARNING_RESOURCES_DIR", "resources"),
             "web_dist_dir": self.web_dist_dir
             or os.getenv(
-                "SMART_LEARNING_WEB_DIST_DIR", str(root / "apps/backend/app/web/dist")
+                "SMART_LEARNING_WEB_DIST_DIR", str(root / "apps/web/dist")
             ),
         }
         for name, value in path_values.items():

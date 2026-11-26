@@ -38,11 +38,15 @@ node_modules/
 
 # Project planning, design, and other documentation
 /docs/
+!/docs/
+!/docs/frontend/
+!/docs/frontend/**
 /DESIGN.md
 /PRODUCT.md
 /AGENTS.md
 *.md
 !README.md
+!/docs/frontend/**/*.md
 
 # Local scratch and generated artifacts
 /tmp/
