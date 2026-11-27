@@ -139,6 +139,29 @@ def test_ocr_preview_only_marks_uncached_sources_for_explicit_send(tmp_path):
     assert changed["fingerprint"] != cached["fingerprint"]
 
 
+def test_partial_native_text_requires_ocr_for_the_missing_pages(tmp_path):
+    source_dir = tmp_path / "sources"
+    source_dir.mkdir()
+    textbook = source_dir / "B02_相关资料切片.pdf"
+    _blank_pdf(textbook, pages=2)
+    sources = SourceService(
+        tmp_path / "resources",
+        source_files_dir=source_dir,
+        ocr_cache_dir=tmp_path / "cache",
+    )
+    sources.get_text_pages = Mock(
+        return_value={
+            "available": True,
+            "sha256": "abc123",
+            "text_status": "partial",
+            "text_page_count": 1,
+            "pages": [{"page": 1, "text": "可读的一页"}],
+        }
+    )
+
+    assert sources.needs_ocr({"source_index": []}, textbook.name) is True
+
+
 def test_ocr_result_rejects_missing_or_duplicate_page_indexes(tmp_path):
     source_dir = tmp_path / "sources"
     source_dir.mkdir()

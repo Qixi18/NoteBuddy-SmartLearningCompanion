@@ -8,7 +8,6 @@ from ...schemas.http import (
     ImportFilesRequest,
     ImportRequest,
     ImportResponse,
-    SourceOCRRequest,
 )
 
 router = APIRouter()
@@ -59,18 +58,3 @@ def import_files(
     return _response(result)
 
 
-@router.get("/api/source-ocr/preview", tags=["sources"])
-def source_ocr_preview(
-    use_cases: WorkbenchUseCases = Depends(get_use_cases),
-) -> dict:
-    return use_cases.import_folder.preview_ocr()
-
-
-@router.post("/api/source-ocr", tags=["sources"])
-def source_ocr(
-    payload: SourceOCRRequest,
-    use_cases: WorkbenchUseCases = Depends(get_use_cases),
-) -> dict:
-    return use_cases.import_folder.execute_ocr(
-        payload.confirmed, payload.preview_fingerprint
-    )

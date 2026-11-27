@@ -66,8 +66,10 @@ def current_run(use_cases: UseCases) -> dict:
 @router.get(
     "/api/cases", response_model=list[CaseSuggestionResponse], tags=["analysis"]
 )
-def cases(use_cases: UseCases) -> list[dict]:
-    return use_cases.list_cases.execute()
+def cases(
+    use_cases: UseCases, node: str | None = Query(default=None, min_length=1)
+) -> list[dict]:
+    return use_cases.list_cases.execute(node_id=node)
 
 
 @router.get("/api/draft", response_model=DraftResponse, tags=["recommendations"])

@@ -13,7 +13,7 @@ export function ClassDiagnosisPage() {
   const selectedClass = scope.classId || String(run?.students[0]?.['模拟班级编号'] ?? '');
   const selectedNode = scope.nodeId || String(run?.nodes[0]?.['节点编号'] ?? '');
   const insights = useClassInsights(run?.run_id ?? '', selectedNode);
-  const cases = useCases(run?.run_id ?? '', Boolean(run));
+  const cases = useCases(run?.run_id ?? '', selectedNode, Boolean(run));
 
   if (runQuery.isPending) return <Loading/>;
   if (!run) return <EmptyState title="当前没有分析运行" detail="请先在教学工作台导入课程与学情数据。" action={<Link className={styles.linkButton} to={routes.dashboard}>前往教学工作台 <ArrowRight size={15}/></Link>}/>;

@@ -10,11 +10,10 @@ export type Row = Record<string, unknown>;
 export const queryKeys = {
   run: ['run'] as const,
   readiness: ['readiness'] as const,
-  cases: (runId: string) => ['cases', runId] as const,
+  cases: (runId: string, nodeId: string) => ['cases', runId, nodeId] as const,
   classInsights: (runId: string, nodeId: string) => ['class-insights', runId, nodeId] as const,
   materialCatalog: (runId: string) => ['material-catalog', runId] as const,
   sourceVerifications: (runId: string) => ['source-verifications', runId] as const,
-  sourceOCRPreview: ['source-ocr-preview'] as const,
   aiSourceMappings: (runId: string) => ['ai-source-mappings', runId] as const,
   knowledgeCandidates: (runId: string, indicatorId: string) => ['knowledge-candidates', runId, indicatorId] as const,
   studentInsights: (runId: string, nodeId: string, studentId: string, indicatorId: string) =>
@@ -63,11 +62,11 @@ export function useReadiness() {
   return useQuery({ queryKey: queryKeys.readiness, queryFn: () => api<Readiness>('/api/readiness') });
 }
 
-export function useCases(runId: string, enabled = true) {
+export function useCases(runId: string, nodeId: string, enabled = true) {
   return useQuery({
-    queryKey: queryKeys.cases(runId),
-    queryFn: () => api<CaseCandidate[]>('/api/cases'),
-    enabled: Boolean(runId) && enabled,
+    queryKey: queryKeys.cases(runId, nodeId),
+    queryFn: () => api<CaseCandidate[]>(`/api/cases?node=${encodeURIComponent(nodeId)}`),
+    enabled: Boolean(runId && nodeId) && enabled,
   });
 }
 

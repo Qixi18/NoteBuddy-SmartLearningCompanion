@@ -20,7 +20,7 @@ def _current_node(nodes: list[dict]) -> dict | None:
     return latest[0] if len(latest) == 1 else None
 
 
-def suggest_cases(run: dict) -> list[dict]:
+def suggest_cases(run: dict, node_id: str | None = None) -> list[dict]:
     students = run.get("students", [])
     if len(students) < 3:
         return []
@@ -30,7 +30,12 @@ def suggest_cases(run: dict) -> list[dict]:
     ):
         return []
 
-    node = _current_node(run.get("nodes", []))
+    nodes = run.get("nodes", [])
+    node = (
+        next((item for item in nodes if item.get("节点编号") == node_id), None)
+        if node_id
+        else _current_node(nodes)
+    )
     if node is None:
         return []
     node_id = node.get("节点编号") if node else None

@@ -53,12 +53,6 @@ class ImportFilesRequest(BaseModel):
         return self
 
 
-class SourceOCRRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    confirmed: Literal[True]
-    preview_fingerprint: str = Field(min_length=64, max_length=64)
-
-
 class DraftRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     student_id: str = Field(min_length=1)

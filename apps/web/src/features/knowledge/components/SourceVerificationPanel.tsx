@@ -1,17 +1,16 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, BrainCircuit, Check, ChevronDown, ChevronRight, CloudUpload, FileText, Minus, ScanSearch, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, BrainCircuit, Check, ChevronDown, ChevronRight, FileText, Minus, ScanSearch, ShieldCheck } from 'lucide-react';
 import { ErrorBox, Notice, Panel } from '../../../components/PageBits';
 import { invalidateAfterSourceVerification } from '../../../api/queries';
 import type {
   MachineVerificationResponse,
   MachineVerificationResult,
   SourceMappingPreview,
-  SourceOCRPreview,
   VerificationCheck,
   VerificationStatus,
 } from '../../../types/api';
-import { runMachineVerification, previewSourceOCR, runSourceOCR, previewSourceMappings, generateSourceMappings } from '../api';
+import { runMachineVerification, previewSourceMappings, generateSourceMappings } from '../api';
 import { str } from '../../shared/workbenchTypes';
 import type { Row } from '../../shared/workbenchTypes';
 import styles from './SourceVerificationPanel.module.css';
@@ -124,8 +123,6 @@ export function SourceVerificationPanel({ runId, objectives, histories, onDone }
   const [lastRun, setLastRun] = useState<MachineVerificationResponse | null>(null);
   const [force, setForce] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [ocrPreview, setOcrPreview] = useState<SourceOCRPreview | null>(null);
-  const [ocrDone, setOcrDone] = useState<string | null>(null);
   const [mappingPreview, setMappingPreview] = useState<SourceMappingPreview | null>(null);
   const [mappingDone, setMappingDone] = useState<string | null>(null);
   const [showMapping, setShowMapping] = useState(false);
@@ -143,16 +140,6 @@ export function SourceVerificationPanel({ runId, objectives, histories, onDone }
     },
   });
 
-  const ocr = useMutation({
-    mutationFn: () => runSourceOCR(ocrPreview?.fingerprint ?? ''),
-    onSuccess: async (data) => {
-      const parsed = str(data.status, 'unknown');
-      setOcrDone(`外部解析已完成（状态：${parsed}）。现在可以重新执行自动核验。`);
-      setOcrPreview(null);
-      await refresh();
-    },
-  });
-
   const mapping = useMutation({
     mutationFn: () => generateSourceMappings({ transmission_confirmed: true, preview_fingerprint: mappingPreview?.fingerprint ?? '' }),
     onSuccess: async (data) => {
@@ -162,14 +149,6 @@ export function SourceVerificationPanel({ runId, objectives, histories, onDone }
       );
       setMappingPreview(null);
       await refresh();
-    },
-  });
-
-  const previewOcr = useMutation({
-    mutationFn: previewSourceOCR,
-    onSuccess: (data) => {
-      setOcrDone(null);
-      setOcrPreview(data);
     },
   });
 
@@ -189,9 +168,8 @@ export function SourceVerificationPanel({ runId, objectives, histories, onDone }
   const verifiedCount = items.filter(item => item.status === 'verified').length;
   const reviewCount = items.filter(item => item.status !== 'verified').length;
   const progress = total ? Math.round((verifiedCount / total) * 100) : 0;
-  const needsExternalOCR = Boolean(ocrPreview && ocrPreview.will_send_count > 0);
 
-  return <Panel title="课程来源自动核验" icon={<ShieldCheck size={18}/>} action={
+  return <Panel title="课程来源记录" icon={<ShieldCheck size={18}/>} action={
     <div className={styles.toolbar}>
       <label className={styles.checkbox} title="已有结论也重新判定；结论未变化时不写新版本">
         <input type="checkbox" checked={force} onChange={event => setForce(event.target.checked)} disabled={verify.isPending}/>
@@ -204,8 +182,7 @@ export function SourceVerificationPanel({ runId, objectives, histories, onDone }
   }>
     <div className={styles.panel}>
       <p className={styles.lede}>
-        系统会检查来源文件、逐页核对课标定位页与教材切片原文、回查题目关联；四类必要证据全部成立才自动写入机器核验记录。
-        证据不足的指标保留待核验并说明原因，不会降低标准换通过。
+        这里保留历史来源记录与可选的课程材料映射。课程 PDF 解析已在导入时自动完成；无需在此逐页核对原文。
       </p>
 
       <div className={styles.summary}>
@@ -221,7 +198,6 @@ export function SourceVerificationPanel({ runId, objectives, histories, onDone }
       </div>
 
       {verify.isError && <ErrorBox message={(verify.error as Error).message}/>}
-      {ocr.isError && <ErrorBox message={(ocr.error as Error).message}/>}
 
       <div className={styles.results}>
         {items.map(item => {
@@ -283,44 +259,6 @@ export function SourceVerificationPanel({ runId, objectives, histories, onDone }
         })}
       </div>
 
-      <section className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <span><CloudUpload size={16}/> 外部 OCR 解析（课标为扫描件时需要）</span>
-          <button type="button" className={styles.secondaryButton} onClick={() => previewOcr.mutate()} disabled={previewOcr.isPending}>
-            {previewOcr.isPending ? '正在检查…' : '检查外部解析需求'}
-          </button>
-        </div>
-        <p className={styles.sectionText}>
-          只有确实缺文本的来源文件才会被送出；文字版 PDF 直接本地解析，不产生费用。发送前必须由教师确认，确认后不可撤回。
-        </p>
-        {ocrDone && <p className={styles.sectionText}>{ocrDone}</p>}
-        {previewOcr.isError && <ErrorBox message={(previewOcr.error as Error).message}/>}
-        {ocrPreview && !needsExternalOCR && <p className={styles.sectionText}>
-          <Check size={14}/> 当前 {Object.keys(ocrPreview.files).length} 份来源都有可读文本，无需发送外部 OCR。
-          {ocrPreview.cached_count > 0 && `（其中 ${ocrPreview.cached_count} 份已使用缓存解析结果）`}
-        </p>}
-        {ocrPreview && needsExternalOCR && <div className={styles.consent}>
-          <span className={styles.consentHeader}><AlertTriangle size={16}/> 需要把 {ocrPreview.will_send_count} 份文件发送到外部 OCR 服务</span>
-          <ul className={styles.consentList}>
-            {Object.entries(ocrPreview.files).filter(([, file]) => file.will_send).map(([name, file]) => <li key={name}>
-              <strong>{name}</strong>
-              <span>{str(file.page_count, '页数未知')} 页 · {formatBytes(file.bytes)}</span>
-              {Array.isArray(file.missing_pages) && file.missing_pages.length > 0 && <span>缺文本页：{file.missing_pages.join('、')}</span>}
-              <span className={styles.muted}>解析服务：{ocrPreview.provider}（按成功页计费）</span>
-            </li>)}
-          </ul>
-          <p className={styles.consentBody}>
-            现有 OCR 客户端按整份文件发送，因此上面列出的每一份都会整体上传；不会只发送部分页面。确认后系统会先解析，再按新的文本重新执行自动核验。
-          </p>
-          <div className={styles.consentActions}>
-            <button type="button" className={styles.primaryButton} onClick={() => ocr.mutate()} disabled={ocr.isPending}>
-              <CloudUpload size={16}/>{ocr.isPending ? '正在解析…' : '确认发送并解析'}
-            </button>
-            <button type="button" className={styles.ghostButton} onClick={() => setOcrPreview(null)} disabled={ocr.isPending}>取消</button>
-          </div>
-          <span className={styles.muted}>预览指纹 {ocrPreview.fingerprint.slice(0, 12)}…（文件或运行变化后需要重新确认）</span>
-        </div>}
-      </section>
 
       <section className={styles.section}>
         <div className={styles.sectionHeader}>

@@ -7,8 +7,6 @@ import type {
   MachineVerificationResponse,
   SourceMappingPreview,
   SourceMappingResult,
-  SourceOCRPreview,
-  SourceOCRResult,
 } from '../../types/api';
 
 export { api, postJson } from '../../api/client';
@@ -21,16 +19,6 @@ export function runMachineVerification(payload: {
   force?: boolean;
 }): Promise<MachineVerificationResponse> {
   return api<MachineVerificationResponse>('/api/source-machine-verification', postJson(payload));
-}
-
-/** GET /api/source-ocr/preview：列出真正需要外部 OCR 的文件。 */
-export function previewSourceOCR(): Promise<SourceOCRPreview> {
-  return api<SourceOCRPreview>('/api/source-ocr/preview');
-}
-
-/** POST /api/source-ocr：教师确认后才真正发送；指纹不匹配后端会拒绝。 */
-export function runSourceOCR(previewFingerprint: string): Promise<SourceOCRResult> {
-  return api<SourceOCRResult>('/api/source-ocr', postJson({ confirmed: true, preview_fingerprint: previewFingerprint }));
 }
 
 /** GET /api/ai-source-mappings/preview：确认前展示发送范围与字节数。 */

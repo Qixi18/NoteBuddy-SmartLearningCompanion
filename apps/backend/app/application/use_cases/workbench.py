@@ -222,33 +222,6 @@ class ImportFolder:
                 folder, imported_source_dir=source_dir
             )
 
-    def preview_ocr(self) -> dict:
-        run = self.import_service.runs.current()
-        return self.import_service.sources.preview_registered_pdfs(
-            run, self.import_service.ocr_client
-        )
-
-    def execute_ocr(self, confirmed: bool, preview_fingerprint: str) -> dict:
-        if not confirmed:
-            raise ValueError("必须明确确认后才能向 OCR 服务发送来源文件")
-        run = self.import_service.runs.current()
-        preview = self.import_service.sources.preview_registered_pdfs(
-            run, self.import_service.ocr_client
-        )
-        if not preview_fingerprint or preview.get("fingerprint") != preview_fingerprint:
-            raise ValueError(
-                "OCR 预览已变化（文件清单或缓存状态不同）；请重新预览并确认"
-            )
-        if (
-            preview.get("will_send_count", 0)
-            and preview.get("status") == "api_key_missing"
-        ):
-            raise ValueError("未配置 OCR 服务密钥，未发送任何文件")
-        return self.import_service.sources.parse_registered_pdfs(
-            run, self.import_service.ocr_client
-        )
-
-
 class IndicatorMappings:
     def __init__(self, uow_factory, source_service, llm_client, config):
         self.uow_factory = uow_factory
@@ -329,8 +302,8 @@ class ListCases:
     def __init__(self, current_run: CurrentRun):
         self.current_run = current_run
 
-    def execute(self) -> list[dict]:
-        return suggest_cases(self.current_run.execute())
+    def execute(self, node_id: str | None = None) -> list[dict]:
+        return suggest_cases(self.current_run.execute(), node_id=node_id)
 
 
 class RuleDraft:

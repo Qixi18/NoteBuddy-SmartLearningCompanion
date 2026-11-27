@@ -30,7 +30,7 @@ export function DashboardPage() {
   const readiness = useReadiness();
   const { classId, nodeId } = scope;
   const insights = useClassInsights(run?.run_id ?? '', nodeId);
-  const cases = useCases(run?.run_id ?? '', Boolean(run));
+  const cases = useCases(run?.run_id ?? '', nodeId, Boolean(run));
   const importMutation = useMutation({
     mutationFn: async (files: FileList) => {
       const selected = Array.from(files);

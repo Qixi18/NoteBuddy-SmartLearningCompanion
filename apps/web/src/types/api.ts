@@ -115,40 +115,6 @@ export interface MachineVerificationResponse {
   skipped: Array<{ indicator_id: string; reason: string }>;
 }
 
-/** OCR 预览：each file 精确说明"会不会把这份文件发出去、为什么"。 */
-export interface SourceOCRPreviewFile {
-  status: string;
-  will_send: boolean;
-  bytes?: number | null;
-  page_count?: number | null;
-  text_page_count?: number | null;
-  text_status?: string | null;
-  required_pages?: number[];
-  missing_pages?: number[];
-  reason?: string | null;
-}
-
-export interface SourceOCRPreview {
-  run_id?: string;
-  provider: string;
-  purpose: string;
-  billing_unit?: string;
-  fingerprint: string;
-  status: string;
-  will_send_count: number;
-  cached_count: number;
-  text_available_count?: number;
-  files: Record<string, SourceOCRPreviewFile>;
-}
-
-export interface SourceOCRResult {
-  provider?: string;
-  status: string;
-  file_count?: number;
-  parsed_file_count?: number;
-  files: Record<string, Record<string, unknown>>;
-}
-
 /** AI 来源映射预览：确认前先看清会向模型发送哪些文件与页数。 */
 export interface SourceMappingPreview {
   run_id: string;

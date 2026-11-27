@@ -41,15 +41,17 @@ class ImportService:
                 sort_keys=True,
             ).encode()
         ).hexdigest()[:16]
-        # Importing assessment data is local-only. OCR is an explicit operation.
-        result["source_parsing"] = {
-            "provider": "deepseek",
-            "purpose": "rich_layout_recognition",
-            "status": "not_requested",
-            "file_count": 0,
-            "parsed_file_count": 0,
-            "files": {},
-        }
+        # Parse course PDFs automatically during import; per-file OCR failures remain
+        # visible in the run while CSV analysis is still retained.
+        result["source_parsing"] = self.sources.parse_registered_pdfs(
+            result, self.ocr_client
+        )
+        course_sources = {}
+        for name in sorted(self.sources.allowed_names(result)):
+            text = self.sources.get_text_pages(result, name)
+            if text.get("available"):
+                course_sources[name] = text
+        result["course_sources"] = course_sources
         runs = self.runs
         if self.uow_factory is not None:
             with self.uow_factory(immediate=False) as uow:

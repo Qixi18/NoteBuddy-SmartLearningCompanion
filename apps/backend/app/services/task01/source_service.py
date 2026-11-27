@@ -3,9 +3,10 @@
 本模块是自动核验的数据基础：它同时负责"文件是否在"和"文件里有没有可读文本"。
 文本读取统一走 `get_text_pages()`，按以下优先级取页文本：
 
-1. 文件 SHA-256 对应的本地文本缓存（`source_text_cache/`）；
-2. pypdf 提取的 PDF 原生文本（扫描件通常为空）；
-3. 该页在 OCR 缓存中的文本（仅当已由教师显式授权解析）。
+1. 当前分析运行 SQLite 快照中已保存的页文本；
+2. 文件 SHA-256 对应的本地文本缓存（`source_text_cache/`）；
+3. pypdf 提取的 PDF 原生文本；
+4. 该页在 OCR 缓存中的文本。
 
 调用方不能再自行用 pypdf 读原文，否则会出现两套文本口径。
 """
@@ -153,6 +154,23 @@ class SourceService:
                 "bytes": None,
             }
         fingerprint = hashlib.sha256(content).hexdigest()
+        stored = (run.get("course_sources") or {}).get(name)
+        if isinstance(stored, dict) and stored.get("sha256") == fingerprint:
+            stored_pages = stored.get("pages")
+            if isinstance(stored_pages, list):
+                return {
+                    "name": name,
+                    "available": True,
+                    "text_status": stored.get("text_status", "available"),
+                    "source": stored.get("source"),
+                    "pages": stored_pages,
+                    "page_count": stored.get("page_count"),
+                    "text_page_count": len(stored_pages),
+                    "local_text_page_count": stored.get("local_text_page_count", 0),
+                    "ocr_text_page_count": stored.get("ocr_text_page_count", 0),
+                    "sha256": fingerprint,
+                    "bytes": len(content),
+                }
         page_count = self._pdf_page_count(content)
         local_pages = self.extract_local_pages(run, name)
         ocr_pages = self.ocr_pages(run, name) or []
@@ -434,17 +452,13 @@ class SourceService:
         return required
 
     def needs_ocr(self, run: dict, name: str) -> bool:
-        """该文件是否真的需要发给外部 OCR：只看"必需页有没有文本"。"""
+        """存在缺少原生文本的页面时，自动 OCR 补齐。"""
         text = self.get_text_pages(run, name)
         if not text["available"]:
             return False
         if text["sha256"] and self._read_ocr_cache(text["sha256"]) is not None:
             return False
-        required = self.required_page_numbers(run).get(name, set())
-        text_pages = {page["page"] for page in text["pages"]}
-        if required:
-            return any(page not in text_pages for page in required)
-        return text["text_page_count"] == 0
+        return text.get("text_status") != "available"
 
     def preview_registered_pdfs(
         self, run: dict, client: DeepSeekOCRAdapter | None

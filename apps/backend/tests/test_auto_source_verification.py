@@ -132,8 +132,8 @@ def test_extract_pages_returns_local_text_without_ocr(tmp_path, monkeypatch):
     ]
 
 
-def test_preview_only_asks_for_files_without_required_text(tmp_path, monkeypatch):
-    """课标是扫描件 → 只把课标列为待发送；已有文本的教材切片不再发送。"""
+def test_preview_requests_ocr_for_every_pdf_with_missing_pages(tmp_path, monkeypatch):
+    """部分可读教材仍需补齐缺失页，因此与扫描课标一起请求 OCR。"""
     service = _service(tmp_path)
     monkeypatch.setattr(
         SourceService,
@@ -146,11 +146,11 @@ def test_preview_only_asks_for_files_without_required_text(tmp_path, monkeypatch
 
     preview = service.preview_registered_pdfs(_run(), client=object())
 
-    assert preview["will_send_count"] == 1
+    assert preview["will_send_count"] == 2
     assert preview["files"][CURRICULUM]["will_send"] is True
     assert preview["files"][CURRICULUM]["missing_pages"] == [62]
-    assert preview["files"][SLICE]["will_send"] is False
-    assert preview["files"][SLICE]["status"] == "text_available"
+    assert preview["files"][SLICE]["will_send"] is True
+    assert preview["files"][SLICE]["status"] == "ready"
     assert preview["run_id"] == "run-1"
 
 

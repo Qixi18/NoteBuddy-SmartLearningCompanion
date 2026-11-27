@@ -69,6 +69,14 @@ def test_cases_use_latest_node_and_explain_evidence_and_roster_coverage():
     assert "0/3 道可用题" in by_type["记录较少"]["reason"]
 
 
+def test_cases_can_be_scoped_to_the_selected_node():
+    cases = suggest_cases(_run(), node_id="N01")
+
+    partial = next(case for case in cases if case["type"] == "部分得分")
+    assert "节点 N01" in partial["reason"]
+    assert partial["evidence_record_ids"] == ["OLD-D01"]
+
+
 def test_insufficient_scores_and_single_class_are_stated_without_invented_evidence():
     run = _run()
     run["students"] = [
