@@ -1,0 +1,463 @@
+/* 课程来源自动核验面板：Operate 语境下的紧凑业务组件。
+   配色、圆角、字号沿用 styles/tokens.css，与既有九个页面保持一致。 */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.toolbarSpacer {
+  flex: 1 1 auto;
+}
+
+.primaryButton,
+.secondaryButton,
+.ghostButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: var(--font-size-label);
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 120ms ease-out, border-color 120ms ease-out;
+}
+
+.primaryButton {
+  border: 1px solid #157b45;
+  color: #fff;
+  background: var(--color-primary);
+}
+
+.primaryButton:hover:not(:disabled) {
+  background: #12713f;
+}
+
+.secondaryButton {
+  border: 1px solid #cfe4d3;
+  color: #2c7544;
+  background: #f4faf4;
+}
+
+.secondaryButton:hover:not(:disabled) {
+  background: #e9f5ea;
+}
+
+.ghostButton {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  color: #3d6a4d;
+  background: transparent;
+}
+
+.ghostButton:hover:not(:disabled) {
+  border-color: #d8e8da;
+  background: #f4faf4;
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled,
+.ghostButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.primaryButton:focus-visible,
+.secondaryButton:focus-visible,
+.ghostButton:focus-visible,
+.resultHead:focus-visible {
+  outline: 2px solid #16864a;
+  outline-offset: 2px;
+}
+
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #5f7065;
+  font-size: var(--font-size-label);
+  font-weight: 700;
+}
+
+.checkbox input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-primary);
+}
+
+/* 汇总条：数字来自真实核验记录，不是示意值。 */
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-6);
+  padding: 14px 16px;
+  border: 1px solid #e3ece4;
+  border-radius: var(--radius-md);
+  background: #fbfdfb;
+}
+
+.summaryItem {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  color: #6b7a70;
+  font-size: var(--font-size-label);
+}
+
+.summaryItem strong {
+  color: #2c5137;
+  font-size: var(--font-size-panel);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.summaryItem strong.ok {
+  color: #187a45;
+}
+
+.summaryItem strong.warn {
+  color: #a8761d;
+}
+
+.summaryNote {
+  margin-left: auto;
+  color: #7c8a80;
+  font-size: var(--font-size-sm);
+}
+
+.lede {
+  margin: 0;
+  color: #5d6f63;
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-reading);
+}
+
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.resultRow {
+  border: 1px solid #e6ece6;
+  border-radius: var(--radius-md);
+  background: #fff;
+}
+
+.resultRow[data-state='verified'] {
+  border-color: #d9e9dc;
+}
+
+.resultRow[data-state='needs_review'] {
+  border-color: #f0e2c4;
+}
+
+.resultHead {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.resultHead:hover {
+  background: #fafcfa;
+}
+
+.indicatorId {
+  color: #2f6f45;
+  font-size: var(--font-size-label);
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.indicatorCell {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.indicatorText {
+  overflow: hidden;
+  color: #42544a;
+  font-size: var(--font-size-body);
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 折叠状态下也给出失败原因：教师不必逐项展开才知道为什么没通过。 */
+.indicatorReason {
+  overflow: hidden;
+  color: #8a6a20;
+  font-size: var(--font-size-sm);
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.indicatorReasonOk {
+  color: #4a6b56;
+}
+
+.statusChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border-radius: 14px;
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.statusVerified {
+  color: #277443;
+  background: #e6f5e7;
+}
+
+.statusReview {
+  color: #8a6a20;
+  background: #fff4d8;
+}
+
+.statusStale {
+  color: #97594e;
+  background: #fbeceb;
+}
+
+.statusSkipped {
+  color: #5f6a64;
+  background: #eef1ef;
+}
+
+.resultBody {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 14px 14px;
+}
+
+.reason {
+  margin: 0;
+  color: #7b5c1e;
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-reading);
+}
+
+.reasonVerified {
+  color: #3f6650;
+}
+
+.reasonCode {
+  margin-right: 6px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  color: #7b4b1f;
+  background: #fdf0d9;
+  font-size: var(--font-size-xs);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.checks {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.checkRow {
+  display: grid;
+  grid-template-columns: 16px minmax(110px, 0.8fr) minmax(0, 2.2fr);
+  align-items: start;
+  gap: 8px;
+  color: #5f6f64;
+  font-size: var(--font-size-sm);
+  line-height: 1.55;
+}
+
+.checkMark {
+  font-weight: 800;
+  text-align: center;
+}
+
+.checkPassed .checkMark {
+  color: #1c8449;
+}
+
+.checkFailed .checkMark {
+  color: #b3703f;
+}
+
+.checkSkipped .checkMark {
+  color: #9aa69d;
+}
+
+.checkLabel {
+  color: #48594f;
+  font-weight: 700;
+}
+
+.evidence {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid #eef2ee;
+  border-radius: var(--radius-sm);
+  background: #fbfcfb;
+}
+
+.evidenceLine {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  color: #5b6b60;
+  font-size: var(--font-size-sm);
+}
+
+.evidenceLine b {
+  color: #3d5446;
+  font-weight: 700;
+}
+
+.excerpt {
+  margin: 0;
+  color: #52645a;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-reading);
+}
+
+.consent {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid #efe3c8;
+  border-radius: var(--radius-md);
+  background: #fffdf7;
+}
+
+.consentHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: #6f5620;
+  font-size: var(--font-size-body);
+  font-weight: 800;
+}
+
+.consentBody {
+  margin: 0;
+  color: #6a5c42;
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-reading);
+}
+
+.consentList {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: #5d6a60;
+  font-size: var(--font-size-sm);
+}
+
+.consentList li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.consentList strong {
+  color: #3f5045;
+  font-weight: 700;
+}
+
+.consentActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.muted {
+  color: #87948b;
+  font-size: var(--font-size-sm);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid #e6ece6;
+  border-radius: var(--radius-md);
+  background: #fcfdfc;
+}
+
+.sectionHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #3f5447;
+  font-size: var(--font-size-body);
+  font-weight: 800;
+}
+
+.sectionText {
+  margin: 0;
+  color: #62726a;
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-reading);
+}
+
+.inlineMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  color: #77857b;
+  font-size: var(--font-size-sm);
+}
+
+@media (max-width: 768px) {
+  .resultHead {
+    grid-template-columns: 1fr auto;
+    row-gap: 6px;
+  }
+
+  .indicatorCell {
+    grid-column: 1 / -1;
+  }
+
+  .summaryNote {
+    margin-left: 0;
+  }
+}

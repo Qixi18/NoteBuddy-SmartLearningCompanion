@@ -1,9 +1,38 @@
-"""Build a current material catalog with OCR and source-mapping states."""
+"""Build a current material catalog with file, text and verification states.
+
+三种状态必须分开表达，不能混用一个字段（自动核验的失败原因要能显示在界面上）：
+
+- **文件状态** `file_status`：文件在不在、能不能读；
+- **文本状态** `text_status`：这份文件有没有可读文本（本地提取或已授权 OCR）；
+- **核验状态** `source_status`：指标来源是否已通过机器或教师核验，及其原因码。
+"""
 
 
-def _document_status(inspection: dict, expected_file_page: int | None) -> str:
-    if not inspection["available"]:
-        return "missing"
+def _file_status(inspection: dict) -> str:
+    if not inspection.get("available"):
+        return "unreadable" if inspection.get("status") == "unreadable" else "missing"
+    return "readable"
+
+
+def _text_status(inspection: dict, expected_file_page: int | None) -> str:
+    if not inspection.get("available"):
+        return "unavailable"
+    text_status = inspection.get("text_status")
+    if text_status in {"available", "partial", "unavailable", "missing", "unreadable"}:
+        return text_status
+    parse_status = inspection.get("parse_status", inspection.get("status"))
+    if parse_status == "unparsed":
+        return "unavailable"
+    if not inspection.get("text_page_count"):
+        return "unavailable"
+    return "available"
+
+
+def _locator_status(
+    inspection: dict, expected_file_page: int | None
+) -> str:
+    if not inspection.get("available"):
+        return "source_missing"
     page_count = inspection.get("page_count")
     if (
         expected_file_page is not None
@@ -11,23 +40,32 @@ def _document_status(inspection: dict, expected_file_page: int | None) -> str:
         and not 1 <= expected_file_page <= page_count
     ):
         return "page_out_of_range"
-    parse_status = inspection.get("parse_status", inspection.get("status"))
-    if parse_status == "unparsed":
-        return "ocr_pending"
-    if parse_status == "failed":
-        return "ocr_failed"
-    if inspection.get("status") != "readable":
-        return "unreadable"
-    if (
-        expected_file_page is not None
-        and expected_file_page not in inspection["text_pages"]
-    ):
-        return "page_text_unavailable"
+    text_pages = inspection.get("text_pages") or []
     if expected_file_page is not None:
-        return "page_text_available"
-    if not inspection["text_page_count"]:
+        return "page_text_available" if expected_file_page in text_pages else "page_text_unavailable"
+    if not text_pages:
         return "page_text_unavailable"
     return "locator_required"
+
+
+def _document_status(inspection: dict, expected_file_page: int | None) -> str:
+    """兼容字段：把三者折叠成一个状态，仅供旧界面使用。"""
+    file_status = _file_status(inspection)
+    if file_status != "readable":
+        return file_status
+    locator = _locator_status(inspection, expected_file_page)
+    if locator == "page_out_of_range":
+        return "page_out_of_range"
+    if locator == "page_text_available":
+        return "page_text_available"
+    if _text_status(inspection, expected_file_page) == "unavailable":
+        parse_status = inspection.get("parse_status")
+        if parse_status == "unparsed":
+            return "ocr_pending"
+        if parse_status == "failed":
+            return "ocr_failed"
+        return "page_text_unavailable"
+    return locator
 
 
 def build_material_catalog(
@@ -102,6 +140,8 @@ def build_material_catalog(
             if name not in inspected_documents:
                 inspected_documents[name] = sources.inspect_pdf(run, name)
             inspection = inspected_documents[name]
+            file_status = _file_status(inspection)
+            text_status = _text_status(inspection, expected_page)
             documents.append(
                 {
                     **inspection,
@@ -110,18 +150,36 @@ def build_material_catalog(
                     if source_kind == "curriculum"
                     else None,
                     "source_kind": source_kind,
+                    "file_status": file_status,
+                    "text_status": text_status,
+                    "locator_status": _locator_status(inspection, expected_page),
                     "status": _document_status(inspection, expected_page),
                     "url": f"/api/source?file={name}",
                 }
             )
+        source_status = latest.get("status", entry.get("verification", "pending"))
         indicators.append(
             {
                 "indicator_id": indicator_id,
                 "topic_id": topic_id,
-                "source_status": latest.get(
-                    "status", entry.get("verification", "pending")
-                ),
+                "source_status": source_status,
                 "source_stale": bool(latest.get("stale")),
+                # 机器/教师核验的可追溯字段：谁核验的、依据是什么、为什么没通过。
+                "verified_by": latest.get("verified_by"),
+                "verification_version": latest.get("verification_version"),
+                "confidence": latest.get("confidence"),
+                "reason_code": latest.get("reason_code"),
+                "reason": latest.get("reason", ""),
+                "checks": latest.get("checks")
+                or (
+                    latest.get("machine_evidence")
+                    if latest.get("verified_by") == "machine"
+                    and isinstance(latest.get("machine_evidence"), list)
+                    and latest.get("machine_evidence")
+                    and isinstance(latest["machine_evidence"][0], dict)
+                    and "id" in latest["machine_evidence"][0]
+                    else []
+                ),
                 "curriculum_locator": latest.get("curriculum_locator", ""),
                 "textbook_locator": latest.get("textbook_locator", ""),
                 "documents": documents,

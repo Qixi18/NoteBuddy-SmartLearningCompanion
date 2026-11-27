@@ -6,6 +6,12 @@
       "topic_id": "T01",
       "source_status": "pending",
       "source_stale": false,
+      "verified_by": null,
+      "verification_version": null,
+      "confidence": null,
+      "reason_code": null,
+      "reason": "",
+      "checks": [],
       "curriculum_locator": "",
       "textbook_locator": "",
       "documents": [
@@ -20,6 +26,11 @@
           "expected_file_page": 62,
           "body_page": 55,
           "source_kind": "curriculum",
+          "file_status": null,
+          "text_status": null,
+          "locator_status": null,
+          "local_text_page_count": null,
+          "ocr_text_page_count": null,
           "status": "missing",
           "url": "/api/source?file=课程标准_2022.pdf"
         }

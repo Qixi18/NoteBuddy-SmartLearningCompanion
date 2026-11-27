@@ -4,8 +4,17 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 
-PROMPT_VERSION = "indicator-mapping-2026.11.1"
+from .machine_verification_service import (
+    CURRICULUM_FILE,
+    indicator_keywords,
+    page_match,
+)
+
+PROMPT_VERSION = "indicator-mapping-2026.11.2"
+# 每份教材切片最多取多少页原文作为映射输入（按关键词相关度排序后截断）。
+MAX_SLICE_PAGES = 6
 
 
 def _response_text(response: dict) -> str:
@@ -13,6 +22,38 @@ def _response_text(response: dict) -> str:
         return response["choices"][0]["message"]["content"]
     except (KeyError, IndexError, TypeError) as exc:
         raise ValueError("映射模型响应结构无效") from exc
+
+
+def _curriculum_target_pages(objective: dict, source_check: dict) -> list[int]:
+    """课标必须读到的页：CSV 登记的文件页，必要时带上前后一页供模型理解上下文。"""
+    target = None
+    locator = str(objective.get("课标文件页／正文页", "") or "")
+    match = re.match(r"\s*(\d+)", locator)
+    if match:
+        target = int(match.group(1))
+    elif isinstance(source_check.get("curriculum_file_page"), int):
+        target = source_check["curriculum_file_page"]
+    if target is None:
+        return []
+    return [page for page in (target - 1, target, target + 1) if page >= 1]
+
+
+def _slice_pages(sources, run: dict, name: str, keywords: list[str]) -> list[int]:
+    """按关键词相关度挑选切片页，而不是永远只看文件最前面 20 页。"""
+    inspection = sources.inspect_pdf(run, name)
+    text_pages = list(inspection.get("text_pages") or [])
+    if not text_pages:
+        return []
+    extracted = sources.extract_pages(run, name, text_pages[:20])
+    scored = [
+        (len(page_match(str(page.get("text", "")), keywords)["matched"]), page["page"])
+        for page in extracted
+    ]
+    scored.sort(key=lambda item: (-item[0], item[1]))
+    chosen = [page for score, page in scored if score > 0][:MAX_SLICE_PAGES]
+    if not chosen:
+        chosen = text_pages[:2]
+    return sorted(chosen)
 
 
 def _references(run: dict, sources, indicator_id: str) -> tuple[list[dict], str]:
@@ -49,13 +90,18 @@ def _references(run: dict, sources, indicator_id: str) -> tuple[list[dict], str]
                 }
             )
     source_check = entry.get("source_check", {})
-    names = ["课程标准_2022.pdf", *source_check.get("textbook_slices", [])]
+    names = [CURRICULUM_FILE, *source_check.get("textbook_slices", [])]
+    keywords = indicator_keywords(str(objective.get("观察指标", "")))
     for name in names:
         inspection = sources.inspect_pdf(run, name)
         if not inspection.get("available") or not inspection.get("page_count"):
             continue
-        pages = inspection.get("text_pages", [])[:20]
-        for page in sources.extract_pages(run, name, pages):
+        if name == CURRICULUM_FILE:
+            # 关键修正：课标只读登记页与其相邻页，而不是文件最前面 20 个有文本页。
+            pages = _curriculum_target_pages(objective, source_check)
+        else:
+            pages = _slice_pages(sources, run, name, keywords)
+        for page in sources.extract_pages(run, name, pages or []):
             refs.append(
                 {
                     "ref_id": f"pdf-{len(refs) + 1}",
@@ -150,7 +196,18 @@ def generate_indicator_mapping(
         "messages": [
             {
                 "role": "system",
-                "content": '你是课程目标与测验材料映射助手。只根据给定来源生成 JSON。每条关系必须引用 ref_id 和原文 excerpt；不得补充来源中没有的教学事实。输出 {"mappings":[{"material_id":string,"relation":"assesses"|"supports","explanation":string,"evidence":[{"ref_id":string,"excerpt":string}]}]}。',
+                "content": (
+                    "你是课程目标与测验材料映射助手。只根据给定来源生成 JSON。"
+                    "每条关系必须引用 ref_id 和原文 excerpt；不得补充来源中没有的教学事实，"
+                    "不得编造页码或材料编号。输出 "
+                    '{"mappings":[{"material_id":string,"relation":"assesses"|"supports",'
+                    '"explanation":string,"evidence":[{"ref_id":string,"excerpt":string}]}],'
+                    '"curriculum_evidence":[{"ref_id":string,"excerpt":string}],'
+                    '"textbook_evidence":[{"ref_id":string,"excerpt":string}],'
+                    '"limitations":[string]}。'
+                    "curriculum_evidence 只能引用课程标准 PDF 的页，textbook_evidence 只能引用教材切片页；"
+                    "找不到依据时留空数组并在 limitations 说明。"
+                ),
             },
             {
                 "role": "user",
@@ -165,6 +222,40 @@ def generate_indicator_mapping(
     except json.JSONDecodeError as exc:
         raise ValueError("映射模型未返回有效 JSON") from exc
     return validate_mapping_candidate(candidate, indicator_id, run, refs, fingerprint)
+
+
+def _validate_evidence_list(
+    rows, reference_map: dict, allowed_source, label: str
+) -> tuple[list[dict], list[str]]:
+    """校验模型给出的课标/教材证据：ref_id 必须真实存在，excerpt 必须能在原文中找到。"""
+    validated: list[dict] = []
+    errors: list[str] = []
+    for index, row in enumerate(rows if isinstance(rows, list) else []):
+        if not isinstance(row, dict):
+            errors.append(f"{label}_{index}:not_object")
+            continue
+        local = reference_map.get(row.get("ref_id"))
+        excerpt = row.get("excerpt", "")
+        if not local or not isinstance(excerpt, str) or not excerpt.strip():
+            errors.append(f"{label}_{index}:invalid_evidence")
+            continue
+        if not allowed_source(local.get("source", "")):
+            errors.append(f"{label}_{index}:wrong_source")
+            continue
+        local_text = str(local.get("text", ""))
+        if excerpt not in local_text:
+            errors.append(f"{label}_{index}:excerpt_not_found")
+            continue
+        validated.append(
+            {
+                "ref_id": local["ref_id"],
+                "source": local["source"],
+                "page": local.get("page"),
+                "line": local.get("line"),
+                "excerpt": excerpt,
+            }
+        )
+    return validated, errors
 
 
 def validate_mapping_candidate(
@@ -262,11 +353,36 @@ def validate_mapping_candidate(
                 "status": "usable" if relation_valid else "needs_resolution",
             }
         )
+    curriculum_evidence, curriculum_errors = _validate_evidence_list(
+        candidate.get("curriculum_evidence"),
+        reference_map,
+        lambda source: source == CURRICULUM_FILE,
+        "curriculum_evidence",
+    )
+    textbook_evidence, textbook_errors = _validate_evidence_list(
+        candidate.get("textbook_evidence"),
+        reference_map,
+        lambda source: source.endswith(".pdf") and source != CURRICULUM_FILE,
+        "textbook_evidence",
+    )
+    limitations = [
+        str(item).strip()
+        for item in (candidate.get("limitations") or [])
+        if str(item).strip()
+    ][:10]
     return {
         "indicator_id": indicator_id,
         "prompt_version": PROMPT_VERSION,
         "input_fingerprint": fingerprint,
         "mappings": validated,
+        # 模型只能提出带引用的候选证据；是否成立由后端核验与教师签核决定。
+        "curriculum_evidence": curriculum_evidence,
+        "textbook_evidence": textbook_evidence,
+        "limitations": limitations,
+        "evidence_errors": curriculum_errors + textbook_errors,
+        "evidence_status": "complete"
+        if curriculum_evidence and textbook_evidence and not (curriculum_errors + textbook_errors)
+        else "partial",
         "validation_errors": errors,
         "status": "usable"
         if validated

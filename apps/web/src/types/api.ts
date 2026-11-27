@@ -75,3 +75,108 @@ export interface ApiProblem extends Error {
   code?: string;
   requestId?: string;
 }
+
+/** 机器核验的逐项检查（来源/课标/教材/题目关联/引用/指纹）。 */
+export interface VerificationCheck {
+  id: string;
+  label: string;
+  status: 'passed' | 'failed' | 'skipped';
+  detail: string;
+}
+
+export type VerificationStatus = 'verified' | 'needs_review' | 'skipped';
+
+export interface MachineVerificationResult {
+  indicator_id: string;
+  status: VerificationStatus;
+  verified_by: string | null;
+  /** 证据不足时的稳定原因码：TEXT_UNAVAILABLE / CURRICULUM_MISMATCH / … */
+  reason_code: string | null;
+  reason: string;
+  confidence: number | null;
+  verification_version: number | null;
+  version: number | null;
+  checks: VerificationCheck[];
+  evidence: Record<string, unknown>;
+}
+
+export interface MachineVerificationSummary {
+  total: number;
+  verified: number;
+  needs_review: number;
+  skipped: number;
+}
+
+export interface MachineVerificationResponse {
+  run_id: string | null;
+  summary: MachineVerificationSummary;
+  results: MachineVerificationResult[];
+  verified: Array<Record<string, unknown>>;
+  skipped: Array<{ indicator_id: string; reason: string }>;
+}
+
+/** OCR 预览：each file 精确说明"会不会把这份文件发出去、为什么"。 */
+export interface SourceOCRPreviewFile {
+  status: string;
+  will_send: boolean;
+  bytes?: number | null;
+  page_count?: number | null;
+  text_page_count?: number | null;
+  text_status?: string | null;
+  required_pages?: number[];
+  missing_pages?: number[];
+  reason?: string | null;
+}
+
+export interface SourceOCRPreview {
+  run_id?: string;
+  provider: string;
+  purpose: string;
+  billing_unit?: string;
+  fingerprint: string;
+  status: string;
+  will_send_count: number;
+  cached_count: number;
+  text_available_count?: number;
+  files: Record<string, SourceOCRPreviewFile>;
+}
+
+export interface SourceOCRResult {
+  provider?: string;
+  status: string;
+  file_count?: number;
+  parsed_file_count?: number;
+  files: Record<string, Record<string, unknown>>;
+}
+
+/** AI 来源映射预览：确认前先看清会向模型发送哪些文件与页数。 */
+export interface SourceMappingPreview {
+  run_id: string;
+  indicator_ids: string[];
+  provider: string;
+  model: string;
+  billing_unit?: string;
+  cache_behavior?: string;
+  source_files: Array<{ name: string; pages?: number[]; lines?: number[] }>;
+  source_count: number;
+  input_bytes: number;
+  fingerprint: string;
+}
+
+export interface SourceMappingResult {
+  run_id: string;
+  results: Array<Record<string, unknown> & { indicator_id?: string; status?: string; error?: string }>;
+}
+
+export interface SourceVerificationEvidence {
+  type: string;
+  file?: string;
+  slice?: string;
+  page?: number | null;
+  text_source?: string;
+  keywords_matched?: string[];
+  keywords_total?: number;
+  match_ratio?: number;
+  excerpt?: string;
+}
+

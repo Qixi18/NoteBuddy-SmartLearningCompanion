@@ -1,13 +1,23 @@
-"""Deterministic machine verification from allowlisted textbook slice text.
+"""Deterministic multi-evidence machine verification of curriculum and textbook sources.
 
-两层信任模型的"机器核验层"v1：
-- 用课程要求 CSV 里的关联关系作为题目映射的机器证据；
-- 用观察指标关键词在 allowlist 切片文本层中定位页面，
-  命中阈值（≥2 个关键词且覆盖率 ≥50%）的资源映射与教材定位
-  以 verified_by="machine" 写入签核记录；
-- 课标侧：课标 OCR 文本可用时（远程 DeepSeek OCR 管道），对课标定位做内容匹配
-  并记录页码一致性证据；OCR 未解析时跳过课标侧，留给教师判断层；
-- 学习顺序（必要联系）与评分点问题命名属于教师判断层，本服务不生成。
+两层信任模型中的"机器核验层"v2（课程来源自动核验）：
+
+v1 只用"观察指标关键词在教材切片内覆盖率"判定通过，存在三个准确性问题：
+
+- 关键词命中会被跨页合并，不同页零散出现的词可以拼成一条"证据"；
+- 课标未解析时直接跳过课标侧，仍可能写出 ``verified``；
+- 失败只有一句"命中低于阈值"，教师无法知道缺的是什么证据。
+
+v2 把关键词覆盖率降级为辅助量，改为四类必要证据全部成立才自动通过：
+
+1. 来源文件存在且可读（``SOURCE_MISSING`` / ``SOURCE_UNREADABLE``）；
+2. 课标定位页有文本且内容与本指标相符（``TEXT_UNAVAILABLE`` / ``CURRICULUM_MISMATCH``）；
+3. 教材切片单页文本与本指标相符——逐页匹配、不跨页合并（``TEXTBOOK_MISMATCH``）；
+4. 本指标在当前运行内有题目/材料关联，且 AI 引用（如有）可逐条回查
+   （``MATERIAL_NOT_LINKED`` / ``REFERENCE_INVALID``）。
+
+核验期间来源文件发生变化时给出 ``SOURCE_CHANGED``。学习顺序（必要联系）与评分点
+问题命名属于教师判断层，本服务不生成。
 """
 
 from __future__ import annotations
@@ -16,11 +26,13 @@ import re
 from pathlib import Path
 from typing import Any, Callable
 
-from pypdf import PdfReader
-from pypdf.errors import PdfReadError, PdfStreamError
-
 from ...application.ports.file_storage import FileStorage
 from ...infrastructure.files.local_file_storage import LocalFileStorage
+
+CURRICULUM_FILE = "课程标准_2022.pdf"
+
+# 核验算法版本：写入签核记录，算法升级后可据此要求重新核验。
+VERIFICATION_VERSION = 2
 
 # 把观察指标切成可检索的关键词片段：中文连接词、虚词作为分隔。
 # 注意：不把"解""释""简"等常用字作为分隔符，避免拆坏"解释""解方程""化简"这类词；
@@ -60,12 +72,34 @@ _DOMAIN_LEXICON = (
     "检验",
 )
 
+# 单页至少命中这些关键词才算"这一页讲了这件事"。
+_MATCH_MIN_KEYWORDS = 2
+# 教材侧覆盖率辅助阈值（不作为唯一判据，但低于它说明该页只是擦边）。
+_MATCH_MIN_RATIO = 0.5
+
+REASON_CODES = {
+    "SOURCE_MISSING": "来源文件缺失",
+    "SOURCE_UNREADABLE": "来源文件无法读取",
+    "TEXT_UNAVAILABLE": "关键页文本不足",
+    "CURRICULUM_MISMATCH": "课标定位与本指标内容不一致",
+    "TEXTBOOK_MISMATCH": "教材内容与本指标不匹配",
+    "REFERENCE_INVALID": "AI 引用证据无法回查",
+    "MATERIAL_NOT_LINKED": "缺少有效的题目或教学材料关联",
+    "SOURCE_CHANGED": "核验期间来源文件发生变化",
+}
+
+CHECK_LABELS = {
+    "sources": "来源文件检查",
+    "curriculum": "课标定位核验",
+    "textbook": "教材切片核验",
+    "item_link": "题目关联核验",
+    "reference": "引用证据核验",
+    "fingerprint": "来源指纹核验",
+}
+
 
 def _domain_lexicon_keywords(indicator_text: str) -> list[str]:
     return [term for term in _DOMAIN_LEXICON if term in (indicator_text or "")]
-
-_MATCH_MIN_KEYWORDS = 2
-_MATCH_MIN_RATIO = 0.5
 
 
 def indicator_keywords(indicator_text: str) -> list[str]:
@@ -87,23 +121,6 @@ def indicator_keywords(indicator_text: str) -> list[str]:
         if term not in keywords:
             keywords.append(term)
     return keywords
-
-
-def _page_texts(path: Path) -> list[dict[str, Any]]:
-    """Extract non-empty text pages from a PDF; unreadable pages are skipped."""
-    try:
-        reader = PdfReader(str(path))
-    except (PdfReadError, PdfStreamError, OSError, TypeError, ValueError):
-        return []
-    pages: list[dict[str, Any]] = []
-    for index, page in enumerate(reader.pages, 1):
-        try:
-            text = page.extract_text() or ""
-        except (PdfReadError, PdfStreamError, TypeError, ValueError):
-            continue
-        if text.strip():
-            pages.append({"page": index, "text": text})
-    return pages
 
 
 def _keyword_matches(keyword: str, text_lower: str) -> bool:
@@ -134,48 +151,465 @@ def _matched_excerpt(page_text: str, keywords: list[str], limit: int = 120) -> s
     return excerpt[:limit]
 
 
-def _best_page(
-    pages: list[dict[str, Any]], keywords: list[str]
-) -> dict[str, Any] | None:
-    best: dict[str, Any] | None = None
+def page_match(page_text: str, keywords: list[str]) -> dict:
+    """单页匹配结果。严格只看这一页，绝不把多页命中合并成一条证据。"""
+    text_lower = (page_text or "").lower()
+    matched = [keyword for keyword in keywords if _keyword_matches(keyword, text_lower)]
+    ratio = len(matched) / len(keywords) if keywords else 0.0
+    return {
+        "matched": matched,
+        "ratio": round(ratio, 3),
+        "excerpt": _matched_excerpt(page_text, matched) if matched else "",
+    }
+
+
+def best_page(pages: list[dict], keywords: list[str]) -> dict | None:
+    """在给定页集合里挑出**单页**命中最多的那一页。
+
+    与 v1 的 `_slice_match()` 的区别：定位页与命中关键词来自同一页，
+    不会出现"甲页命中2个词、乙页命中1个词，合起来算3个"的证据拼凑。
+    """
+    best: dict | None = None
     for page in pages:
-        text_lower = page["text"].lower()
-        matched = [k for k in keywords if _keyword_matches(k, text_lower)]
-        if not matched:
+        result = page_match(str(page.get("text", "")), keywords)
+        if not result["matched"]:
             continue
-        if best is None or len(matched) > len(best["matched"]):
+        if best is None or len(result["matched"]) > len(best["matched"]):
             best = {
-                "page": page["page"],
-                "matched": matched,
-                "excerpt": _matched_excerpt(page["text"], matched),
+                "page": page.get("page"),
+                "text_source": page.get("source", "local"),
+                **result,
             }
     return best
 
 
-def _slice_match(
-    pages: list[dict[str, Any]], keywords: list[str]
-) -> dict[str, Any] | None:
-    """切片级匹配：任一页命中的关键词并入切片覆盖集；定位页取命中最多的一页。"""
-    slice_matched: list[str] = []
-    best_page: dict[str, Any] | None = None
-    for page in pages:
-        text_lower = page["text"].lower()
-        matched = [k for k in keywords if _keyword_matches(k, text_lower)]
-        if not matched:
-            continue
-        slice_matched.extend(k for k in matched if k not in slice_matched)
-        if best_page is None or len(matched) > len(best_page["matched"]):
-            best_page = {"page": page["page"], "matched": matched}
-    if not slice_matched:
-        return None
-    excerpt = ""
-    if best_page is not None:
-        page_text = next(p["text"] for p in pages if p["page"] == best_page["page"])
-        excerpt = _matched_excerpt(page_text, best_page["matched"])
+def _text_pages_of(text: dict) -> list[dict]:
+    return list(text.get("pages") or [])
+
+
+class TextPageProvider:
+    """一次批量核验内复用每份文件的文本页，避免重复读 PDF / 重复算指纹。"""
+
+    def __init__(self, source_service):
+        self.source_service = source_service
+        self._cache: dict[tuple[str, str], dict] = {}
+
+    def __call__(self, run: dict, name: str) -> dict:
+        key = (str(run.get("run_id", "")), name)
+        if key not in self._cache:
+            self._cache[key] = self.source_service.get_text_pages(run, name)
+        return self._cache[key]
+
+    def invalidate(self) -> None:
+        self._cache.clear()
+
+
+def _checks_template() -> dict[str, dict]:
     return {
-        "matched": slice_matched,
-        "page": best_page["page"] if best_page else None,
-        "excerpt": excerpt,
+        key: {
+            "id": key,
+            "label": CHECK_LABELS[key],
+            "status": "skipped",
+            "detail": "",
+        }
+        for key in CHECK_LABELS
+    }
+
+
+def _locator_page(objective: dict, source_check: dict) -> int | None:
+    """课标文件页：优先课程要求 CSV 的定位，其次 source_checks 的登记页。"""
+    locator = str(objective.get("课标文件页／正文页", "") or "")
+    match = re.match(r"\s*(\d+)", locator)
+    if match:
+        return int(match.group(1))
+    page = source_check.get("curriculum_file_page")
+    return page if isinstance(page, int) else None
+
+
+def _validate_ai_references(
+    ai_mappings: list[dict], lookup: Callable[[str], dict]
+) -> list[dict]:
+    """逐条回查 AI 映射引用：页码必须存在、原文必须能在该页找到。"""
+    problems: list[dict] = []
+    for mapping in ai_mappings or []:
+        if not isinstance(mapping, dict):
+            continue
+        for evidence in mapping.get("evidence") or []:
+            if not isinstance(evidence, dict):
+                continue
+            source = str(evidence.get("source", ""))
+            page = evidence.get("page")
+            excerpt = str(evidence.get("excerpt", "")).strip()
+            if not source.endswith(".pdf") or not isinstance(page, int):
+                continue
+            text = lookup(source)
+            page_text = next(
+                (
+                    str(item.get("text", ""))
+                    for item in _text_pages_of(text)
+                    if item.get("page") == page
+                ),
+                "",
+            )
+            if not page_text:
+                problems.append(
+                    {
+                        "material_id": mapping.get("material_id"),
+                        "problem": "page_text_unavailable",
+                        "page": page,
+                        "source": source,
+                    }
+                )
+                continue
+            if excerpt and excerpt not in page_text:
+                problems.append(
+                    {
+                        "material_id": mapping.get("material_id"),
+                        "problem": "excerpt_not_found",
+                        "page": page,
+                        "source": source,
+                    }
+                )
+    return problems
+
+
+def build_machine_verification_report(
+    run: dict,
+    source_service,
+    indicator_id: str,
+    *,
+    text_provider: Callable[[dict, str], dict] | None = None,
+    ai_mappings: list[dict] | None = None,
+) -> dict:
+    """对单个指标做多维证据核验，返回结论、原因码、逐项检查与签核载荷。
+
+    ``text_provider(run, name) -> {"available", "pages": [{"page", "text", "source"}]}``
+    可注入，便于测试脱离真实 PDF；默认走 ``SourceService.get_text_pages``。
+    """
+    provider = text_provider or TextPageProvider(source_service)
+    objectives = {row["指标编号"]: row for row in run.get("objectives", [])}
+    if indicator_id not in objectives:
+        raise ValueError("指标编号不存在")
+    objective = objectives[indicator_id]
+    source_entry = next(
+        (
+            row
+            for row in run.get("source_index", [])
+            if row.get("indicator_id") == indicator_id
+        ),
+        None,
+    )
+    source_check = (source_entry or {}).get("source_check") or {}
+    slices = list(source_check.get("textbook_slices") or [])
+    keywords = indicator_keywords(str(objective.get("观察指标", "")))
+    linked_questions = sorted(
+        {
+            str(row["材料编号"])
+            for row in run.get("items", [])
+            if row.get("指标编号") == indicator_id and row.get("材料编号")
+        }
+    )
+    checks = _checks_template()
+    evidence: dict[str, Any] = {
+        "curriculum": None,
+        "textbook": None,
+        "item_link": None,
+        "source_fingerprint": None,
+    }
+
+    def fail(reason_code: str, detail: str, *, check: str | None = None) -> dict:
+        if check:
+            checks[check]["status"] = "failed"
+            checks[check]["detail"] = detail
+        # 前序证据不足时，后续检查没有被执行——如实标注，不留下空的"—"。
+        for entry in checks.values():
+            if entry["status"] == "skipped" and not entry["detail"]:
+                entry["detail"] = "未执行：前序证据不足"
+        return {
+            "indicator_id": indicator_id,
+            "status": "needs_review",
+            "reason_code": reason_code,
+            "reason": f"{REASON_CODES[reason_code]}：{detail}",
+            "checks": list(checks.values()),
+            "evidence": evidence,
+            "confidence": None,
+            "verification_version": VERIFICATION_VERSION,
+            "payload": None,
+        }
+
+    # 1. 来源文件与关键词
+    if not keywords:
+        return fail("TEXT_UNAVAILABLE", "观察指标没有可检索的关键词", check="curriculum")
+    if not slices:
+        return fail(
+            "MATERIAL_NOT_LINKED",
+            "当前指标没有登记教材切片来源（source_checks.textbook_slices 为空）",
+            check="item_link",
+        )
+
+    curriculum_text = provider(run, CURRICULUM_FILE)
+    slice_texts: dict[str, dict] = {}
+    missing_files: list[str] = []
+    for name in [CURRICULUM_FILE, *slices]:
+        if name in slice_texts:
+            continue
+        text = curriculum_text if name == CURRICULUM_FILE else provider(run, name)
+        slice_texts[name] = text
+        if not text.get("available"):
+            missing_files.append(name)
+    if missing_files:
+        unreadable = [
+            name
+            for name in missing_files
+            if slice_texts[name].get("text_status") == "unreadable"
+        ]
+        if unreadable:
+            checks["sources"]["status"] = "failed"
+            checks["sources"]["detail"] = f"无法读取：{'、'.join(unreadable)}"
+            return fail("SOURCE_UNREADABLE", f"无法读取：{'、'.join(unreadable)}", check="sources")
+        checks["sources"]["status"] = "failed"
+        checks["sources"]["detail"] = f"缺失：{'、'.join(missing_files)}"
+        return fail("SOURCE_MISSING", f"缺失：{'、'.join(missing_files)}", check="sources")
+    checks["sources"]["status"] = "passed"
+    checks["sources"]["detail"] = f"共检查 {len(slice_texts)} 份来源文件，全部可读"
+
+    # 2. 课标定位页内容核验（课标为扫描件时只能给出 TEXT_UNAVAILABLE）
+    curriculum_page = _locator_page(objective, source_check)
+    curriculum_pages = _text_pages_of(curriculum_text)
+    curriculum_match = None
+    if curriculum_page is not None:
+        page_record = next(
+            (item for item in curriculum_pages if item.get("page") == curriculum_page),
+            None,
+        )
+        if page_record is None:
+            checks["curriculum"]["status"] = "failed"
+            checks["curriculum"]["detail"] = (
+                f"课标第 {curriculum_page} 页没有可读文本（扫描版 PDF 需要先经授权 OCR）"
+            )
+            return fail(
+                "TEXT_UNAVAILABLE",
+                f"课标第 {curriculum_page} 页没有可读文本"
+                f"（本地 {curriculum_text.get('local_text_page_count', 0)} 页有文本，"
+                f"OCR {curriculum_text.get('ocr_text_page_count', 0)} 页）",
+                check="curriculum",
+            )
+        curriculum_match = page_match(str(page_record.get("text", "")), keywords)
+        evidence["curriculum"] = {
+            "type": "curriculum_page_match",
+            "file": CURRICULUM_FILE,
+            "page": curriculum_page,
+            "text_source": page_record.get("source"),
+            "keywords_matched": curriculum_match["matched"],
+            "keywords_total": len(keywords),
+            "match_ratio": curriculum_match["ratio"],
+            "excerpt": curriculum_match["excerpt"],
+        }
+        if len(curriculum_match["matched"]) < _MATCH_MIN_KEYWORDS:
+            checks["curriculum"]["status"] = "failed"
+            checks["curriculum"]["detail"] = (
+                f"第 {curriculum_page} 页只命中 {len(curriculum_match['matched'])} 个关键词"
+                f"（要求 ≥{_MATCH_MIN_KEYWORDS}）"
+            )
+            return fail(
+                "CURRICULUM_MISMATCH",
+                f"课标第 {curriculum_page} 页未出现本指标的核心概念",
+                check="curriculum",
+            )
+        checks["curriculum"]["status"] = "passed"
+        checks["curriculum"]["detail"] = (
+            f"第 {curriculum_page} 页命中 {len(curriculum_match['matched'])}/{len(keywords)} 个关键词"
+        )
+    else:
+        checks["curriculum"]["status"] = "skipped"
+        checks["curriculum"]["detail"] = "课程要求未登记课标文件页，无法核对课标定位"
+
+    # 3. 教材切片：单页匹配，不跨页合并
+    best: dict | None = None
+    for name in slices:
+        text = slice_texts[name]
+        candidate = best_page(_text_pages_of(text), keywords)
+        if candidate is None:
+            continue
+        if best is None or len(candidate["matched"]) > len(best["matched"]):
+            best = {**candidate, "slice": name}
+    if best is None:
+        checks["textbook"]["status"] = "failed"
+        checks["textbook"]["detail"] = "切片中没有任何一页命中本指标关键词"
+        return fail(
+            "TEXTBOOK_MISMATCH",
+            f"教材切片（{'、'.join(slices)}）没有任何一页命中本指标关键词",
+            check="textbook",
+        )
+    evidence["textbook"] = {
+        "type": "textbook_page_match",
+        "slice": best["slice"],
+        "page": best["page"],
+        "text_source": best["text_source"],
+        "keywords_matched": best["matched"],
+        "keywords_total": len(keywords),
+        "match_ratio": best["ratio"],
+        "excerpt": best["excerpt"],
+    }
+    if (
+        len(best["matched"]) < _MATCH_MIN_KEYWORDS
+        or best["ratio"] < _MATCH_MIN_RATIO
+    ):
+        checks["textbook"]["status"] = "failed"
+        checks["textbook"]["detail"] = (
+            f"最匹配的一页（{best['slice']} 第 {best['page']} 页）命中 "
+            f"{len(best['matched'])}/{len(keywords)} 个关键词，覆盖率 {best['ratio']:.0%}"
+        )
+        return fail(
+            "TEXTBOOK_MISMATCH",
+            f"切片 {best['slice']} 第 {best['page']} 页命中不足"
+            f"（{len(best['matched'])}/{len(keywords)}，要求 ≥{_MATCH_MIN_KEYWORDS} 个且覆盖率 ≥{_MATCH_MIN_RATIO:.0%}）",
+            check="textbook",
+        )
+    checks["textbook"]["status"] = "passed"
+    checks["textbook"]["detail"] = (
+        f"切片 {best['slice']} 第 {best['page']} 页命中 {len(best['matched'])}/{len(keywords)} 个关键词"
+    )
+
+    # 4. 题目关联
+    if not linked_questions:
+        checks["item_link"]["status"] = "failed"
+        checks["item_link"]["detail"] = "当前指标没有关联的题目或教学材料"
+        return fail(
+            "MATERIAL_NOT_LINKED",
+            "当前指标没有关联的题目或教学材料",
+            check="item_link",
+        )
+    slice_to_material: dict[str, str] = {}
+    for row in run.get("items", []):
+        source_file = str(row.get("来源或资料文件", ""))
+        for name in slices:
+            if name and name in source_file and name not in slice_to_material:
+                slice_to_material[name] = str(row["材料编号"])
+    material_id = slice_to_material.get(best["slice"])
+    if not material_id:
+        checks["item_link"]["status"] = "failed"
+        checks["item_link"]["detail"] = "命中的切片没有对应的题目材料编号"
+        return fail(
+            "MATERIAL_NOT_LINKED",
+            f"切片 {best['slice']} 未关联到任何题目材料编号",
+            check="item_link",
+        )
+    node_ids = [
+        str(node["节点编号"])
+        for node in run.get("nodes", [])
+        if any(question in str(node.get("可用题目编号", "")) for question in linked_questions)
+    ]
+    evidence["item_link"] = {
+        "type": "official_indicator_item_binding",
+        "material_ids": linked_questions,
+        "slice": best["slice"],
+        "slice_material_id": material_id,
+        "allowed_node_ids": node_ids,
+    }
+    checks["item_link"]["status"] = "passed"
+    checks["item_link"]["detail"] = f"关联 {len(linked_questions)} 项材料，来源切片可回指材料 {material_id}"
+
+    # 5. AI 引用（存在才校验；虚构页码/原文直接拒绝）
+    if ai_mappings:
+        problems = _validate_ai_references(
+            ai_mappings, lambda name: provider(run, name)
+        )
+        if problems:
+            evidence["reference_problems"] = problems
+            checks["reference"]["status"] = "failed"
+            checks["reference"]["detail"] = f"{len(problems)} 条引用无法回查"
+            return fail(
+                "REFERENCE_INVALID",
+                f"AI 映射中有 {len(problems)} 条引用无法在来源原文中回查",
+                check="reference",
+            )
+        checks["reference"]["status"] = "passed"
+        checks["reference"]["detail"] = f"回查 {len(ai_mappings)} 条 AI 映射引用，全部可定位"
+    else:
+        checks["reference"]["status"] = "skipped"
+        checks["reference"]["detail"] = "当前指标没有 AI 映射引用需要回查"
+
+    # 6. 来源指纹
+    try:
+        fingerprints = source_service.fingerprints(run)
+    except (AttributeError, OSError, ValueError):
+        fingerprints = {}
+    cited = {name: fingerprints.get(name) for name in {CURRICULUM_FILE, *slices}}
+    if any(value is None for value in cited.values()):
+        checks["fingerprint"]["status"] = "failed"
+        checks["fingerprint"]["detail"] = "引用文件缺少可计算的内容指纹"
+        return fail(
+            "SOURCE_CHANGED",
+            "引用文件在核验期间不可读或已被替换，请刷新来源后重试",
+            check="fingerprint",
+        )
+    evidence["source_fingerprint"] = {
+        "type": "sha256",
+        "files": {name: value["sha256"] for name, value in cited.items()},
+    }
+    checks["fingerprint"]["status"] = "passed"
+    checks["fingerprint"]["detail"] = f"{len(cited)} 份引用文件指纹已记录"
+
+    confidence = round(
+        min(
+            best["ratio"],
+            curriculum_match["ratio"] if curriculum_match else 1.0,
+        ),
+        2,
+    )
+    resource_link = {
+        "material_id": material_id,
+        "purpose": "讲解与观察指标相关的教材内容",
+        "indicator_ids": [indicator_id],
+        "allowed_node_ids": node_ids,
+        "source_locator": f"切片 {best['slice']} 第 {best['page']} 页",
+        "evidence": best["excerpt"],
+        "status": "verified",
+    }
+    machine_evidence = [
+        {
+            "type": "multi_evidence",
+            "checks": list(checks.values()),
+            "curriculum": evidence["curriculum"],
+            "textbook": evidence["textbook"],
+            "item_link": evidence["item_link"],
+        }
+    ]
+    payload = {
+        "indicator_id": indicator_id,
+        "status": "verified",
+        "curriculum_locator": str(objective.get("课标文件页／正文页", "")),
+        "textbook_locator": str(objective.get("教材正文页", "")),
+        "material_ids": linked_questions,
+        "knowledge_links": [],
+        "rubric_mappings": [],
+        "resource_links": [resource_link],
+        "reviewer": "机器核验（课标与切片逐页文本匹配）",
+        "reason": (
+            f"课标第 {curriculum_page} 页命中 {len(curriculum_match['matched'])}/{len(keywords)} 个关键词；"
+            if curriculum_match
+            else "课标定位未登记；"
+        )
+        + f"教材切片 {best['slice']} 第 {best['page']} 页命中 {len(best['matched'])}/{len(keywords)} 个关键词；"
+        + f"题目关联 {len(linked_questions)} 项且切片可回指材料 {material_id}",
+        "verified_by": "machine",
+        "confidence": confidence,
+        "machine_evidence": machine_evidence,
+        "verification_version": VERIFICATION_VERSION,
+        "reason_code": None,
+        "checks": list(checks.values()),
+    }
+    return {
+        "indicator_id": indicator_id,
+        "status": "verified",
+        "reason_code": None,
+        "reason": payload["reason"],
+        "checks": list(checks.values()),
+        "evidence": evidence,
+        "confidence": confidence,
+        "verification_version": VERIFICATION_VERSION,
+        "payload": payload,
     }
 
 
@@ -186,165 +620,54 @@ def build_machine_verification(
     *,
     extract_page_texts: Callable[[Path], list[dict[str, Any]]] | None = None,
 ) -> dict | None:
-    """Build a machine-verified signoff payload for one indicator.
+    """兼容入口：达到全部必要证据时返回机器签核载荷，否则返回 None。
 
-    返回 None 表示证据不足或切片不可读——这类指标留给教师判断层，不自动通过。
+    新代码请用 :func:`build_machine_verification_report`，它还会给出失败原因码。
     """
-    extract = extract_page_texts or _page_texts
-    objectives = {row["指标编号"]: row for row in run.get("objectives", [])}
-    if indicator_id not in objectives:
-        raise ValueError("指标编号不存在")
-    objective = objectives[indicator_id]
+    if extract_page_texts is not None:
+        extract = extract_page_texts
 
-    source_entry = next(
-        (
-            row
-            for row in run.get("source_index", [])
-            if row.get("indicator_id") == indicator_id
-        ),
-        None,
+        def provider(run_arg: dict, name: str) -> dict:
+            pages = extract(Path(name))
+            return {
+                "available": True,
+                "text_status": "available" if pages else "unavailable",
+                "pages": [dict(page, source="local") for page in pages],
+                "page_count": len(pages),
+                "text_page_count": len(pages),
+                "local_text_page_count": len(pages),
+                "ocr_text_page_count": 0,
+            }
+
+    else:
+        provider = None
+    report = build_machine_verification_report(
+        run, source_service, indicator_id, text_provider=provider
     )
-    slices = list(
-        (source_entry or {}).get("source_check", {}).get("textbook_slices", [])
-    )
-    keywords = indicator_keywords(str(objective.get("观察指标", "")))
-    if not slices or not keywords:
+    return report["payload"]
+
+
+def needs_review_payload(report: dict) -> dict | None:
+    """把"证据不足"的结论转成可持久化的待核验记录（不伪造通过）。"""
+    if report["status"] == "verified":
         return None
-
-    linked_questions = sorted(
-        {
-            str(row["材料编号"])
-            for row in run.get("items", [])
-            if row.get("指标编号") == indicator_id and row.get("材料编号")
-        }
-    )
-    if not linked_questions:
-        return None
-
-    slice_to_material: dict[str, str] = {}
-    for row in run.get("items", []):
-        source_file = str(row.get("来源或资料文件", ""))
-        for name in slices:
-            if name and name in source_file and name not in slice_to_material:
-                slice_to_material[name] = str(row["材料编号"])
-
-    best: dict[str, Any] | None = None
-    for name in slices:
-        path = source_service.resolve(run, name)
-        if path is None:
-            continue
-        try:
-            pages = extract(path)
-        except (PdfReadError, PdfStreamError, OSError, TypeError, ValueError):
-            continue
-        candidate = _slice_match(pages, keywords)
-        if candidate and (
-            best is None or len(candidate["matched"]) > len(best["matched"])
-        ):
-            best = {**candidate, "slice": name}
-
-    if not best:
-        return None
-    matched_ratio = len(best["matched"]) / len(keywords)
-    if len(best["matched"]) < _MATCH_MIN_KEYWORDS or matched_ratio < _MATCH_MIN_RATIO:
-        return None
-
-    material_id = slice_to_material.get(best["slice"])
-    if not material_id:
-        return None
-
-    node_ids = [
-        node["节点编号"]
-        for node in run.get("nodes", [])
-        if any(
-            question in str(node.get("可用题目编号", ""))
-            for question in linked_questions
-        )
-    ]
-
-    confidence = round(matched_ratio, 2)
-    evidence = {
-        "type": "textbook_keyword_match",
-        "material_id": material_id,
-        "slice": best["slice"],
-        "page": best["page"],
-        "keywords_matched": best["matched"],
-        "keywords_total": len(keywords),
-        "excerpt": best["excerpt"],
-        "confidence": confidence,
-    }
-    machine_evidence = [evidence]
-
-    # 课标侧：OCR 文本可用时，对课标定位做内容匹配（扫描件经 DeepSeek OCR 提取）。
-    # 命中页与课程要求 CSV 的文件页一致 → 定位确认；不一致 → 记录差异并降低置信度，
-    # 不自动通过定位；OCR 未解析时跳过课标侧，留给教师判断层。
-    curriculum_note = "课标定位沿用课程要求 CSV，课标 OCR 未解析，待人工或视觉核验"
-    try:
-        curriculum_pages = source_service.ocr_pages(run, "课程标准_2022.pdf") or []
-    except (AttributeError, PdfReadError, PdfStreamError, OSError, TypeError, ValueError):
-        curriculum_pages = []
-    if curriculum_pages:
-        curriculum_candidate = _slice_match(
-            [{"page": page.get("index", 0) + 1, "text": str(page.get("text", ""))} for page in curriculum_pages],
-            keywords,
-        )
-        if curriculum_candidate and len(curriculum_candidate["matched"]) >= _MATCH_MIN_KEYWORDS:
-            csv_file_page = None
-            locator = str(objective.get("课标文件页／正文页", ""))
-            locator_match = re.match(r"(\d+)", locator)
-            if locator_match:
-                csv_file_page = int(locator_match.group(1))
-            matched_page = curriculum_candidate["page"]
-            locator_confirmed = csv_file_page is not None and matched_page == csv_file_page
-            curriculum_confidence = round(
-                len(curriculum_candidate["matched"]) / len(keywords), 2
-            ) * (1.0 if locator_confirmed else 0.6)
-            curriculum_note = (
-                f"课标内容 OCR 命中于文件第 {matched_page} 页"
-                f"（CSV 定位文件页 {csv_file_page if csv_file_page is not None else '未知'}，"
-                f"{'一致' if locator_confirmed else '存在差异，待人工复核'}）"
-            )
-            machine_evidence.append(
-                {
-                    "type": "curriculum_ocr_match",
-                    "page": matched_page,
-                    "csv_file_page": csv_file_page,
-                    "locator_confirmed": locator_confirmed,
-                    "keywords_matched": curriculum_candidate["matched"],
-                    "keywords_total": len(keywords),
-                    "excerpt": curriculum_candidate["excerpt"],
-                    "confidence": round(curriculum_confidence, 2),
-                }
-            )
-            confidence = round(confidence * (0.9 if locator_confirmed else 0.6), 2)
-
-    resource_link = {
-        "material_id": material_id,
-        "purpose": "讲解与观察指标相关的教材内容",
-        "indicator_ids": [indicator_id],
-        "allowed_node_ids": node_ids,
-        "source_locator": f"切片 {best['slice']} 第 {best['page']} 页",
-        "evidence": best["excerpt"],
-        "status": "verified",
-    }
     return {
-        "indicator_id": indicator_id,
-        "status": "verified",
-        "curriculum_locator": str(objective.get("课标文件页／正文页", "")),
-        "textbook_locator": str(objective.get("教材正文页", "")),
-        "material_ids": linked_questions,
+        "indicator_id": report["indicator_id"],
+        "status": "pending",
+        "verified_by": "machine",
+        "curriculum_locator": "",
+        "textbook_locator": "",
+        "material_ids": [],
         "knowledge_links": [],
         "rubric_mappings": [],
-        "resource_links": [resource_link],
-        "reviewer": "机器核验（切片文本匹配）",
-        "reason": (
-            f"切片关键词自动匹配 {len(best['matched'])}/{len(keywords)} 个关键词"
-            f"（阈值：≥{_MATCH_MIN_KEYWORDS} 个且覆盖率 ≥{_MATCH_MIN_RATIO:.0%}）；"
-            f"{curriculum_note}"
-        ),
-        "verified_by": "machine",
-        "confidence": confidence,
-        "machine_evidence": machine_evidence,
+        "resource_links": [],
+        "reviewer": "机器核验（证据不足，待人工或 OCR 后重试）",
+        "reason": report["reason"],
+        "reason_code": report["reason_code"],
+        "confidence": None,
+        "machine_evidence": report["checks"],
+        "verification_version": report["verification_version"],
+        "checks": report["checks"],
     }
 
 

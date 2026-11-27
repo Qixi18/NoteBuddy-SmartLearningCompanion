@@ -7,7 +7,10 @@ from ...services.task01.knowledge_link_service import (
     build_knowledge_link_candidates,
 )
 from ...services.task01.machine_verification_service import (
-    build_machine_verification,
+    VERIFICATION_VERSION,
+    TextPageProvider,
+    build_machine_verification_report,
+    needs_review_payload,
 )
 from ...services.task02.evidence_reference_service import (
     validate_evidence_references,
@@ -86,6 +89,9 @@ class Stage2Decisions:
             payload.get("confidence") is not None
             or payload.get("machine_evidence")
             or payload.get("spot_checks")
+            or payload.get("verification_version") is not None
+            or payload.get("reason_code") is not None
+            or payload.get("checks")
         ):
             raise ValueError("教师签核不接受机器核验与抽查字段")
         with self.uow_factory() as uow:
@@ -204,73 +210,241 @@ class Stage2Decisions:
                 run["run_id"], indicator_id, payload, expected_version=expected_version
             )
 
-    def apply_machine_verification(self, indicator_id: str | None = None) -> dict:
-        """机器核验层：切片文本匹配自动写入 verified_by="machine" 的签核记录。
+    def apply_machine_verification(
+        self,
+        indicator_id: str | None = None,
+        *,
+        run_id: str | None = None,
+        force: bool = False,
+    ) -> dict:
+        """批量机器核验：一次绑定运行，逐项写入结论或原因，返回逐项结果与汇总。
 
-        只对达到置信阈值的指标写入 verified 记录；未达阈值或切片不可读的指标
-        保持现状，留给教师判断层。已有未过期已核验记录的指标跳过，不重复写入。
+        关键约束（v2）：
+
+        - **运行绑定**：进入时取一次 `run` 快照并校验 `run_id`；循环内不再重读
+          `uow.runs.current()`。教师在核验期间重新导入数据时，旧证据不会写进新运行。
+        - **不伪造通过**：只有四类必要证据全部成立才写 `verified`；证据不足时写入
+          `status="pending"` 的待核验记录并附原因码，绝不降低标准换绿色状态。
+        - **幂等**：已有同版本未过期记录时不重复写入；强制重核验但结论未变化时也不产生新版本。
         """
         with self.uow_factory(immediate=False) as uow:
             run = uow.runs.current()
-            objectives = [row["指标编号"] for row in run["objectives"]]
+            bound_run_id = run.get("run_id", "")
+            if run_id is not None and run_id != bound_run_id:
+                raise ValueError("当前运行已变化（可能重新导入了数据），请刷新页面后重新核验")
+            objectives = [row["指标编号"] for row in run.get("objectives", [])]
             if indicator_id is not None and indicator_id not in objectives:
                 raise ValueError("指标编号不存在")
             targets = [indicator_id] if indicator_id else objectives
-            fresh = self.with_source_freshness(
-                run, uow.stage2.list_sources(run["run_id"])
+            histories = self.with_source_freshness(
+                run, uow.stage2.list_sources(bound_run_id)
             )
-        verified: list[dict] = []
+            ai_mappings = uow.stage2.list_ai_mappings(bound_run_id)
+        provider = TextPageProvider(self.source_service)
+        results: list[dict] = []
+        verified_records: list[dict] = []
         skipped: list[dict] = []
         for target in targets:
-            latest = (fresh.get(target) or [None])[-1]
-            if (
+            latest = (histories.get(target) or [None])[-1]
+            # 人工结论优先：教师已驳回或已签核的记录不被机器核验覆盖（force 也不覆盖）。
+            if latest and not latest.get("stale"):
+                human_status = latest.get("status")
+                human_reviewer = latest.get("verified_by")
+                if human_status == "rejected":
+                    results.append(
+                        {
+                            "indicator_id": target,
+                            "status": "skipped",
+                            "verified_by": human_reviewer,
+                            "reason_code": None,
+                            "reason": "教师已驳回该来源；机器核验不会覆盖人工结论",
+                            "confidence": None,
+                            "verification_version": latest.get("verification_version"),
+                            "version": latest.get("version"),
+                            "checks": [],
+                            "evidence": {},
+                        }
+                    )
+                    skipped.append(
+                        {"indicator_id": target, "reason": "教师已驳回，未覆盖人工结论"}
+                    )
+                    continue
+                if human_status == "verified" and human_reviewer == "teacher":
+                    results.append(
+                        {
+                            "indicator_id": target,
+                            "status": "skipped",
+                            "verified_by": "teacher",
+                            "reason_code": None,
+                            "reason": "教师已签核该来源；机器核验不会覆盖人工结论",
+                            "confidence": latest.get("confidence"),
+                            "verification_version": latest.get("verification_version"),
+                            "version": latest.get("version"),
+                            "checks": [],
+                            "evidence": {},
+                        }
+                    )
+                    skipped.append(
+                        {"indicator_id": target, "reason": "教师已签核，未覆盖人工结论"}
+                    )
+                    continue
+            already_verified = bool(
                 latest
                 and latest.get("status") == "verified"
                 and not latest.get("stale")
-            ):
+            )
+            if already_verified and not force:
+                entry = {
+                    "indicator_id": target,
+                    "status": "skipped",
+                    "verified_by": latest.get("verified_by"),
+                    "reason_code": None,
+                    "reason": "已有未过期的已核验记录；勾选强制重核验可重新判定",
+                    "confidence": latest.get("confidence"),
+                    "verification_version": latest.get("verification_version"),
+                    "version": latest.get("version"),
+                    "checks": [],
+                    "evidence": {},
+                }
+                results.append(entry)
                 skipped.append(
+                    {"indicator_id": target, "reason": "已有未过期的已核验记录，未重复写入"}
+                )
+                continue
+            latest_ai = (ai_mappings.get(target) or [None])[-1]
+            report = build_machine_verification_report(
+                run,
+                self.source_service,
+                target,
+                text_provider=provider,
+                ai_mappings=latest_ai.get("mappings") if latest_ai else None,
+            )
+            if report["status"] == "verified":
+                payload = self._bind_machine_payload(run, target, report["payload"])
+                if already_verified and not force:
+                    unchanged = True
+                else:
+                    unchanged = self._machine_payload_unchanged(latest, payload)
+                if unchanged:
+                    entry = {
+                        "indicator_id": target,
+                        "status": "skipped",
+                        "verified_by": (latest or {}).get("verified_by"),
+                        "reason_code": None,
+                        "reason": "结论与上次机器核验一致，未产生新版本",
+                        "confidence": (latest or {}).get("confidence", payload["confidence"]),
+                        "verification_version": VERIFICATION_VERSION,
+                        "version": (latest or {}).get("version"),
+                        "checks": report["checks"],
+                        "evidence": report["evidence"],
+                    }
+                    results.append(entry)
+                    skipped.append(
+                        {"indicator_id": target, "reason": "结论未变化，未重复写入版本"}
+                    )
+                    continue
+                with self.uow_factory() as uow:
+                    record = uow.stage2.append_source(bound_run_id, target, payload)
+                verified_records.append(record)
+                results.append(
                     {
                         "indicator_id": target,
-                        "reason": "已有未过期的已核验记录，未重复写入",
+                        "status": "verified",
+                        "verified_by": "machine",
+                        "reason_code": None,
+                        "reason": payload["reason"],
+                        "confidence": payload["confidence"],
+                        "verification_version": VERIFICATION_VERSION,
+                        "version": record["version"],
+                        "checks": report["checks"],
+                        "evidence": report["evidence"],
                     }
                 )
                 continue
-            payload = build_machine_verification(run, self.source_service, target)
-            if payload is None:
-                skipped.append(
-                    {
-                        "indicator_id": target,
-                        "reason": "切片不可读或关键词命中低于阈值，留给教师判断层",
-                    }
-                )
-                continue
-            with self.uow_factory() as uow:
-                run = uow.runs.current()
-                materials = {
-                    str(row.get("材料编号", "")): row
-                    for row in run["items"]
-                    if row.get("材料编号")
+            pending_payload = needs_review_payload(report)
+            duplicate_pending = bool(
+                latest
+                and latest.get("status") == "pending"
+                and latest.get("verified_by") == "machine"
+                and latest.get("reason_code") == report["reason_code"]
+                and latest.get("verification_version") == VERIFICATION_VERSION
+            )
+            record = None
+            if not duplicate_pending:
+                with self.uow_factory() as uow:
+                    record = uow.stage2.append_source(
+                        bound_run_id, target, pending_payload
+                    )
+            results.append(
+                {
+                    "indicator_id": target,
+                    "status": "needs_review",
+                    "verified_by": "machine",
+                    "reason_code": report["reason_code"],
+                    "reason": report["reason"],
+                    "confidence": None,
+                    "verification_version": VERIFICATION_VERSION,
+                    "version": record["version"] if record else (latest or {}).get("version"),
+                    "checks": report["checks"],
+                    "evidence": report["evidence"],
                 }
-                objective_ids = {row["指标编号"] for row in run["objectives"]}
-                node_ids = {row["节点编号"] for row in run["nodes"]}
-                material_ids = set(payload["material_ids"])
-                resource_ids = {
-                    link["material_id"] for link in payload["resource_links"]
-                }
-                payload["resource_links"] = bind_resource_links(
-                    payload["resource_links"],
-                    materials,
-                    objective_ids,
-                    node_ids,
-                    target,
-                    "verified",
-                )
-                payload["source_fingerprints"] = self.current_source_fingerprints(
-                    run, material_ids | resource_ids
-                )
-                record = uow.stage2.append_source(run["run_id"], target, payload)
-            verified.append(record)
-        return {"verified": verified, "skipped": skipped}
+            )
+        summary = {
+            "total": len(results),
+            "verified": sum(1 for item in results if item["status"] == "verified"),
+            "needs_review": sum(
+                1 for item in results if item["status"] == "needs_review"
+            ),
+            "skipped": sum(1 for item in results if item["status"] == "skipped"),
+        }
+        return {
+            "run_id": bound_run_id,
+            "summary": summary,
+            "results": results,
+            "verified": verified_records,
+            "skipped": skipped,
+        }
+
+    def _bind_machine_payload(self, run: dict, indicator_id: str, payload: dict) -> dict:
+        """把机器结论绑定到当前运行的材料、节点关系与来源指纹。"""
+        materials = {
+            str(row.get("材料编号", "")): row
+            for row in run["items"]
+            if row.get("材料编号")
+        }
+        objective_ids = {row["指标编号"] for row in run["objectives"]}
+        node_ids = {row["节点编号"] for row in run["nodes"]}
+        material_ids = set(payload.get("material_ids") or [])
+        resource_ids = {
+            link["material_id"] for link in payload.get("resource_links") or []
+        }
+        payload["resource_links"] = bind_resource_links(
+            payload.get("resource_links") or [],
+            materials,
+            objective_ids,
+            node_ids,
+            indicator_id,
+            "verified",
+        )
+        payload["source_fingerprints"] = self.current_source_fingerprints(
+            run, material_ids | resource_ids
+        )
+        return payload
+
+    @staticmethod
+    def _machine_payload_unchanged(latest: dict | None, payload: dict) -> bool:
+        """结论、依据与指纹都没变时不再追加版本（避免无意义的版本膨胀）。"""
+        if not latest or latest.get("status") != "verified":
+            return False
+        if latest.get("verified_by") != "machine":
+            return False
+        if latest.get("verification_version") != payload.get("verification_version"):
+            return False
+        if latest.get("source_fingerprints") != payload.get("source_fingerprints"):
+            return False
+        if latest.get("confidence") != payload.get("confidence"):
+            return False
+        return latest.get("reason") == payload.get("reason")
 
     def record_spot_check(self, payload: dict) -> dict:
         """抽查机制：教师抽样人工复核机器核验记录，留痕于该版本记录。

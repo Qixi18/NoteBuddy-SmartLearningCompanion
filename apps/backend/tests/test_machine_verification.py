@@ -1,6 +1,12 @@
-"""机器核验层（切片文本匹配）的服务与接口测试。"""
+"""机器核验层 v2（多维证据 + 原因码）的服务与接口测试。
 
-import json
+与 v1 的差别（对应《课程来源自动核验开发规划》4.3）：
+
+- 课标页没有文本时不再"跳过课标侧照样通过"，而是给出 TEXT_UNAVAILABLE；
+- 关键词命中不再跨页合并，单页命中不足就是 TEXTBOOK_MISMATCH；
+- 失败结论带稳定原因码，界面据此解释"为什么没有自动通过"。
+"""
+
 from dataclasses import replace
 from pathlib import Path
 
@@ -10,24 +16,70 @@ from app.config import settings
 from app.repositories.store import Store
 from app.services.analysis import analyze
 from app.services.task01 import machine_verification_service as mvs
+from app.services.task01.source_service import SourceService
 from fastapi.testclient import TestClient
 from test_core import sample_tables
 
+CURRICULUM = "课程标准_2022.pdf"
+SLICE = "B01_相关资料切片.pdf"
+
+# 观察指标 "识别同类项、去括号并化简" 的四个关键词里，这一页命中三个。
+MATCHING_TEXT = "同类项与去括号的化简方法。"
+UNRELATED_TEXT = "分数的加减运算与通分。"
+
+
+def _pages(*entries):
+    return [{"page": page, "text": text, "source": "local"} for page, text in entries]
+
 
 class StubSources:
-    """resolve 恒返回占位路径；配合注入的抽取器即可脱离真实 PDF 测试。"""
+    """按文件名返回文本页与指纹，脱离真实 PDF 也能驱动核验逻辑。"""
 
-    def __init__(self, pages):
-        self.pages = pages
+    def __init__(self, pages_by_name: dict[str, list[dict]] | None = None):
+        self.pages_by_name = pages_by_name or {}
 
     def resolve(self, run, name):
-        return Path("stub.pdf")
+        return Path("stub.pdf") if name in self.pages_by_name else None
+
+    def get_text_pages(self, run, name):
+        pages = self.pages_by_name.get(name)
+        if pages is None:
+            return {
+                "name": name,
+                "available": False,
+                "text_status": "missing",
+                "pages": [],
+                "page_count": None,
+                "text_page_count": 0,
+                "local_text_page_count": 0,
+                "ocr_text_page_count": 0,
+                "sha256": None,
+                "bytes": None,
+            }
+        numbers = [page["page"] for page in pages]
+        return {
+            "name": name,
+            "available": True,
+            "text_status": "available" if pages else "unavailable",
+            "pages": pages,
+            "page_count": max(numbers) if numbers else None,
+            "text_page_count": len(pages),
+            "local_text_page_count": len(pages),
+            "ocr_text_page_count": 0,
+            "sha256": "a" * 64,
+            "bytes": 10,
+        }
+
+    def fingerprints(self, run):
+        return {
+            name: {"sha256": "b" * 64, "bytes": 10} for name in self.pages_by_name
+        }
 
 
 def sample_run(**overrides):
     run = analyze(sample_tables(), {})
     run["objectives"][0]["观察指标"] = overrides.get(
-        "indicator_text", "solve equations by moving terms"
+        "indicator_text", "识别同类项、去括号并化简"
     )
     run["objectives"][0]["课标文件页／正文页"] = "62／55"
     run["objectives"][0]["教材正文页"] = "上册68—109"
@@ -36,13 +88,11 @@ def sample_run(**overrides):
             "材料编号": "B01",
             "材料类型": "教材",
             "指标编号": "",
-            "来源或资料文件": "5_课程标准及相关教学资源/B01_相关资料切片.pdf",
+            "来源或资料文件": f"5_课程标准及相关教学资源/{SLICE}",
         }
     )
-    run["source_index"][0]["source_check"]["textbook_slices"] = [
-        "B01_相关资料切片.pdf"
-    ]
-    # 追加一个关键词无法命中的指标，用于验证门控：低置信度不自动写入。
+    run["source_index"][0]["source_check"]["textbook_slices"] = [SLICE]
+    # 追加一个没有关联题目的指标，用于验证 MATERIAL_NOT_LINKED。
     run["objectives"].append(
         {
             "主题编号": "T01",
@@ -54,9 +104,11 @@ def sample_run(**overrides):
     return run
 
 
-ENGLISH_PAGE = [
-    {"page": 12, "text": "Solve the equations by moving terms across the equals sign."}
-]
+def full_evidence():
+    return {
+        CURRICULUM: _pages((62, MATCHING_TEXT)),
+        SLICE: _pages((12, MATCHING_TEXT)),
+    }
 
 
 def test_indicator_keywords_splits_on_particles():
@@ -69,124 +121,261 @@ def test_indicator_keywords_splits_on_particles():
     ]
 
 
-def test_build_machine_verification_writes_machine_signoff_above_threshold(tmp_path):
+def test_all_evidence_present_verifies_and_records_machine_signoff():
     run = sample_run()
-    payload = mvs.build_machine_verification(
-        run, StubSources(ENGLISH_PAGE), "T01I1", extract_page_texts=lambda path: ENGLISH_PAGE
+    report = mvs.build_machine_verification_report(
+        run, StubSources(full_evidence()), "T01I1"
     )
 
-    assert payload is not None
-    assert payload["status"] == "verified"
+    assert report["status"] == "verified"
+    assert report["reason_code"] is None
+    payload = report["payload"]
     assert payload["verified_by"] == "machine"
-    assert payload["confidence"] == 1.0
-    assert payload["material_ids"]
+    assert payload["verification_version"] == mvs.VERIFICATION_VERSION
+    assert payload["material_ids"] == ["Q001"]
     assert payload["resource_links"][0]["material_id"] == "B01"
     assert "第 12 页" in payload["resource_links"][0]["source_locator"]
-    assert payload["machine_evidence"][0]["keywords_total"] == 5
-    assert payload["machine_evidence"][0]["page"] == 12
+    assert report["evidence"]["curriculum"]["page"] == 62
+    assert report["evidence"]["textbook"]["page"] == 12
+    assert all(check["status"] != "failed" for check in report["checks"])
+    assert report["checks"] and {check["id"] for check in report["checks"]} == {
+        "sources",
+        "curriculum",
+        "textbook",
+        "item_link",
+        "reference",
+        "fingerprint",
+    }
 
 
-def test_build_machine_verification_gates_below_threshold(tmp_path):
-    run = sample_run(indicator_text="用整式解释具体问题")
-    payload = mvs.build_machine_verification(
-        run,
-        StubSources(ENGLISH_PAGE),
-        "T01I1",
-        extract_page_texts=lambda path: ENGLISH_PAGE,
+def test_curriculum_page_without_text_blocks_verification():
+    """课标为扫描件且未 OCR 时，教材侧再匹配也不能自动通过。"""
+    run = sample_run()
+    sources = StubSources({CURRICULUM: [], SLICE: _pages((12, MATCHING_TEXT))})
+    report = mvs.build_machine_verification_report(run, sources, "T01I1")
+
+    assert report["status"] == "needs_review"
+    assert report["reason_code"] == "TEXT_UNAVAILABLE"
+    assert report["payload"] is None
+    curriculum_check = next(c for c in report["checks"] if c["id"] == "curriculum")
+    assert curriculum_check["status"] == "failed"
+    assert "第 62 页" in curriculum_check["detail"]
+
+
+def test_curriculum_content_mismatch_has_own_reason_code():
+    run = sample_run()
+    sources = StubSources(
+        {CURRICULUM: _pages((62, UNRELATED_TEXT)), SLICE: _pages((12, MATCHING_TEXT))}
     )
-    assert payload is None
+    report = mvs.build_machine_verification_report(run, sources, "T01I1")
+
+    assert report["status"] == "needs_review"
+    assert report["reason_code"] == "CURRICULUM_MISMATCH"
 
 
-def test_build_machine_verification_requires_known_indicator(tmp_path):
+def test_keyword_hits_on_different_pages_are_not_merged():
+    """v1 会把两页各命中一个关键词合并成"命中2个"；v2 只看单页。"""
+    run = sample_run()
+    sources = StubSources(
+        {
+            CURRICULUM: _pages((62, MATCHING_TEXT)),
+            SLICE: _pages((12, "同类项的定义。"), (13, "去括号的法则。")),
+        }
+    )
+    report = mvs.build_machine_verification_report(run, sources, "T01I1")
+
+    assert report["status"] == "needs_review"
+    assert report["reason_code"] == "TEXTBOOK_MISMATCH"
+    # 最好的一页只命中 1 个关键词——两页的命中没有被合并成 2 个。
+    assert len(report["evidence"]["textbook"]["keywords_matched"]) == 1
+
+
+def test_missing_source_file_is_reported_as_source_missing():
+    run = sample_run()
+    sources = StubSources({CURRICULUM: _pages((62, MATCHING_TEXT))})
+    report = mvs.build_machine_verification_report(run, sources, "T01I1")
+
+    assert report["status"] == "needs_review"
+    assert report["reason_code"] == "SOURCE_MISSING"
+    assert SLICE in report["reason"]
+
+
+def test_indicator_without_linked_materials_is_not_verified():
+    run = sample_run()
+    report = mvs.build_machine_verification_report(
+        run, StubSources(full_evidence()), "T01I2"
+    )
+
+    assert report["status"] == "needs_review"
+    assert report["reason_code"] == "MATERIAL_NOT_LINKED"
+
+
+def test_fabricated_ai_reference_is_rejected():
+    run = sample_run()
+    ai_mappings = [
+        {
+            "material_id": "Q001",
+            "evidence": [
+                {
+                    "ref_id": "pdf-2",
+                    "source": SLICE,
+                    "page": 12,
+                    "excerpt": "来源原文里根本没有这句话",
+                }
+            ],
+        }
+    ]
+    report = mvs.build_machine_verification_report(
+        run, StubSources(full_evidence()), "T01I1", ai_mappings=ai_mappings
+    )
+
+    assert report["status"] == "needs_review"
+    assert report["reason_code"] == "REFERENCE_INVALID"
+
+
+def test_known_indicator_required():
     run = sample_run()
     with pytest.raises(ValueError):
-        mvs.build_machine_verification(
-            run,
-            StubSources(ENGLISH_PAGE),
-            "NOPE",
-            extract_page_texts=lambda path: ENGLISH_PAGE,
+        mvs.build_machine_verification_report(
+            run, StubSources(full_evidence()), "NOPE"
         )
 
 
-def test_machine_verification_endpoint_writes_and_skips(tmp_path, monkeypatch):
+def _endpoint_store(tmp_path):
     pdf_root = tmp_path / "pdfs"
     pdf_root.mkdir()
-    (pdf_root / "B01_相关资料切片.pdf").write_bytes(b"%PDF-1.4 stub")
+    (pdf_root / SLICE).write_bytes(b"%PDF-1.4 stub")
+    (pdf_root / CURRICULUM).write_bytes(b"%PDF-1.4 curriculum")
     config = replace(settings, source_files_dir=pdf_root)
     run = sample_run()
     store = Store(tmp_path / "state", config=config)
     store.database.create_schema_for_tests()
     with store.uow_factory() as uow:
         uow.runs.save(run)
-    monkeypatch.setattr(mvs, "_page_texts", lambda path: ENGLISH_PAGE)
+    return store, config, run
+
+
+def _patch_pages(monkeypatch, pages_by_name):
+    stub = StubSources(pages_by_name)
+
+    def fake_get_text_pages(self, run, name):
+        return stub.get_text_pages(run, name)
+
+    monkeypatch.setattr(SourceService, "get_text_pages", fake_get_text_pages)
+    return stub
+
+
+def test_machine_verification_endpoint_returns_summary_and_results(
+    tmp_path, monkeypatch
+):
+    store, config, run = _endpoint_store(tmp_path)
+    _patch_pages(monkeypatch, full_evidence())
     client = TestClient(create_app(store, config))
 
-    first = client.post("/api/source-machine-verification", json={})
-    assert first.status_code == 200
-    body = first.json()
+    response = client.post(
+        "/api/source-machine-verification", json={"run_id": run["run_id"]}
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["run_id"] == run["run_id"]
+    assert body["summary"] == {"total": 2, "verified": 1, "needs_review": 1, "skipped": 0}
+    by_id = {item["indicator_id"]: item for item in body["results"]}
+    assert by_id["T01I1"]["status"] == "verified"
+    assert by_id["T01I1"]["verified_by"] == "machine"
+    assert by_id["T01I1"]["version"] == 1
+    assert by_id["T01I2"]["status"] == "needs_review"
+    assert by_id["T01I2"]["reason_code"] == "MATERIAL_NOT_LINKED"
+    # 兼容字段仍然返回已写入的记录。
     assert [record["indicator_id"] for record in body["verified"]] == ["T01I1"]
     record = body["verified"][0]
-    assert record["verified_by"] == "machine"
-    assert record["confidence"] == 1.0
+    assert record["confidence"] > 0.5
     assert record["resource_links"][0]["material_id"] == "B01"
-    assert any(
-        item["indicator_id"] == "T01I2" and "低于阈值" in item["reason"]
-        for item in body["skipped"]
-    )
 
     listed = client.get("/api/source-verifications").json()
     assert listed["T01I1"][-1]["verified_by"] == "machine"
-    assert listed["T01I1"][-1]["confidence"] == 1.0
+    # 证据不足的指标写入待核验记录并保留原因码，绝不伪造成通过。
+    assert listed["T01I2"][-1]["status"] == "pending"
+    assert listed["T01I2"][-1]["reason_code"] == "MATERIAL_NOT_LINKED"
 
-    second = client.post("/api/source-machine-verification", json={})
-    assert second.status_code == 200
-    assert second.json()["verified"] == []
-    assert second.json()["skipped"][0]["reason"].startswith("已有未过期")
-
-
-def test_curriculum_ocr_match_confirms_locator(tmp_path):
-    class StubSourcesWithOCR(StubSources):
-        def ocr_pages(self, run, name):
-            if name == "课程标准_2022.pdf":
-                return [
-                    {"index": 61, "text": "Solve the equations by moving terms across the equals sign."}
-                ]
-            return None
-
-    run = sample_run()
-    payload = mvs.build_machine_verification(
-        run,
-        StubSourcesWithOCR(ENGLISH_PAGE),
-        "T01I1",
-        extract_page_texts=lambda path: ENGLISH_PAGE,
+    again = client.post("/api/source-machine-verification", json={"run_id": run["run_id"]})
+    assert again.status_code == 200
+    again_body = again.json()
+    assert again_body["summary"]["verified"] == 0
+    assert again_body["summary"]["skipped"] == 1
+    # 重复执行不产生无意义的新版本。
+    assert listed["T01I1"][-1]["version"] == client.get("/api/source-verifications").json()["T01I1"][-1]["version"]
+    assert len(client.get("/api/source-verifications").json()["T01I2"]) == 1
+    assert any(
+        item["indicator_id"] == "T01I1" and item["status"] == "skipped"
+        for item in again_body["results"]
     )
 
-    curriculum = [
-        entry
-        for entry in payload["machine_evidence"]
-        if entry["type"] == "curriculum_ocr_match"
-    ]
-    assert len(curriculum) == 1
-    # OCR 命中页（index 61 → 文件页 62）与课程要求 CSV 定位一致 → 定位确认。
-    assert curriculum[0]["page"] == 62
-    assert curriculum[0]["locator_confirmed"] is True
-    assert payload["confidence"] == 0.9  # 教材 1.0 × 课标确认折减 0.9
+
+def test_machine_verification_force_rechecks_without_duplicating_versions(
+    tmp_path, monkeypatch
+):
+    store, config, run = _endpoint_store(tmp_path)
+    _patch_pages(monkeypatch, full_evidence())
+    client = TestClient(create_app(store, config))
+    client.post("/api/source-machine-verification", json={"run_id": run["run_id"]})
+
+    forced = client.post(
+        "/api/source-machine-verification",
+        json={"run_id": run["run_id"], "indicator_id": "T01I1", "force": True},
+    )
+    assert forced.status_code == 200
+    body = forced.json()
+    assert body["summary"]["verified"] == 0
+    assert body["summary"]["skipped"] == 1
+    assert body["results"][0]["status"] == "skipped"
+    assert body["results"][0]["version"] == 1
 
 
-def test_curriculum_ocr_skip_when_not_parsed(tmp_path):
-    run = sample_run()
-    # StubSources 无 ocr_pages → 课标侧跳过，教材侧照常核验。
-    payload = mvs.build_machine_verification(
-        run,
-        StubSources(ENGLISH_PAGE),
-        "T01I1",
-        extract_page_texts=lambda path: ENGLISH_PAGE,
+def test_machine_verification_rejects_stale_run_id(tmp_path, monkeypatch):
+    store, config, run = _endpoint_store(tmp_path)
+    _patch_pages(monkeypatch, full_evidence())
+    client = TestClient(create_app(store, config))
+
+    response = client.post(
+        "/api/source-machine-verification", json={"run_id": "old-run"}
     )
-    assert payload is not None
-    assert all(
-        entry["type"] != "curriculum_ocr_match"
-        for entry in payload["machine_evidence"]
+    assert response.status_code == 400
+    assert "运行已变化" in response.json()["error"]
+
+
+def test_machine_verification_never_overrides_teacher_rejection(tmp_path, monkeypatch):
+    """教师驳回是人工结论；机器核验（含 force）不能把它改成通过。"""
+    store, config, run = _endpoint_store(tmp_path)
+    _patch_pages(monkeypatch, full_evidence())
+    client = TestClient(create_app(store, config))
+
+    rejected = client.post(
+        "/api/source-verification",
+        json={
+            "indicator_id": "T01I1",
+            "status": "rejected",
+            "material_ids": ["Q001"],
+            "reviewer": "数学教师甲",
+            "reason": "教材切片与本指标不符，需人工复核",
+            "expected_version": 0,
+        },
     )
+    assert rejected.status_code == 200
+
+    for payload in (
+        {"run_id": run["run_id"], "indicator_id": "T01I1"},
+        {"run_id": run["run_id"], "indicator_id": "T01I1", "force": True},
+    ):
+        response = client.post("/api/source-machine-verification", json=payload)
+        assert response.status_code == 200
+        body = response.json()
+        assert body["summary"]["verified"] == 0
+        assert body["results"][0]["status"] == "skipped"
+        assert "教师已驳回" in body["results"][0]["reason"]
+
+    history = client.get("/api/source-verifications").json()["T01I1"]
+    assert len(history) == 1
+    assert history[-1]["status"] == "rejected"
 
 
 def test_teacher_signoff_rejects_machine_signature_fields(tmp_path):
@@ -267,16 +456,8 @@ def test_knowledge_link_candidates_do_not_infer_cross_topic_order_from_ambiguous
 
 
 def test_teacher_confirmation_flow_after_machine_verification(tmp_path, monkeypatch):
-    pdf_root = tmp_path / "pdfs"
-    pdf_root.mkdir()
-    (pdf_root / "B01_相关资料切片.pdf").write_bytes(b"%PDF-1.4 stub")
-    config = replace(settings, source_files_dir=pdf_root)
-    run = sample_run()
-    store = Store(tmp_path / "state", config=config)
-    store.database.create_schema_for_tests()
-    with store.uow_factory() as uow:
-        uow.runs.save(run)
-    monkeypatch.setattr(mvs, "_page_texts", lambda path: ENGLISH_PAGE)
+    store, config, run = _endpoint_store(tmp_path)
+    _patch_pages(monkeypatch, full_evidence())
     client = TestClient(create_app(store, config))
 
     confirmed = client.post("/api/source-machine-verification", json={})
@@ -316,16 +497,8 @@ def test_teacher_confirmation_flow_after_machine_verification(tmp_path, monkeypa
 
 
 def test_spot_check_records_audit_trail_on_machine_record(tmp_path, monkeypatch):
-    pdf_root = tmp_path / "pdfs"
-    pdf_root.mkdir()
-    (pdf_root / "B01_相关资料切片.pdf").write_bytes(b"%PDF-1.4 stub")
-    config = replace(settings, source_files_dir=pdf_root)
-    run = sample_run()
-    store = Store(tmp_path / "state", config=config)
-    store.database.create_schema_for_tests()
-    with store.uow_factory() as uow:
-        uow.runs.save(run)
-    monkeypatch.setattr(mvs, "_page_texts", lambda path: ENGLISH_PAGE)
+    store, config, run = _endpoint_store(tmp_path)
+    _patch_pages(monkeypatch, full_evidence())
     client = TestClient(create_app(store, config))
 
     confirmed = client.post("/api/source-machine-verification", json={})
@@ -337,7 +510,7 @@ def test_spot_check_records_audit_trail_on_machine_record(tmp_path, monkeypatch)
             "indicator_id": "T01I1",
             "reviewer": "数学教师乙",
             "verdict": "抽查通过",
-            "checked_items": ["B01_相关资料切片.pdf 第 12 页"],
+            "checked_items": [f"{SLICE} 第 12 页"],
         },
     )
     assert spot.status_code == 200
@@ -377,4 +550,4 @@ def test_spot_check_records_audit_trail_on_machine_record(tmp_path, monkeypatch)
         "/api/source-spot-check",
         json={"indicator_id": "T01I1", "reviewer": "数学教师乙", "verdict": "很好"},
     )
-    assert invalid.status_code in (400, 422)  # 无效结论被 schema 或用例拒绝
+    assert invalid.status_code == 422

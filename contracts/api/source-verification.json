@@ -33,5 +33,8 @@
   "verified_by": null,
   "confidence": null,
   "machine_evidence": [],
-  "spot_checks": []
+  "spot_checks": [],
+  "verification_version": null,
+  "reason_code": null,
+  "checks": []
 }

@@ -62,6 +62,33 @@ npm run test:e2e                             # 九页 E2E（需要 Edge 或设�
 
 Playwright 会自行启动隔离的 8876 后端与 5174 前端，并使用临时数据库。视觉验收覆盖 1920/1440/1280/768/390 五档分辨率，截图输出到 `artifacts/frontend-acceptance/`（desktop 与 mobile 各九张）。最近一次验收的命令、实测结果与尚未完成的外部验收项见 [`docs/frontend/final-acceptance-report.md`](docs/frontend/final-acceptance-report.md)。
 
+## 课程来源自动核验
+
+「课程知识 → 主题概览」顶部的 **自动核验全部指标** 是来源核验的主入口，教师不需要逐项填写课标与教材定位。
+
+```
+POST /api/source-machine-verification
+{"run_id": "<当前运行 ID>", "indicator_id": null, "force": false}
+```
+
+返回 `run_id`、`summary`（total / verified / needs_review / skipped）与逐项 `results`（状态、原因码、逐项检查、来源页码与证据片段）。旧的 `verified`、`skipped` 字段保留兼容。
+
+判定标准（四类必要证据全部成立才自动通过，全部由后端重新计算）：
+
+1. 来源文件存在且可读；
+2. 课标定位页有文本，且该页内容与观察指标相符；
+3. 教材切片中**同一页**的文本与本指标相符（逐页匹配，不跨页合并命中）；
+4. 本指标在当前运行内有题目/材料关联，且 AI 引用（如有）能逐条回查。
+
+证据不足时写入 `status=pending` 的待核验记录并附原因码，不降低标准换通过：`SOURCE_MISSING`、`SOURCE_UNREADABLE`、`TEXT_UNAVAILABLE`、`CURRICULUM_MISMATCH`、`TEXTBOOK_MISMATCH`、`REFERENCE_INVALID`、`MATERIAL_NOT_LINKED`、`SOURCE_CHANGED`。
+
+几点实现约束：
+
+- **本地文本优先**。`SourceService.get_text_pages()` 统一取页文本：文本缓存（`data/source_text_cache`，按文件 SHA-256）→ pypdf 原生文本 → 已授权 OCR 缓存（`data/source_ocr_cache`）。文字版 PDF 不再被标成 `unparsed`，也不会被送去外部 OCR。
+- **只发送真正缺文本的文件**。`GET /api/source-ocr/preview` 逐份列出「会不会发送、为什么、缺哪几页」；教师确认后 `POST /api/source-ocr` 才执行，预览指纹（含 run_id）变化时必须重新确认。现有 OCR 客户端按整份文件发送，界面不会声称只发送部分页面。
+- **课标为扫描件时不会自动通过**。赛事提供的 `课程标准_2022.pdf` 为 189 页扫描件、无原生文本，未授权 OCR 时九项指标会一致给出 `TEXT_UNAVAILABLE`，这是预期行为。
+- **运行绑定与幂等**。请求携带的 `run_id` 与当前运行不一致时拒绝写入；核验期间重新导入数据不会把旧证据写进新运行；已有未过期结论不重复写版本，`force=true` 重核验但结论未变化时也不产生新版本。
+
 ## 前端结构
 
 - `apps/web/src/layout`：全局导航和分析范围选择器（支持侧边栏收起）。

@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, type QueryClient } from '@tanstack/react-query';
 import { api } from './client';
 import type { CaseCandidate, ClassInsights, Readiness, RunData } from '../types/api';
 
@@ -14,6 +14,8 @@ export const queryKeys = {
   classInsights: (runId: string, nodeId: string) => ['class-insights', runId, nodeId] as const,
   materialCatalog: (runId: string) => ['material-catalog', runId] as const,
   sourceVerifications: (runId: string) => ['source-verifications', runId] as const,
+  sourceOCRPreview: ['source-ocr-preview'] as const,
+  aiSourceMappings: (runId: string) => ['ai-source-mappings', runId] as const,
   knowledgeCandidates: (runId: string, indicatorId: string) => ['knowledge-candidates', runId, indicatorId] as const,
   studentInsights: (runId: string, nodeId: string, studentId: string, indicatorId: string) =>
     ['student-insights', runId, nodeId, studentId, indicatorId] as const,
@@ -28,6 +30,30 @@ export const queryKeys = {
   classTeachingPlans: (runId: string, classId: string, nodeId: string) =>
     ['class-teaching-plans', runId, classId, nodeId] as const,
 };
+
+/**
+ * 自动核验会改变来源核验记录，并影响下游教学建议、发布预检等业务数据。
+ * 这里按《课程来源自动核验开发规划》5.4 的清单失效相关缓存，不整页刷新。
+ */
+export const sourceVerificationAffectedKeys = [
+  ['source-verifications'],
+  ['material-catalog'],
+  ['knowledge-candidates'],
+  ['ai-source-mappings'],
+  ['class-insights'],
+  ['student-insights'],
+  ['evidence-bundle'],
+  ['draft'],
+  ['class-teaching-plans'],
+  ['class-report'],
+  ['readiness'],
+] as const;
+
+export async function invalidateAfterSourceVerification(queryClient: QueryClient): Promise<void> {
+  await Promise.all(
+    sourceVerificationAffectedKeys.map(key => queryClient.invalidateQueries({ queryKey: key })),
+  );
+}
 
 export function useRun() {
   return useQuery({ queryKey: queryKeys.run, queryFn: () => api<RunData>('/api/run') });

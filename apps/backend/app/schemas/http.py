@@ -286,6 +286,11 @@ class SourceVerificationRequest(BaseModel):
     confidence: float | None = Field(default=None, ge=0, le=1)
     machine_evidence: list[dict[str, Any]] = Field(default_factory=list)
     spot_checks: list[dict[str, Any]] = Field(default_factory=list)
+    # 机器核验可追溯字段：核验算法版本、失败原因码、逐项检查明细。
+    # 教师签核提交时不得携带（见 Stage2Decisions.verify_source 的拒绝逻辑）。
+    verification_version: int | None = None
+    reason_code: str | None = None
+    checks: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class CaseReviewRef(BaseModel):
@@ -519,6 +524,10 @@ class MachineVerificationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     indicator_id: str | None = Field(default=None, min_length=1)
+    # 前端加载页面时的运行 ID：后端据此拒绝"页面看到旧运行、实际已换库"的写入。
+    run_id: str | None = Field(default=None, min_length=1, max_length=64)
+    # 强制重核验：已有结论也重新判定，但结论未变化时仍不产生新版本。
+    force: bool = False
 
 
 class MachineVerificationSkipped(BaseModel):
@@ -526,7 +535,33 @@ class MachineVerificationSkipped(BaseModel):
     reason: str
 
 
+class MachineVerificationResult(BaseModel):
+    """单项指标的机器核验结论（含失败原因，供界面直接解释）。"""
+
+    indicator_id: str
+    status: Literal["verified", "needs_review", "skipped"]
+    verified_by: str | None = None
+    reason_code: str | None = None
+    reason: str = ""
+    confidence: float | None = None
+    verification_version: int | None = None
+    version: int | None = None
+    checks: list[dict[str, Any]] = Field(default_factory=list)
+    evidence: dict[str, Any] = Field(default_factory=dict)
+
+
+class MachineVerificationSummary(BaseModel):
+    total: int = 0
+    verified: int = 0
+    needs_review: int = 0
+    skipped: int = 0
+
+
 class MachineVerificationResponse(BaseModel):
+    run_id: str | None = None
+    summary: MachineVerificationSummary = Field(default_factory=MachineVerificationSummary)
+    results: list[MachineVerificationResult] = Field(default_factory=list)
+    # 兼容旧调用方：保留已写入的核验记录与跳过列表。
     verified: list[SourceVerificationResponse] = Field(default_factory=list)
     skipped: list[MachineVerificationSkipped] = Field(default_factory=list)
 
@@ -554,6 +589,14 @@ class MaterialCatalogDocument(BaseModel):
     expected_file_page: int | None = None
     body_page: int | None = None
     source_kind: Literal["curriculum", "textbook"]
+    # 文件读取、文本解析、定位三件事分开表达，避免"一个状态糊所有问题"。
+    file_status: Literal["readable", "missing", "unreadable"] | None = None
+    text_status: Literal[
+        "available", "partial", "unavailable", "missing", "unreadable"
+    ] | None = None
+    locator_status: str | None = None
+    local_text_page_count: int | None = None
+    ocr_text_page_count: int | None = None
     status: Literal[
         "missing",
         "unreadable",
@@ -583,6 +626,12 @@ class IndicatorMaterialCatalog(BaseModel):
     topic_id: str
     source_status: str
     source_stale: bool = False
+    verified_by: str | None = None
+    verification_version: int | None = None
+    confidence: float | None = None
+    reason_code: str | None = None
+    reason: str = ""
+    checks: list[dict[str, Any]] = Field(default_factory=list)
     curriculum_locator: str = ""
     textbook_locator: str = ""
     documents: list[MaterialCatalogDocument] = Field(default_factory=list)

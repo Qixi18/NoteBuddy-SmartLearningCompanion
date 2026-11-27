@@ -100,9 +100,11 @@ def verify_source(payload: SourceVerificationRequest, use_cases: UseCases) -> di
 def run_machine_verification(
     payload: MachineVerificationRequest, use_cases: UseCases
 ) -> dict:
-    """机器核验层：切片文本匹配自动写入机器署名的已核验记录。"""
+    """机器核验层：多维证据（来源、课标页、教材页、题目关联）全部成立才自动通过。"""
     try:
-        return use_cases.stage2.apply_machine_verification(payload.indicator_id)
+        return use_cases.stage2.apply_machine_verification(
+            payload.indicator_id, run_id=payload.run_id, force=payload.force
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

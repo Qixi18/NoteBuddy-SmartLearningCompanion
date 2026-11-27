@@ -7,6 +7,7 @@ import { routes } from '../../../app/routes';
 import type { RunData } from '../../../types/api';
 import { api, postJson } from '../api';
 import { KnowledgeModuleHeader } from '../components/KnowledgeModuleHeader';
+import { SourceVerificationPanel } from '../components/SourceVerificationPanel';
 import { useWorkbenchScope } from '../../shared/useWorkbenchScope';
 import { isSyntheticVerification, label, str } from '../../shared/workbenchTypes';
 import type { Row } from '../../shared/workbenchTypes';
@@ -132,6 +133,8 @@ function TopicOverviewView({ run, catalog, catalogPending, catalogError, verific
   return <div className={styles.pageStack}>
     <KnowledgeModuleHeader kind="overview" search={search}/>
     <Notice>本页内容取自当前课程运行快照；核验状态反映记录状态。若定位依据为合成验收数据，会明确标出，不代表真实课标或教材已完成核验。</Notice>
+    {/* 主操作放在页面首个模块：教师进入课程知识即可一键核验来源，不必先滚动。 */}
+    <SourceVerificationPanel runId={run.run_id} objectives={run.objectives} histories={verifications} onDone={onSourcesSaved}/>
     <Panel title="主题学习要求与资源映射" icon={<Layers3 size={18}/>}>{topics.length ? <div className={styles.topicOverviewTable}><DataTable columns={[
       { key: 'order', title: '序号', render: row => <span className={styles.topicOrder}>{String(row.order)}</span> },
       { key: 'topic', title: '主题', render: row => <><strong>{String(row.topic_name)}</strong><small className={styles.secondaryCell}>{String(row.topic_id)}</small></> },

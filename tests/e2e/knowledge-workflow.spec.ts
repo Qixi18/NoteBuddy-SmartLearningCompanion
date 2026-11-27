@@ -16,6 +16,23 @@ test('topic overview lists real topics, indicators and source status', async ({ 
   await expect(page.getByText('教师来源核验').first()).toBeVisible();
 });
 
+test('auto source verification runs from the overview and explains every result', async ({ page }) => {
+  await gotoRoute(page, '/knowledge/overview', '课程知识');
+
+  const panel = page.locator('section').filter({ hasText: '课程来源自动核验' }).first();
+  await expect(panel.getByText('课程来源自动核验')).toBeVisible();
+  await expect(panel.getByRole('button', { name: /自动核验全部指标/ })).toBeVisible();
+
+  await panel.getByRole('button', { name: /自动核验全部指标/ }).click();
+
+  // 批量核验结束后必须给出真实汇总，而不是只把状态改成绿色。
+  await expect(panel.getByText(/本次执行：通过 \d+ · 待核验 \d+ · 跳过 \d+/)).toBeVisible({ timeout: 60_000 });
+  // 证据不足时展示稳定原因码，教师据此判断是缺文件、缺文本还是内容不匹配。
+  await expect(
+    panel.getByText(/SOURCE_MISSING|SOURCE_UNREADABLE|TEXT_UNAVAILABLE|CURRICULUM_MISMATCH|TEXTBOOK_MISMATCH|MATERIAL_NOT_LINKED|REFERENCE_INVALID/).first(),
+  ).toBeVisible();
+});
+
 test('knowledge structure tab keeps scope and shows indicator detail', async ({ page }) => {
   await gotoRoute(page, '/knowledge/overview', '课程知识');
   await page.getByRole('link', { name: '知识结构' }).first().click();
