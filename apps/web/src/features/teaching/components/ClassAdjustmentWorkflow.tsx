@@ -67,7 +67,7 @@ export function ClassAdjustmentWorkflow({
     <Notice>
       实施记录只属于当前班级与测验节点，与学生级教学调整相互独立。后续效果必须引用本班该测验节点的实际作答记录。
     </Notice>
-    {!planAccepted && <EmptyState title="需要先采纳当前班级方案" detail="仅采纳或教师修改后的班级方案，才能登记实施与复测记录。"/>}
+    {!planAccepted && <EmptyState compact title="需要先采纳当前班级方案" detail="仅采纳或教师修改后的班级方案，才能登记实施与复测记录。"/>}
     {planAccepted && Boolean(plan?.stale) && <Notice tone="warning">当前方案已过期，请重新生成并采纳后再登记实施记录。</Notice>}
 
     {canCreate && <div className={styles.caseForm}>
@@ -88,7 +88,7 @@ export function ClassAdjustmentWorkflow({
 
     {adjustments.isPending ? <Loading label="读取班级实施记录…"/>
       : adjustments.isError ? <ErrorBox message={(adjustments.error as Error).message}/>
-      : !adjustments.data?.length ? <EmptyState title="暂无班级实施记录" detail="采纳方案后可登记一次班级教学实施与复测。"/>
+      : !adjustments.data?.length ? <EmptyState compact title="暂无班级实施记录" detail="采纳方案后可登记一次班级教学实施与复测。"/>
       : <div className={styles.adjustmentList}>{adjustments.data.map(record => <ClassAdjustmentRecord
             key={str(record.adjustment_id)}
             record={record}

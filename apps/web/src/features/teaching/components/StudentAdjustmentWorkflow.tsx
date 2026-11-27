@@ -26,8 +26,8 @@ export function StudentAdjustmentWorkflow({ run, studentId, indicatorId, nodeId,
     <Notice>计划和实施记录按学生、观察指标与测验节点保存。后续效果必须引用后续节点的实际作答记录；没有作答时请等待补充证据。</Notice>
     {review && matchingReviewEvidence.length ? <AdjustmentPlanForm run={run} studentId={studentId} indicatorId={indicatorId} nodeId={nodeId} review={review} evidence={evidence!} matchingEvidence={matchingReviewEvidence}/> : latestReview?.status === 'accepted' || latestReview?.status === 'edited'
       ? <Notice tone="warning">已找到当前节点的教师复核，但证据包中没有匹配的作答来源，暂不能创建可追溯的教学调整计划。</Notice>
-      : <EmptyState title="需要先接受当前节点的建议" detail={latestReview ? `当前最新复核状态为「${str(latestReview.status)}」。仅接受或修改后的建议可建立教学调整记录。` : '确认一份有可追溯作答依据的学生建议后，可在这里登记教学活动与后续观察。'}/>}
-    <div className={styles.adjustmentList}>{adjustments.length ? adjustments.map(row => <AdjustmentProgressEditor key={String(row.adjustment_id)} run={run} record={row}/>) : <EmptyState title="暂无教学调整记录" detail="已接受当前学生建议后，可创建教学计划并持续记录实施结果。"/>}</div>
+      : <EmptyState compact title="需要先接受当前节点的建议" detail={latestReview ? `当前最新复核状态为「${str(latestReview.status)}」。仅接受或修改后的建议可建立教学调整记录。` : '确认一份有可追溯作答依据的学生建议后，可在这里登记教学活动与后续观察。'}/>}
+    <div className={styles.adjustmentList}>{adjustments.length ? adjustments.map(row => <AdjustmentProgressEditor key={String(row.adjustment_id)} run={run} record={row}/>) : <EmptyState compact title="暂无教学调整记录" detail="已接受当前学生建议后，可创建教学计划并持续记录实施结果。"/>}</div>
   </Panel>;
 }
 function splitLines(value: string) { return value.split(/\r?\n/).map(item => item.trim()).filter(Boolean); }

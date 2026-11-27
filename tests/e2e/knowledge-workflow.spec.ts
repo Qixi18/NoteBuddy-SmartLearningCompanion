@@ -26,6 +26,46 @@ test('knowledge structure tab keeps scope and shows indicator detail', async ({ 
   await expect(page.getByText(/主题|指标|知识/).first()).toBeVisible();
 });
 
+test('topic overview filters materials and paginates the item list', async ({ page }) => {
+  await gotoRoute(page, '/knowledge/overview', '课程知识');
+
+  const itemPanel = page.locator('section').filter({ hasText: '相关题目 / 材料列表' }).first();
+  await expect(itemPanel.getByText('第 1 / 2 页 · 共 12 项')).toBeVisible();
+  await itemPanel.getByRole('button', { name: '下一页' }).click();
+  await expect(itemPanel.getByText('第 2 / 2 页 · 共 12 项')).toBeVisible();
+  await expect(itemPanel.getByText('Q010')).toBeVisible();
+
+  await page.getByRole('combobox', { name: '筛选主题' }).selectOption('T01');
+  await expect(page.getByText('当前显示 3 项题目与材料')).toBeVisible();
+  await expect(itemPanel.getByText('Q001')).toBeVisible();
+  await expect(itemPanel.getByText('Q010')).toHaveCount(0);
+
+  await page.getByRole('combobox', { name: '筛选观察指标' }).selectOption('I011');
+  await expect(page.getByText('当前显示 1 项题目与材料')).toBeVisible();
+  await expect(itemPanel.getByText('Q001')).toBeVisible();
+  await expect(itemPanel.getByText('Q002')).toHaveCount(0);
+});
+
+test('item relations pagination keeps detail and source linked to the selected item', async ({ page }) => {
+  await gotoRoute(page, '/knowledge/items', '课程知识');
+
+  const listPanel = page.locator('section').filter({ hasText: '题目关联清单' }).first();
+  await expect(listPanel.getByText('第 1 / 2 页 · 共 12 项')).toBeVisible();
+  await listPanel.getByRole('button', { name: '下一页' }).click();
+  await expect(listPanel.getByText('第 2 / 2 页 · 共 12 项')).toBeVisible();
+  const detailPanel = page.locator('section').filter({ hasText: '当前题目详情' }).first();
+  await listPanel.getByRole('button', { name: /Q010/ }).click();
+  await expect(page.getByText('当前题目详情')).toBeVisible();
+  await expect(detailPanel.getByRole('heading', { name: 'Q010', level: 3 })).toBeVisible();
+  await expect(page.getByText('关联课程来源与材料')).toBeVisible();
+
+  await page.getByRole('combobox', { name: '筛选观察指标' }).selectOption('I021');
+  await expect(page.getByText('2 项题目与材料 · 9 项关联指标')).toBeVisible();
+  await expect(listPanel.getByRole('button', { name: /Q004/ })).toBeVisible();
+  await listPanel.getByRole('button', { name: /Q004/ }).click();
+  await expect(detailPanel.getByRole('heading', { name: 'Q004', level: 3 })).toBeVisible();
+});
+
 test('item relations search and detail keep the item scope', async ({ page }) => {
   await gotoRoute(page, '/knowledge/items', '课程知识');
 

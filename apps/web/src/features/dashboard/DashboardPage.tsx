@@ -80,13 +80,15 @@ export function DashboardPage() {
   const quality = run?.quality;
   const chartBar = {
     animationDuration: 500,
-    grid: { left: 112, right: 28, top: 12, bottom: 30 },
-    xAxis: { type: 'value', min: 0, max: 1, axisLabel: { color: '#849188', formatter: (v: number) => `${Math.round(v * 100)}%` }, splitLine: { lineStyle: { color: '#edf1ed' } } },
-    yAxis: { type: 'category', data: ratios.map(item => item.label).slice(0, 6).reverse(), axisLabel: { color: '#52645a', width: 100, overflow: 'truncate' }, axisLine: { show: false }, axisTick: { show: false } },
-    series: [{ type: 'bar', data: ratios.slice(0, 6).map(item => item.ratio).reverse(), barWidth: 16, showBackground: true, backgroundStyle: { color: '#f0f4f0', borderRadius: 9 }, itemStyle: { color: '#13864a', borderRadius: [0, 8, 8, 0] }, label: { show: true, position: 'right', formatter: (p: { value: number | null }) => p.value == null ? '—' : `${(p.value * 100).toFixed(1)}%`, color: '#24352e', fontWeight: 700 } }],
-    tooltip: { trigger: 'axis', valueFormatter: (value: number | null) => pct(value) },
+    textStyle: { fontFamily: 'Inter, "Microsoft YaHei", "PingFang SC", sans-serif' },
+    grid: { left: 172, right: 36, top: 18, bottom: 38 },
+    xAxis: { type: 'value', min: 0, max: 1, axisLabel: { color: '#849188', fontSize: 12, hideOverlap: true, formatter: (v: number) => `${Math.round(v * 100)}%` }, splitLine: { lineStyle: { color: '#edf1ed' } } },
+    yAxis: { type: 'category', data: ratios.map(item => item.label).slice(0, 6).reverse(), axisLabel: { color: '#52645a', width: 150, overflow: 'break', lineHeight: 18, fontSize: 13 }, axisLine: { show: false }, axisTick: { show: false } },
+    series: [{ type: 'bar', data: ratios.slice(0, 6).map(item => item.ratio).reverse(), barWidth: 18, showBackground: true, backgroundStyle: { color: '#f0f4f0', borderRadius: 9 }, itemStyle: { color: '#13864a', borderRadius: [0, 8, 8, 0] }, label: { show: true, position: 'right', fontSize: 13, formatter: (p: { value: number | null }) => p.value == null ? '—' : `${(p.value * 100).toFixed(1)}%`, color: '#24352e', fontWeight: 700 } }],
+    tooltip: { trigger: 'axis', textStyle: { fontSize: 13 }, valueFormatter: (value: number | null) => pct(value) },
   };
   const distribution = {
+    animation: false,
     tooltip: { trigger: 'item', formatter: '{b}: {c} 人（{d}%）' },
     color: ['#11834a', '#68c56b', '#bce9b2', '#dfefdc'],
     series: [{ type: 'pie', radius: ['56%', '78%'], center: ['50%', '50%'], avoidLabelOverlap: true, itemStyle: { borderColor: '#fff', borderWidth: 4 }, label: { show: false }, data: (insights.data?.classes ?? []).map(item => ({ name: item.class_id, value: item.student_count })) }],
@@ -122,36 +124,36 @@ export function DashboardPage() {
     <div className={styles.metrics}>
       <Metric label="班级学生" value={classStats?.student_count ?? classStudents.length} hint={`当前班级 ${classId || '未选择'}`} icon={<Users size={27}/>}/>
       <Metric label="当前班级有效评分" value={classStats?.scored_record_count ?? 0} hint={`本节点 ${classStats?.raw_record_count ?? 0} 条原始作答`} icon={<ClipboardCheck size={27}/>}/>
-      <Metric label="当前优先指标" value={priority[0]?.label ?? '暂无可比数据'} hint={priority[0] ? `全题集得分率 ${pct(priority[0].ratio)}` : '当前范围没有有效评分'} icon={<Target size={27}/>}/>
+      <Metric label="当前优先指标" value={priority[0]?.label ?? '暂无可比数据'} hint={priority[0] ? `全题集得分率 ${pct(priority[0].ratio)}` : '当前范围没有有效评分'} icon={<Target size={27}/>} variant="text"/>
       <Metric label="典型学生候选" value={classCases.length} hint="按案例证据类型列出，不代表能力等级" icon={<AlertTriangle size={27}/>} tone="amber"/>
     </div>
 
     {quality && quality.raw_rows > 0 && <Notice tone={quality.findings.length ? 'warning' : 'info'}>顶部评分统计仅覆盖当前班级与测验节点；下方数据质量面板覆盖当前运行全部班级和节点。未评分、异常或缺失记录不作为零分。</Notice>}
     <div className={styles.contentGrid}>
       <Panel title="主题表现概览" icon={<Activity size={19}/>} action={<span className={styles.panelMeta}>基于当前测验 · 全题集得分率</span>} className={styles.performancePanel}>
-        {insights.isFetching ? <Loading label="正在汇总当前班级表现…"/> : ratios.length ? <ReactECharts option={chartBar} notMerge lazyUpdate style={{ height: 245, width: '100%' }}/> : <EmptyState title="暂无可展示的指标表现" detail="当前测验没有可用的指标评分记录。"/>}
+        {insights.isFetching ? <Loading label="正在汇总当前班级表现…"/> : ratios.length ? <ReactECharts option={chartBar} notMerge lazyUpdate style={{ height: 340, width: '100%' }}/> : <EmptyState title="暂无可展示的指标表现" detail="当前测验没有可用的指标评分记录。"/>}
         {ratios.some(item => !item.comparable) && <p className={styles.chartFootnote}>部分指标没有共同题目，班级间不可比；图中仅展示当前班级全题集口径。</p>}
       </Panel>
 
-      <Panel title="本周优先处理事项" icon={<ClipboardCheck size={19}/>} action={<Link to={{ pathname: routes.classDiagnosis, search: search }}>查看诊断 <ArrowRight size={14}/></Link>}>
+      <Panel title="本周优先处理事项" icon={<ClipboardCheck size={19}/>} action={<Link to={{ pathname: routes.classDiagnosis, search: search }}>查看诊断 <ArrowRight size={14}/></Link>} className={styles.priorityPanel}>
         <div className={styles.priorityList}>{priority.length ? priority.map((item, index) => <div className={styles.priorityItem} key={item.indicator}><span className={`${styles.priorityNumber} ${index === 0 ? styles.priorityHigh : ''}`}>{index + 1}</span><div><strong>{item.label}</strong><small>当前班级全题集得分率 {pct(item.ratio)}{item.comparable ? ` · 共同题目 ${pct(item.common)}` : ' · 班级间不可比较'}</small></div><span className={styles.priorityTag}>{index === 0 ? '优先关注' : '持续观察'}</span></div>) : <EmptyState title="暂无优先项" detail="有效评分记录出现后，将按观察指标汇总表现。"/>}</div>
       </Panel>
 
-      <Panel title="AI 教学助手" icon={<Bot size={19}/>} className={styles.assistantPanel}>
+      <Panel title="典型学生候选" icon={<Users size={19}/>} action={<Link to={{ pathname: routes.classDiagnosis, search: search }}>全部候选 <ArrowRight size={14}/></Link>} className={styles.candidatePanel}>
+        <div className={styles.studentList}>{classCases.length ? classCases.slice(0, 4).map(item => <div className={styles.studentRow} key={`${item.class_id}-${item.student_id}`}><span className={styles.studentCode}>{item.student_id}</span><div><strong>{item.type}</strong><small>{item.reason || '可查看该案例的关联作答证据。'}</small></div><Link aria-label={`查看学生 ${item.student_id}`} to={{ pathname: routes.studentDiagnosis, search: applyScope(params, { student: item.student_id, class: item.class_id }).toString() }}><ArrowRight size={16}/></Link></div>) : <EmptyState title={caseOrderingUnclear ? '案例候选暂不可用' : '当前班级暂无案例候选'} detail={caseOrderingUnclear ? '测验日期缺失、无效或重复，无法确定最新节点。核对日期并重新导入后再查看候选。' : '候选案例由后端按可用证据生成；没有候选不代表表现稳定。'}/>}</div>
+      </Panel>
+
+      <Panel title="班级学生分布" icon={<Layers3 size={19}/>} action={<span className={styles.panelMeta}>按导入数据中的班级编号</span>} className={styles.distributionPanel}>
+        <div className={styles.distribution}><div className={styles.donut}><ReactECharts option={distribution} notMerge lazyUpdate style={{ height: 190, width: 190 }}/><div><strong>{run.students.length}</strong><small>名学生</small></div></div><div className={styles.classLegend}>{(insights.data?.classes ?? []).map((item, index) => <div key={item.class_id}><i style={{ background: ['#11834a','#68c56b','#bce9b2','#dfefdc'][index % 4] }}/><span>{item.class_id}</span><strong>{item.student_count} 人</strong></div>)}</div></div>
+      </Panel>
+
+      <Panel title="AI 教学助手" icon={<Bot size={19}/>} className={`${styles.assistantPanel} ${readiness.data?.model?.configured ? '' : styles.assistantPanelCompact}`}>
         <div className={styles.assistantMessage}><span className={styles.assistantDot}/><p>{readiness.data?.model?.configured ? '模型服务已就绪。生成分析前会展示数据范围并请求确认。' : '本机未配置模型服务，可先使用已有规则分析和教学建议。'}</p></div>
         <small className={styles.assistantFoot}>AI 外部传输需要教师明确确认。生成结果需结合证据核对。</small>
         <Link to={{ pathname: routes.classDiagnosis, search: search }} className={styles.assistantLink}><Lightbulb size={16}/>查看诊断依据<ArrowRight size={15}/></Link>
       </Panel>
 
-      <Panel title="典型学生候选" icon={<Users size={19}/>} action={<Link to={{ pathname: routes.classDiagnosis, search: search }}>全部候选 <ArrowRight size={14}/></Link>}>
-        <div className={styles.studentList}>{classCases.length ? classCases.slice(0, 4).map(item => <div className={styles.studentRow} key={`${item.class_id}-${item.student_id}`}><span className={styles.studentCode}>{item.student_id}</span><div><strong>{item.type}</strong><small>{item.reason || '可查看该案例的关联作答证据。'}</small></div><Link aria-label={`查看学生 ${item.student_id}`} to={{ pathname: routes.studentDiagnosis, search: applyScope(params, { student: item.student_id, class: item.class_id }).toString() }}><ArrowRight size={16}/></Link></div>) : <EmptyState title={caseOrderingUnclear ? '案例候选暂不可用' : '当前班级暂无案例候选'} detail={caseOrderingUnclear ? '测验日期缺失、无效或重复，无法确定最新节点。核对日期并重新导入后再查看候选。' : '候选案例由后端按可用证据生成；没有候选不代表表现稳定。'}/>}</div>
-      </Panel>
-
-      <Panel title="班级学生分布" icon={<Layers3 size={19}/>} action={<span className={styles.panelMeta}>按导入数据中的班级编号</span>}>
-        <div className={styles.distribution}><div className={styles.donut}><ReactECharts option={distribution} notMerge lazyUpdate style={{ height: 180, width: 180 }}/><div><strong>{run.students.length}</strong><small>名学生</small></div></div><div className={styles.classLegend}>{(insights.data?.classes ?? []).map((item, index) => <div key={item.class_id}><i style={{ background: ['#11834a','#68c56b','#bce9b2','#dfefdc'][index % 4] }}/><span>{item.class_id}</span><strong>{item.student_count} 人</strong></div>)}</div></div>
-      </Panel>
-
-      <Panel title="快捷入口" icon={<BookOpen size={19}/>}>
+      <Panel title="快捷入口" icon={<BookOpen size={19}/>} className={styles.quickLinksPanel}>
         <div className={styles.quickLinks}><Link to={{ pathname: routes.topicOverview, search: search }}><span><BookOpen size={19}/></span><strong>课程知识</strong><ArrowRight size={15}/></Link><Link to={{ pathname: routes.classDiagnosis, search: search }}><span><Activity size={19}/></span><strong>班级诊断</strong><ArrowRight size={15}/></Link><Link to={{ pathname: routes.studentDiagnosis, search: search }}><span><Users size={19}/></span><strong>学生诊断</strong><ArrowRight size={15}/></Link><Link to={{ pathname: routes.studentTeaching, search: search }}><span><Lightbulb size={19}/></span><strong>教学建议</strong><ArrowRight size={15}/></Link><button onClick={() => inputRef.current?.click()}><span><FileUp size={19}/></span><strong>导入新数据</strong><ArrowRight size={15}/></button></div>
       </Panel>
       {quality && quality.raw_rows > 0 && <QualityPanel quality={quality}/>}

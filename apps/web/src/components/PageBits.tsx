@@ -16,22 +16,22 @@ export function Notice({ children, tone = 'info' }: { children: ReactNode; tone?
   return <div className={`${styles.notice} ${styles[tone]}`} role={tone === 'error' ? 'alert' : 'status'}><Icon size={19}/><span>{children}</span></div>;
 }
 
-export function Loading({ label = '正在读取当前运行数据…' }: { label?: string }) {
-  return <div className={styles.loading}><RefreshCw size={18} className={styles.spin}/>{label}</div>;
+export function Loading({ label = '正在读取当前运行数据…', compact = false }: { label?: string; compact?: boolean }) {
+  return <div className={`${styles.loading} ${compact ? styles.compact : ''}`}><RefreshCw size={18} className={styles.spin}/>{label}</div>;
 }
 
 export function ErrorBox({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return <div className={styles.error} role="alert"><AlertCircle size={20}/><span>{message}</span>{onRetry && <button onClick={onRetry}>重试 <ArrowRight size={15}/></button>}</div>;
 }
 
-export function EmptyState({ title, detail, action }: { title: string; detail: string; action?: ReactNode }) {
-  return <div className={styles.empty}><div className={styles.emptyIcon}><FileQuestion size={23}/></div><strong>{title}</strong><p>{detail}</p>{action}</div>;
+export function EmptyState({ title, detail, action, compact = false }: { title: string; detail: string; action?: ReactNode; compact?: boolean }) {
+  return <div className={`${styles.empty} ${compact ? styles.compact : ''}`}><div className={styles.emptyIcon}><FileQuestion size={compact ? 19 : 23}/></div><strong>{title}</strong><p>{detail}</p>{action}</div>;
 }
 
-export function Metric({ label, value, hint, icon, tone = 'green' }: {
-  label: string; value: string | number; hint?: string; icon: ReactNode; tone?: 'green' | 'amber' | 'purple';
+export function Metric({ label, value, hint, icon, tone = 'green', variant = 'number' }: {
+  label: string; value: string | number; hint?: string; icon: ReactNode; tone?: 'green' | 'amber' | 'purple'; variant?: 'number' | 'text';
 }) {
-  return <article className={`${styles.metric} ${styles[tone]}`}><div className={styles.metricIcon}>{icon}</div><div className={styles.metricText}><span>{label}</span><strong>{value}</strong>{hint && <small>{hint}</small>}</div></article>;
+  return <article className={`${styles.metric} ${styles[tone]}`}><div className={styles.metricIcon}>{icon}</div><div className={styles.metricText}><span>{label}</span><strong className={variant === 'text' ? styles.metricTextValue : undefined}>{value}</strong>{hint && <small>{hint}</small>}</div></article>;
 }
 
 export function DataTable({ columns, rows, onRowClick }: {

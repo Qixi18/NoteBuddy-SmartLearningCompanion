@@ -13,13 +13,14 @@ export function ClassDiagnosis({ insights, cases, caseOrderingUnclear, classId, 
   if (!insights) return <Loading label="正在分析班级比较与共性问题…"/>;
   const selected = insights.classes.find(item => item.class_id === classId);
   const graph = {
+    animation: false,
     color: ['#16864a', '#80cb6d', '#b5e9a7'],
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, valueFormatter: (value: number | null) => percent(value) },
-    legend: { bottom: 0, textStyle: { color: '#77847a', fontSize: 10 } },
-    grid: { left: 82, right: 12, top: 14, bottom: 38 },
-    xAxis: { type: 'value', min: 0, max: 1, axisLabel: { formatter: (value: number) => `${Math.round(value * 100)}%`, color: '#87928a', fontSize: 9, hideOverlap: true }, splitLine: { lineStyle: { color: '#edf1ed' } } },
-    yAxis: { type: 'category', data: insights.comparisons.map(item => objectiveName(item.indicator_id)).slice(0, 8).reverse(), axisLabel: { color: '#53645a', width: 90, overflow: 'truncate' } },
-    series: insights.classes.map(summary => ({ name: summary.class_id, type: 'bar', data: insights.comparisons.map(item => item.classes.find(row => row.class_id === summary.class_id)?.common_ratio ?? null).slice(0, 8).reverse(), barMaxWidth: 14, itemStyle: { borderRadius: [0, 6, 6, 0] }, connectNulls: false })),
+    legend: { bottom: 0, textStyle: { color: '#77847a', fontSize: 13 } },
+    grid: { left: 168, right: 24, top: 18, bottom: 44 },
+    xAxis: { type: 'value', min: 0, max: 1, axisLabel: { formatter: (value: number) => `${Math.round(value * 100)}%`, color: '#87928a', fontSize: 12, hideOverlap: true }, splitLine: { lineStyle: { color: '#edf1ed' } } },
+    yAxis: { type: 'category', data: insights.comparisons.map(item => objectiveName(item.indicator_id)).slice(0, 8).reverse(), axisLabel: { color: '#53645a', width: 150, overflow: 'break', lineHeight: 18, fontSize: 13 } },
+    series: insights.classes.map(summary => ({ name: summary.class_id, type: 'bar', data: insights.comparisons.map(item => item.classes.find(row => row.class_id === summary.class_id)?.common_ratio ?? null).slice(0, 8).reverse(), barMaxWidth: 18, itemStyle: { borderRadius: [0, 6, 6, 0] }, connectNulls: false })),
   };
   const classCases = cases.filter(item => item.class_id === classId);
   const heatmapLegend = [{ label: '≥ 90%', tone: styles.heatmapHigh }, { label: '80–89%', tone: styles.heatmapGood }, { label: '70–79%', tone: styles.heatmapMid }, { label: '60–69%', tone: styles.heatmapLow }, { label: '< 60%', tone: styles.heatmapWeak }];
@@ -34,7 +35,7 @@ export function ClassDiagnosis({ insights, cases, caseOrderingUnclear, classId, 
     <div className={styles.classDiagnosisGrid}>
     <Panel title="班级共同题目得分率对比" icon={<Activity size={18}/>} className={styles.classChartPanel}>
       <div className={styles.classSummaryBadges}><span><Users size={14}/>{insights.classes.length} 个班级</span><span><FileSearch size={14}/>{selected?.scored_record_count ?? 0} 条当前班有效评分</span></div>
-      {insights.comparisons.some(item => item.status === 'available') ? <ReactECharts option={graph} notMerge lazyUpdate style={{ height: 270, width: '100%' }}/> : <EmptyState title="当前测验没有共同题目" detail="不能比较班级表现。页面保留不可比较状态，不绘制排名或零值。"/>}
+      {insights.comparisons.some(item => item.status === 'available') ? <ReactECharts option={graph} notMerge lazyUpdate style={{ height: 340, width: '100%' }}/> : <EmptyState title="当前测验没有共同题目" detail="不能比较班级表现。页面保留不可比较状态，不绘制排名或零值。"/>}
       <p className={styles.heatmapNote}>仅比较各班共同作答题目；完整共同题目范围与覆盖数见下方热力图。</p>
     </Panel>
     <Panel title="班级共性问题" icon={<Target size={18}/>} className={styles.classIssuesPanel}>
@@ -47,7 +48,7 @@ export function ClassDiagnosis({ insights, cases, caseOrderingUnclear, classId, 
     </Panel>
     </div>
     <Panel title="共同题目指标比较" icon={<Target size={18}/>} action={<span className={styles.muted}>仅绘制可比口径</span>}>
-      <DataTable columns={[{ key: 'indicator_id', title: '观察指标', render: row => `${objectiveName(String(row.indicator_id))} (${String(row.indicator_id)})` }, { key: 'common_material_ids', title: '共同题目' }, ...insights.classes.map(summary => ({ key: summary.class_id, title: summary.class_id, render: (row: Row) => { const comp = insights.comparisons.find(item => item.indicator_id === row.indicator_id); const val = comp?.classes.find(item => item.class_id === summary.class_id); return comp?.status === 'available' ? `${percent(val?.common_ratio ?? null)} · ${val?.observed_student_count ?? 0} 人` : '不可比较'; } }))]} rows={insights.comparisons.map(item => ({ ...item }))}/>
+      <div className={styles.classComparisonTable}><DataTable columns={[{ key: 'indicator_id', title: '观察指标', render: row => `${objectiveName(String(row.indicator_id))} (${String(row.indicator_id)})` }, { key: 'common_material_ids', title: '共同题目' }, ...insights.classes.map(summary => ({ key: summary.class_id, title: summary.class_id, render: (row: Row) => { const comp = insights.comparisons.find(item => item.indicator_id === row.indicator_id); const val = comp?.classes.find(item => item.class_id === summary.class_id); return comp?.status === 'available' ? `${percent(val?.common_ratio ?? null)} · ${val?.observed_student_count ?? 0} 人` : '不可比较'; } }))]} rows={insights.comparisons.map(item => ({ ...item }))}/></div>
     </Panel>
     <Panel title="观察指标得分热力图" icon={<Layers3 size={18}/>} action={<div className={styles.heatmapLegend}>{heatmapLegend.map(item => <span key={item.label}><i className={item.tone}/>{item.label}</span>)}</div>}>
       <p className={styles.heatmapNote}>仅按各班共同题目计算；不可比单元格不填色，也不以缺失记录补零。</p>

@@ -18,6 +18,7 @@ export function ReleasePanel({ runId, nodeId, students }: { runId: string; nodeI
     const latest = histories.data?.[studentId]?.at(-1);
     return latest?.status === 'confirmed' && latest.run_id === runId;
   });
+  const hasConfirmedCases = confirmedStudents.length > 0;
   const preflight = useMutation({
     mutationFn: (input: { ids: string[]; reviewer: string; contentReviewed: boolean }) => {
       const query = new URLSearchParams({ node: nodeId, reviewer: input.reviewer, content_reviewed: String(input.contentReviewed) });
@@ -54,8 +55,8 @@ export function ReleasePanel({ runId, nodeId, students }: { runId: string; nodeI
   };
   return <Panel title="赛事发布预检与材料导出" icon={<ClipboardCheck size={19}/>} className={styles.releasePanel}>
     <p className={styles.exportHint}>从当前运行中选择 3 名已确认案例的学生。预检会重算教师复核、来源签核和案例报告；报告内容经人工确认后才可导出正式材料包。</p>
-    {histories.isPending ? <Loading label="读取已确认案例…"/> : histories.isError ? <ErrorBox message={(histories.error as Error).message}/> : confirmedStudents.length ? <div className={styles.exportStudents}>{confirmedStudents.map(studentId => <label key={studentId}><input type="checkbox" checked={selected.includes(studentId)} disabled={!selected.includes(studentId) && selected.length >= 3} onChange={() => toggle(studentId)}/><span>{studentId}</span></label>)}</div> : <EmptyState title="尚无已确认案例" detail="请在学生教学建议页完成教师复核和案例确认后，再进行赛事发布预检。"/>}
-    <div className={styles.releaseFields}><label>内容负责人<input value={reviewer} onChange={event => changeReviewer(event.target.value)} maxLength={200} placeholder="填写人工审阅人姓名"/></label><label className={styles.releaseConsent}><input type="checkbox" checked={contentReviewed} disabled={!preflightMatchesSelection} onChange={event => { setContentReviewed(event.target.checked); setPreparedKey(''); }}/><span>先查看下方当前案例与班级报告，再完成内容重点风险人工复核。更改案例或姓名后需重新预检。</span></label></div>
+    {histories.isPending ? <Loading label="读取已确认案例…" compact/> : histories.isError ? <ErrorBox message={(histories.error as Error).message}/> : confirmedStudents.length ? <div className={styles.exportStudents}>{confirmedStudents.map(studentId => <label key={studentId}><input type="checkbox" checked={selected.includes(studentId)} disabled={!selected.includes(studentId) && selected.length >= 3} onChange={() => toggle(studentId)}/><span>{studentId}</span></label>)}</div> : <EmptyState compact title="尚无已确认案例" detail="请在学生教学建议页完成教师复核和案例确认后，再进行赛事发布预检。"/>}
+    {hasConfirmedCases && <div className={styles.releaseFields}><label>内容负责人<input value={reviewer} onChange={event => changeReviewer(event.target.value)} maxLength={200} placeholder="填写人工审阅人姓名"/></label><label className={styles.releaseConsent}><input type="checkbox" checked={contentReviewed} disabled={!preflightMatchesSelection} onChange={event => { setContentReviewed(event.target.checked); setPreparedKey(''); }}/><span>先查看下方当前案例与班级报告，再完成内容重点风险人工复核。更改案例或姓名后需重新预检。</span></label></div>}
     <div className={styles.exportActions}><span>已选 {selected.length} / 3 · 节点 {nodeId}</span><button className={styles.secondaryButton} disabled={selected.length !== 3 || preflight.isPending || !reviewer.trim()} onClick={() => { setPreparedKey(''); setDownloadError(''); preflight.mutate({ ids: selected, reviewer: reviewer.trim(), contentReviewed }); }}><ClipboardCheck size={15}/>{preflight.isPending ? '正在预检…' : contentReviewed ? '按人工复核状态更新预检' : '运行预检 / 查看报告'}</button><button className={styles.primaryButton} disabled={!canExport} onClick={() => void download()}><Download size={15}/>导出赛事材料</button></div>
     {preflight.isSuccess && !preflightMatchesSelection && <Notice>选择或负责人已变化。请重新预检以查看当前范围的报告。</Notice>}
     {preflight.isSuccess && preflightMatchesSelection && <>

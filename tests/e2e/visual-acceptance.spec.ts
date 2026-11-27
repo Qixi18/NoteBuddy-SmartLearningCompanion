@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test } from '@playwright/test';
 import { allRoutes, ensureDemoRun, gotoRoute } from './fixtures/demoContext';
@@ -36,6 +36,56 @@ test.beforeAll(async ({ request }) => {
   mkdirSync(MOBILE, { recursive: true });
 });
 
+test('css keeps a readable font-size floor', async () => {
+  const files = [
+    'apps/web/src/styles/tokens.css',
+    'apps/web/src/styles/global.css',
+    'apps/web/src/layout/AppLayout.module.css',
+    'apps/web/src/components/PageBits.module.css',
+    'apps/web/src/features/dashboard/DashboardPage.module.css',
+    'apps/web/src/features/shared/WorkbenchPages.module.css',
+  ];
+  const offenders: string[] = [];
+  for (const file of files) {
+    const css = readFileSync(path.resolve(file), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    for (const match of css.matchAll(/font-size\s*:\s*(\d+(?:\.\d+)?)px/g)) {
+      const size = Number(match[1]);
+      if (size < 12) offenders.push(`${file}: ${size}px`);
+    }
+  }
+  expect(offenders).toEqual([]);
+});
+
+async function auditTypography(page: import('@playwright/test').Page) {
+  return page.evaluate(() => {
+    const visible = (element: Element) => {
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0' && rect.width > 0 && rect.height > 0;
+    };
+    const textElements = [...document.querySelectorAll('main *')].filter(element => element.children.length === 0 && (element.textContent ?? '').trim().length > 0 && visible(element));
+    const small = textElements
+      .map(element => ({ text: (element.textContent ?? '').trim().slice(0, 60), size: parseFloat(getComputedStyle(element).fontSize) }))
+      .filter(item => item.size < 12);
+    const clippedHeadings = [...document.querySelectorAll('main h1, main h2, main h3')].filter(element => visible(element) && element.scrollWidth > element.clientWidth + 2).map(element => (element.textContent ?? '').trim().slice(0, 80));
+    const clippedCritical = [...document.querySelectorAll('main [class*="metricText"] strong, main [class*="priorityItem"] strong')].filter(element => visible(element) && getComputedStyle(element).textOverflow === 'ellipsis' && element.scrollWidth > element.clientWidth + 2).map(element => (element.textContent ?? '').trim().slice(0, 80));
+    const readingSelectors = [
+      'main [class*="studentAnswerText"] p',
+      'main [class*="evidenceItemPrompt"] h2',
+      'main [class*="itemRelationPromptBlock"] p',
+      'main [class*="draftFields"] p',
+      'main [class*="reviewPlanForm"] textarea',
+      'main [class*="caseForm"] textarea',
+      'main [class*="answerCols"] p',
+      'main [class*="responseBody"]',
+      'main [class*="claimHeading"] b',
+    ];
+    const lowReading = readingSelectors.flatMap(selector => [...document.querySelectorAll(selector)].filter(visible).map(element => ({ selector, size: parseFloat(getComputedStyle(element).fontSize) }))).filter(item => item.size < 15);
+    const lowControls = [...document.querySelectorAll('main button, main select, main input:not([type="checkbox"]), main textarea')].filter(visible).map(element => ({ tag: element.tagName, text: (element.textContent ?? '').trim().slice(0, 40), size: parseFloat(getComputedStyle(element).fontSize) })).filter(item => item.size < 14);
+    return { small, clippedHeadings, clippedCritical, lowReading, lowControls };
+  });
+}
+
 test('desktop acceptance: nine pages render with real data and saved screenshots', async ({ page }) => {
   test.setTimeout(240_000);
   const errors: string[] = [];
@@ -50,6 +100,12 @@ test('desktop acceptance: nine pages render with real data and saved screenshots
       path: path.join(DESKTOP, `${String(index + 1).padStart(2, '0')}-${slug(route.path)}.png`),
       fullPage: true,
     });
+    const audit = await auditTypography(page);
+    expect(audit.small, `${route.path} 存在低于 12px 的可见文字`).toEqual([]);
+    expect(audit.clippedHeadings, `${route.path} 标题被横向截断`).toEqual([]);
+    expect(audit.clippedCritical, `${route.path} 核心指标名称被截断`).toEqual([]);
+    expect(audit.lowReading, `${route.path} 主要阅读内容低于 15px`).toEqual([]);
+    expect(audit.lowControls, `${route.path} 按钮/筛选器/表单低于 14px`).toEqual([]);
   }
   expect(errors).toEqual([]);
 });

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
   Activity, Bell, BookOpen, ChevronDown, CircleUserRound, ClipboardList, GraduationCap,
-  House, Lightbulb, PanelLeftClose, PanelLeftOpen,
+  House, Lightbulb, Menu, PanelLeftClose, PanelLeftOpen, X,
 } from 'lucide-react';
 import { useRun } from '../api/queries';
 import { pageTitles, routes } from '../app/routes';
@@ -29,15 +29,47 @@ function initialCollapsed() {
   try { return window.localStorage.getItem(COLLAPSE_KEY) === '1'; } catch { return false; }
 }
 
+function NavItems({ pathname, search, collapsed = false, onNavigate }: { pathname: string; search: string; collapsed?: boolean; onNavigate?: () => void }) {
+  return <>
+    {navGroups.map(group => {
+      const Icon = group.icon;
+      const active = pathname === group.path || group.children?.some(child => child.path === pathname);
+      return <div key={group.label} className={styles.navGroup}>
+        <NavLink onClick={onNavigate} aria-label={group.label} title={collapsed ? group.label : undefined} to={{ pathname: group.path, search }} className={`${styles.navItem} ${active ? styles.active : ''}`}>
+          <Icon size={20}/><span>{group.label}</span>{group.children && <ChevronDown className={styles.navChevron} size={15}/>}
+        </NavLink>
+        {group.children && active && <div className={styles.subNav}>{group.children.map(child =>
+          <NavLink key={child.path} onClick={onNavigate} to={{ pathname: child.path, search }} className={({ isActive }) => `${styles.subNavItem} ${isActive ? styles.subActive : ''}`}>{child.label}</NavLink>,
+        )}</div>}
+      </div>;
+    })}
+  </>;
+}
+
 export function AppLayout() {
   const { data: run } = useRun();
   const location = useLocation();
   const { scope, search, classes, nodes, setClass, setNode } = useWorkbenchScope();
   const [collapsed, setCollapsed] = useState(initialCollapsed);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
     try { window.localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0'); } catch { /* 本地存储不可用时仅忽略 */ }
   }, [collapsed]);
+
+  useEffect(() => { setMobileNavOpen(false); }, [location.pathname]);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') setMobileNavOpen(false); };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [mobileNavOpen]);
 
   const page = pageTitles[location.pathname]
     ?? (location.pathname.startsWith(`${routes.itemEvidence}/`) ? pageTitles[routes.itemEvidence] : pageTitles[routes.dashboard]);
@@ -56,18 +88,7 @@ export function AppLayout() {
       </NavLink>
       <div className={styles.sideCaption}>教师教学空间</div>
       <nav className={styles.nav} aria-label="主导航">
-        {navGroups.map(group => {
-          const Icon = group.icon;
-          const active = location.pathname === group.path || group.children?.some(child => child.path === location.pathname);
-          return <div key={group.label} className={styles.navGroup}>
-            <NavLink aria-label={group.label} title={collapsed ? group.label : undefined} to={{ pathname: group.path, search }} className={`${styles.navItem} ${active ? styles.active : ''}`}>
-              <Icon size={20}/><span>{group.label}</span>{group.children && <ChevronDown className={styles.navChevron} size={15}/>}
-            </NavLink>
-            {group.children && active && <div className={styles.subNav}>{group.children.map(child =>
-              <NavLink key={child.path} to={{ pathname: child.path, search }} className={({ isActive }) => `${styles.subNavItem} ${isActive ? styles.subActive : ''}`}>{child.label}</NavLink>,
-            )}</div>}
-          </div>;
-        })}
+        <NavItems pathname={location.pathname} search={search} collapsed={collapsed}/>
       </nav>
       <div className={styles.sideFooter}>
         <span className={styles.avatar} aria-hidden="true">李</span>
@@ -85,8 +106,26 @@ export function AppLayout() {
       </div>
     </aside>
 
+    {mobileNavOpen && <button type="button" className={styles.mobileScrim} aria-label="关闭导航" onClick={() => setMobileNavOpen(false)}/>}
+    <aside className={`${styles.mobileDrawer} ${mobileNavOpen ? styles.mobileDrawerOpen : ''}`} aria-label="移动导航" aria-hidden={!mobileNavOpen} inert={!mobileNavOpen}>
+      <div className={styles.mobileDrawerHeader}>
+        <span className={styles.brandIcon}><BookOpen size={24}/></span>
+        <strong>智慧学伴</strong>
+        <button type="button" className={styles.mobileDrawerClose} aria-label="关闭导航" onClick={() => setMobileNavOpen(false)}><X size={20}/></button>
+      </div>
+      <div className={styles.sideCaption}>教师教学空间</div>
+      <nav className={styles.nav} aria-label="移动主导航">
+        <NavItems pathname={location.pathname} search={search} onNavigate={() => setMobileNavOpen(false)}/>
+      </nav>
+      <div className={styles.mobileDrawerFooter}>
+        <span className={styles.avatar} aria-hidden="true">李</span>
+        <div><strong>教师工作区</strong><small>{run ? `运行 ${run.run_id.slice(0, 8)}` : '等待导入数据'}</small></div>
+      </div>
+    </aside>
+
     <div className={styles.workspace}>
       <header className={styles.topbar}>
+        <button type="button" className={styles.mobileMenuButton} aria-label="打开导航" aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen(true)}><Menu size={21}/></button>
         <div className={styles.scopeGroup}>
           <label className={styles.scopeField}><GraduationCap size={19}/><span>学科</span>
             <div className={styles.scopeValue} title={text(subject) ? undefined : '当前运行数据未提供学科名称'}>

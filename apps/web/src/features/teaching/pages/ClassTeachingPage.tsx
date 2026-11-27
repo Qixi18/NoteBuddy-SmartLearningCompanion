@@ -210,7 +210,7 @@ export function ClassTeachingPage() {
       <span><History size={15}/><b>版本</b> {history.data?.plans.length ?? 0} 个</span>
     </div>
 
-    <div className={styles.twoColumns}>
+    <div className={styles.classTeachingColumns}>
       <Panel
         title="班级教学分析报告"
         icon={<Users size={18}/>}
@@ -236,6 +236,7 @@ export function ClassTeachingPage() {
         {history.isPending ? <Loading label="读取方案历史…"/>
           : history.isError ? <ErrorBox message={(history.error as Error).message}/>
           : !latestPlan ? <EmptyState
+              compact
               title="尚无班级教学方案"
               detail="根据当前班级在该测验节点的有效评分记录生成规则草稿；没有有效证据时系统不会生成空话方案。"
             />
@@ -297,8 +298,10 @@ export function ClassTeachingPage() {
     </div>
 
     <Panel title="方案版本历史" icon={<History size={18}/>}>
-      {history.isPending ? <Loading label="读取版本历史…"/>
-        : !history.data?.plans.length ? <EmptyState title="暂无历史版本" detail="生成或审核方案后，每个版本都会保留在这里。"/>
+      <details className={styles.versionHistory}>
+        <summary>查看版本历史（{history.data?.plans.length ?? 0} 个版本）</summary>
+        {history.isPending ? <Loading label="读取版本历史…" compact/>
+        : !history.data?.plans.length ? <EmptyState compact title="暂无历史版本" detail="生成或审核方案后，每个版本都会保留在这里。"/>
         : <div className={styles.adjustmentList}>{[...(history.data?.plans ?? [])].reverse().map(plan => <details className={styles.adjustmentRecord} key={str(plan.plan_id)}>
             <summary>
               <b>第 {str(plan.version)} 版 · {STATUS_LABELS[str(plan.status)] ?? str(plan.status)}</b>
@@ -316,6 +319,7 @@ export function ClassTeachingPage() {
               })}
             </div>
           </details>)}</div>}
+      </details>
     </Panel>
 
     <ClassAdjustmentWorkflow runId={runId} classId={classId} nodeId={nodeId} plan={latestPlan} nodes={run?.nodes ?? []}/>
@@ -342,7 +346,7 @@ export function ClassTeachingPage() {
                 <small>{str(finding.next_step, '')}{finding.support_level ? ` · 支持程度 ${str(finding.support_level)}` : ''}</small>
               </div>
             </article>)}</div>
-              : <EmptyState title="当前还没有班级 AI 分析结果" detail="生成后会在这里显示带证据引用的教师向观察。"/>}
+              : <EmptyState compact title="当前还没有班级 AI 分析结果" detail="生成后会在这里显示带证据引用的教师向观察。"/>}
             <div className={styles.aiConsent}>
               <label>
                 <input
