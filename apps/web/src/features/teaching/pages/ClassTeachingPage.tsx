@@ -12,6 +12,8 @@ import {
 } from '../api';
 import { ClassAdjustmentWorkflow } from '../components/ClassAdjustmentWorkflow';
 import { ClassTeachingReport } from '../components/ClassTeachingReport';
+import { ClassPlanEditor } from '../components/ClassPlanEditor';
+import { ClassPlanReader } from '../components/ClassPlanReader';
 import { useWorkbenchScope } from '../../shared/useWorkbenchScope';
 import { str } from '../../shared/workbenchTypes';
 import type { Row } from '../../shared/workbenchTypes';
@@ -97,11 +99,13 @@ export function ClassTeachingPage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [consent, setConsent] = useState(false);
+  const [editingPlan, setEditingPlan] = useState(false);
 
   useEffect(() => {
     // 方案版本变化时只同步编辑区内容；成功/失败提示保留到下一次操作，避免刚显示就被清空。
     setText(bodyToText(latestPlan?.plan as Row | undefined));
     setReviewBaseline(bodyToText(latestPlan?.plan as Row | undefined));
+    setEditingPlan(false);
   }, [latestPlanId]);
 
   const draft = useMutation({
@@ -140,6 +144,7 @@ export function ClassTeachingPage() {
     onSuccess: async data => {
       setError('');
       setMessage(`已保存第 ${str(data.version)} 版：${STATUS_LABELS[str(data.status)] ?? str(data.status)}。`);
+      setEditingPlan(false);
       await queryClient.invalidateQueries({ queryKey: ['class-teaching-plans'] });
     },
     onError: cause => { setMessage(''); setError((cause as Error).message); },
@@ -210,7 +215,7 @@ export function ClassTeachingPage() {
       <span><History size={15}/><b>版本</b> {history.data?.plans.length ?? 0} 个</span>
     </div>
 
-    <div className={styles.classTeachingColumns}>
+    <div className={styles.classTeachingReport}>
       <Panel
         title="班级教学分析报告"
         icon={<Users size={18}/>}
@@ -225,13 +230,12 @@ export function ClassTeachingPage() {
       <Panel
         title="班级教学方案"
         icon={<ClipboardCheck size={18}/>}
-        action={<button
-          className={styles.textButton}
-          disabled={draft.isPending || !nodeId}
-          onClick={() => { setError(''); draft.mutate(); }}
-        >
-          <Sparkles size={15}/>{draft.isPending ? '正在生成…' : latestPlan ? '按当前证据重新生成' : '生成规则方案'}
-        </button>}
+        action={<div className={styles.classPlanActions}>
+          {latestPlan && !editingPlan && <button className={styles.textButton} onClick={() => setEditingPlan(true)}>编辑方案</button>}
+          <button className={styles.textButton} disabled={draft.isPending || !nodeId} onClick={() => { setError(''); draft.mutate(); }}>
+            <Sparkles size={15}/>{draft.isPending ? '正在生成…' : latestPlan ? '按当前证据重新生成' : '生成规则方案'}
+          </button>
+        </div>}
       >
         {history.isPending ? <Loading label="读取方案历史…"/>
           : history.isError ? <ErrorBox message={(history.error as Error).message}/>
@@ -241,32 +245,17 @@ export function ClassTeachingPage() {
               detail="根据当前班级在该测验节点的有效评分记录生成规则草稿；没有有效证据时系统不会生成空话方案。"
             />
           : <>
-              <div className={styles.draftFields}>
-                <label>当前版本
-                  <p>第 {str(latestPlan.version)} 版 · {STATUS_LABELS[str(latestPlan.status)] ?? str(latestPlan.status)}
-                    {' · '}{latestPlan.reviewer ? `审核人 ${str(latestPlan.reviewer)}` : '尚未审核'}
-                    {' · '}{formatTime(latestPlan.updated_at)}</p>
-                </label>
-                {Boolean(latestPlan.stale) && <Notice tone="warning">
-                  来源核验或作答数据已变化，该版本已过期。请重新生成方案后再采纳。
-                </Notice>}
-              </div>
+              {Boolean(latestPlan.stale) && <Notice tone="warning">
+                来源核验或作答数据已变化，该版本已过期。请重新生成方案后再采纳。
+              </Notice>}
 
-              <div className={styles.caseForm} data-testid="class-plan-editor">
-                {SECTIONS.map(section => <label key={section.key}>
-                  {section.label}
-                  <textarea
-                    rows={3}
-                    value={text[section.key]}
-                    placeholder={section.hint}
-                    onChange={event => setText(current => ({ ...current, [section.key]: event.target.value }))}
-                  />
-                </label>)}
+              {editingPlan ? <>
+                <ClassPlanEditor sections={SECTIONS.map(section => ({ ...section, value: text[section.key] }))} resizeKey={latestPlanId} onChange={(key, value) => setText(current => ({ ...current, [key]: value }))}/>
                 <div className={styles.adjustmentFormGrid}>
                   <label>审核人<input value={reviewer} maxLength={200} onChange={event => setReviewer(event.target.value)} placeholder="填写审核人姓名"/></label>
                   <label>审核说明<input value={reason} maxLength={200} onChange={event => setReason(event.target.value)} placeholder="说明核对依据"/></label>
                 </div>
-              </div>
+              </> : <ClassPlanReader sections={SECTIONS.map(section => ({ ...section, value: text[section.key] }))} status={<>第 {str(latestPlan.version)} 版 · {STATUS_LABELS[str(latestPlan.status)] ?? str(latestPlan.status)} · {latestPlan.reviewer ? `审核人 ${str(latestPlan.reviewer)}` : '尚未审核'} · {formatTime(latestPlan.updated_at)}</>}/>}
 
               <div className={styles.reviewActions}>
                 <button

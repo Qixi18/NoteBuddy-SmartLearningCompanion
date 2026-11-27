@@ -35,6 +35,7 @@ test('a teacher can run the whole class workflow end to end', async ({ page }) =
   await gotoRoute(page, '/teaching/class', '班级教学建议');
   await page.getByRole('button', { name: /生成规则方案|按当前证据重新生成/ }).click();
   await expect(page.getByText(/已生成第 \d+ 版规则草稿|已存在同一版草稿/).first()).toBeVisible({ timeout: 30_000 });
+  await page.getByRole('button', { name: '编辑方案' }).click();
   await page.getByLabel('审核人').fill('演示教师');
   await page.getByLabel('审核说明').fill('已核对当前班级证据。');
   await page.getByRole('button', { name: '采纳并保存' }).click();

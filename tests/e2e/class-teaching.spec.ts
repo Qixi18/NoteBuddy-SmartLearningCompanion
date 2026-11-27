@@ -10,6 +10,7 @@ test('generating a class plan produces an editable rule draft', async ({ page })
 
   await page.getByRole('button', { name: /生成规则方案|按当前证据重新生成/ }).click();
   await expect(page.getByText(/已生成第 \d+ 版规则草稿|已存在同一版草稿/).first()).toBeVisible({ timeout: 20_000 });
+  await page.getByRole('button', { name: '编辑方案' }).click();
 
   const editor = page.getByTestId('class-plan-editor').locator('textarea');
   await expect(editor).toHaveCount(7);
@@ -23,6 +24,7 @@ test('teacher edits and accepts the class plan without losing history', async ({
   await gotoRoute(page, '/teaching/class', '班级教学建议');
   await page.getByRole('button', { name: /生成规则方案|按当前证据重新生成/ }).click();
   await expect(page.getByText(/已生成第 \d+ 版规则草稿|已存在同一版草稿/).first()).toBeVisible({ timeout: 20_000 });
+  await page.getByRole('button', { name: '编辑方案' }).click();
 
   const firstSection = page.getByTestId('class-plan-editor').locator('textarea').first();
   await firstSection.fill('演示：先集中处理方程类共同问题，再做一次同型题重练。');
@@ -47,4 +49,24 @@ test('class plan page binds the current class and node', async ({ page }) => {
   await expect(scope).toBeVisible();
   await expect(scope).toContainText(DEMO.classId);
   await expect(scope).toContainText(DEMO.nodeId);
+});
+
+test('class plan is readable by default and switches to a growing editor', async ({ page }) => {
+  await gotoRoute(page, '/teaching/class', '班级教学建议');
+  await page.getByRole('button', { name: /生成规则方案|按当前证据重新生成/ }).click();
+  await expect(page.getByText(/已生成第 \d+ 版规则草稿|已存在同一版草稿/).first()).toBeVisible({ timeout: 20_000 });
+
+  const reader = page.getByTestId('class-plan-reader');
+  await expect(reader).toBeVisible();
+  await expect(reader.locator('article')).toHaveCount(7);
+  await expect(page.getByTestId('class-plan-editor')).toHaveCount(0);
+  await page.getByRole('button', { name: '编辑方案' }).click();
+
+  const editor = page.getByTestId('class-plan-editor');
+  await expect(editor.locator('textarea')).toHaveCount(7);
+  const firstSection = editor.locator('textarea').first();
+  const initialHeight = await firstSection.evaluate(element => element.getBoundingClientRect().height);
+  await firstSection.fill(`${'自动高度验证内容。'.repeat(80)}\\n换行之后仍然可以完整阅读。`);
+  await expect.poll(() => firstSection.evaluate(element => element.getBoundingClientRect().height)).toBeGreaterThan(initialHeight);
+  await expect(firstSection).toHaveValue(new RegExp('换行之后仍然可以完整阅读'));
 });

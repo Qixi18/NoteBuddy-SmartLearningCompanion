@@ -45,11 +45,11 @@ export function StudentDiagnosisPage() {
     <ScopeSelectors run={run} selectedStudent={selectedStudent} selectedIndicator={selectedIndicator} objectiveName={objectiveName} onStudent={setStudent} onIndicator={setIndicator} showStudent/>
     <StudentQuickSwitch students={run.students} classId={selectedClass} selectedStudent={selectedStudent} search={studentSearch} onSearch={setStudentSearch} onSelect={setStudent}/>
     {evidence.data && <StudentEvidenceSummary bundle={evidence.data} testName={label(run.nodes.find(row => String(row['节点编号'] ?? '') === selectedNode) ?? {}, ['节点名称', '测验名称', '名称'], selectedNode)} indicatorName={objectiveName(selectedIndicator)}/>}
-    {evidence.data && <div className={styles.studentDiagnosticGrid}>
-      <Panel title="本次作答表现" icon={<Activity size={18}/>}>{evidence.data.responses.length ? <StudentScoreBars bundle={evidence.data}/> : <EmptyState title="当前范围没有作答记录" detail="无记录不代表未掌握。补充本次测验作答后，这里会显示有效评分。"/>}</Panel>
-      <Panel title="学生画像与诊断结论" icon={<Target size={18}/>}>{studentInsights.isPending ? <Loading/> : studentInsights.data ? <StudentDiagnosticClaims claims={studentInsights.data.claims} evidencePath={`${routes.itemEvidence}`} params={linkParams}/> : <EmptyState title="当前范围没有诊断结论" detail="诊断接口没有返回可追溯的主张。无记录不代表未掌握。"/>}</Panel>
+    {evidence.data && <div className={styles.studentDiagnosisPair} data-testid="student-diagnosis-pair">
+      <Panel title="本次作答表现" icon={<Activity size={18}/>}>{evidence.data.responses.length ? <StudentScoreBars bundle={evidence.data}/> : <EmptyState compact title="当前范围没有作答记录" detail="无记录不代表未掌握。补充本次测验作答后，这里会显示有效评分。"/>}</Panel>
+      <Panel title="学生画像与诊断结论" icon={<Target size={18}/>}>{studentInsights.isPending ? <Loading compact/> : studentInsights.data?.claims?.length ? <StudentDiagnosticClaims claims={studentInsights.data.claims} evidencePath={`${routes.itemEvidence}`} params={linkParams}/> : <EmptyState compact title="当前范围没有诊断结论" detail="诊断接口没有返回可追溯的主张。无记录不代表未掌握。"/>}</Panel>
     </div>}
-    {evidence.data && <div className={styles.twoColumns}>
+    {evidence.data && <div className={styles.studentDiagnosisPair} data-testid="student-diagnosis-pair">
       <Panel title="典型作答证据" icon={<FileSearch size={18}/>} action={<Link to={{ pathname: routes.itemEvidence, search: search }}>查看完整证据 <ArrowRight size={14}/></Link>}>{<EvidenceRows bundle={evidence.data} selectedItem={params.itemId}/>}</Panel>
       <Panel title="评分点本次表现" icon={<Layers3 size={18}/> }><RubricPointSummary bundle={evidence.data} params={linkParams}/></Panel>
     </div>}

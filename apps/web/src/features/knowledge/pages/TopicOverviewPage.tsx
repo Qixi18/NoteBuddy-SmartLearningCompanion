@@ -141,7 +141,7 @@ function TopicOverviewView({ run, catalog, catalogPending, catalogError, verific
       { key: 'materials', title: '关联题目 / 材料', render: row => { const ids = row.material_ids as string[]; return ids.length ? <details className={styles.inlineDetails}><summary>{ids.length} 项</summary><p>{ids.join('、')}</p></details> : '暂无关联材料'; } },
       { key: 'verification', title: '来源核验', render: row => <span className={`${styles.status} ${row.verification_label === '已核验' ? styles.verified : row.verification_label === '含合成验收记录' ? styles.syntheticStatus : ''}`}>{String(row.verification_label)}</span> },
     ]} rows={topics as unknown as Row[]}/></div>:<EmptyState title="没有课程主题" detail="导入课程要求后，此处会按真实主题汇总学习要求和资源映射。"/>}</Panel>
-    <div className={styles.overviewColumns}>
+    <div className={styles.overviewResourceStack}>
       <Panel title="主题重点提示" icon={<Target size={18}/>} className={styles.overviewFocusPanel}>{topics.length ? <div className={styles.topicFocusList}>{topics.map(topic => <article key={topic.topic_id}><header><span className={styles.topicOrder}>{topic.order}</span><div><strong>{topic.topic_name}</strong><small>{topic.indicators.length} 项课程观察指标</small></div></header><ul className={styles.requirementList}>{topic.requirements.length ? topic.requirements.map((item, index) => <li key={`${topic.topic_id}-req-${index}`}>{item}</li>) : <li>课程数据未提供独立的学习要求文本。</li>}</ul><small className={styles.topicFocusMeta}>指标：{topic.indicators.map(item => item.id).join('、') || '未提供'}</small></article>)}</div> : <EmptyState title="没有学习要求" detail="导入课程要求后显示主题和要求。"/>}</Panel>
       <div className={styles.overviewFilters}>
         <strong>筛选下方教材与题目</strong>
@@ -162,6 +162,7 @@ function TopicOverviewView({ run, catalog, catalogPending, catalogError, verific
   </div>;
 }
 function MaterialCatalog({ value, indicatorFilter, topicIndicatorIds }: { value: unknown; indicatorFilter: string; topicIndicatorIds: Set<string> }) {
+  const [expandedIndicator, setExpandedIndicator] = useState<string | null>(null);
   if (!value || typeof value !== 'object') return <EmptyState title="暂无材料目录" detail="目录接口没有返回可展示条目。"/>;
   const indicators = (value as Row).indicators;
   if (!Array.isArray(indicators) || !indicators.length) return <EmptyState title="当前运行没有教材目录条目" detail="指标与教材材料尚未建立目录关联。"/>;
@@ -170,14 +171,16 @@ function MaterialCatalog({ value, indicatorFilter, topicIndicatorIds }: { value:
   return <div className={styles.catalogList}>{visibleIndicators.map((item, index) => {
     const docs = Array.isArray(item.documents) ? item.documents as Row[] : [];
     const materials = Array.isArray(item.materials) ? item.materials as Row[] : [];
+    const indicatorId = String(item.indicator_id ?? index);
+    const expanded = expandedIndicator === null ? index === 0 : expandedIndicator === indicatorId;
     const syntheticVerification = /合成|模拟验收|synthetic|mock/i.test(`${String(item.curriculum_locator ?? '')} ${String(item.textbook_locator ?? '')}`);
-    return <article key={String(item.indicator_id ?? index)}><details className={styles.catalogItem} open={index === 0}><summary><header><div><strong>{str(item.indicator_id)}</strong><small>{str(item.topic_id, '未关联主题')}</small></div><span className={`${styles.status} ${item.source_status === 'verified' && !item.source_stale ? syntheticVerification ? styles.syntheticStatus : styles.verified : ''}`}>{item.source_stale ? '核验已过期' : item.source_status === 'verified' ? syntheticVerification ? '合成验收记录' : '来源已核验' : '待核验'}</span></header></summary>
-      <div className={styles.catalogBody}>
+    return <article key={indicatorId} className={`${styles.catalogItem} ${expanded ? styles.catalogItemExpanded : ''}`}><button type="button" className={styles.catalogSummary} aria-expanded={expanded} onClick={() => setExpandedIndicator(current => current === indicatorId ? null : indicatorId)}><header><div><strong>{str(item.indicator_id)}</strong><small>{str(item.topic_id, '未关联主题')}</small></div><span className={`${styles.status} ${item.source_status === 'verified' && !item.source_stale ? syntheticVerification ? styles.syntheticStatus : styles.verified : ''}`}>{item.source_stale ? '核验已过期' : item.source_status === 'verified' ? syntheticVerification ? '合成验收记录' : '来源已核验' : '待核验'}</span></header><span className={styles.catalogExpandLabel}>{expanded ? '收起' : '查看来源与关联材料'}</span></button>
+      {expanded && <div className={styles.catalogBody}>
         {Boolean(item.curriculum_locator) && <p className={styles.catalogLocator}>课标定位：{str(item.curriculum_locator)}</p>}{Boolean(item.textbook_locator) && <p className={styles.catalogLocator}>教材定位：{str(item.textbook_locator)}</p>}
         {docs.length > 0 && <div className={styles.documentList}>{docs.map((doc, docIndex) => <div key={`${String(doc.name)}-${docIndex}`}><NotebookTabs size={14}/><span>{str(doc.name)}</span><small>{doc.available ? `${str(doc.page_count, '页数未知')} 页` : '来源文件缺失'}</small></div>)}</div>}
         {materials.length > 0 && <div className={styles.materialTags}>{materials.map((material, materialIndex) => <span key={`${String(material.material_id)}-${materialIndex}`}><b>{str(material.material_id)}</b>{str(material.title, str(material.resource_type, '材料'))}{material.verified ? ' · 已核验' : ''}</span>)}</div>}
-      </div>
-    </details></article>;
+      </div>}
+    </article>;
   })}</div>;
 }
 function SourceVerificationEditor({ objectives, items, histories, onSaved }: {

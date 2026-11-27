@@ -60,7 +60,7 @@ export function KnowledgeStructurePage({ run, selectedIndicator, search, verific
   const relatedItems = objective ? run.items.filter(row => String(row['指标编号'] ?? '') === String(objective['指标编号'] ?? '')) : [];
 
   return <>
-    <div className={styles.structureColumns}>
+    <div className={styles.structureColumns} data-testid="knowledge-structure-columns">
       <Panel title="主题导航" icon={<Layers3 size={18}/> }>
         {groups.length ? <div className={styles.topicNavigation}>{groups.map(([topic, rows]) => {
           const topicKey = text(rows[0]?.['主题编号'], topic);
@@ -92,11 +92,17 @@ export function KnowledgeStructurePage({ run, selectedIndicator, search, verific
           <p>所属主题：{topicName}</p>
           <p>学习要求：{field(objective, ['学习要求', '课程要求', '内容要求', '要求描述'], '当前数据未提供独立的学习要求文本。')}</p>
           <div className={styles.structureRelationStatus}><span>关联题目</span><b>{relatedItems.length} 道</b><span>关系状态</span><b>{verifiedRelations.filter(row => String(row.sourceId) === String(objective['指标编号']) || String(row.target_indicator_id) === String(objective['指标编号'])).length} 条已核验</b><span>当前来源记录</span><b>{isSyntheticVerification(verifications[String(objective['指标编号'])]?.at(-1)) ? '合成验收数据' : '按记录状态显示'}</b></div>
-          <h4>相关题目</h4>
-          {relatedItems.length ? <ul>{relatedItems.map((item, index) => <li key={`${String(item['材料编号'])}-${index}`}><Link to={{ pathname: `${routes.itemEvidence}/${encodeURIComponent(String(item['材料编号'] ?? ''))}`, search: new URLSearchParams({ ...Object.fromEntries(new URLSearchParams(search)), indicator: String(objective['指标编号'] ?? '') }).toString() }}><b>{text(item['材料编号'])}</b><span>{field(item, ['题干或内容', '题目内容', '材料名称'], '未提供题目内容')}</span><ArrowRight size={14}/></Link></li>)}</ul> : <EmptyState title="没有关联题目" detail="当前数据没有将题目映射到该指标。"/>}
         </div> : <EmptyState title="选择一个课程指标" detail="指标详情和关联题目会显示在这里。"/>}
       </Panel>
     </div>
+
+    <Panel title={`当前知识点的相关题目（${relatedItems.length}）`} icon={<FileSearch size={18}/> } className={styles.structureRelatedItems}>
+      <div data-testid="structure-related-items" className={styles.structureRelatedItemGrid}>
+        {relatedItems.length ? relatedItems.map((item, index) => <Link key={`${String(item['材料编号'])}-${index}`} to={{ pathname: `${routes.itemEvidence}/${encodeURIComponent(String(item['材料编号'] ?? ''))}`, search: new URLSearchParams({ ...Object.fromEntries(new URLSearchParams(search)), indicator: String(objective?.['指标编号'] ?? '') }).toString() }}>
+          <b>{text(item['材料编号'])}</b><span>{field(item, ['题干或内容', '题目内容', '材料名称'], '未提供题目内容')}</span><ArrowRight size={14}/>
+        </Link>) : <EmptyState compact title="没有关联题目" detail="当前数据没有将题目映射到该指标。"/>}
+      </div>
+    </Panel>
 
     <Panel title="主题关联与来源状态" icon={<Layers3 size={18}/> }>
       <p className={styles.sectionLead}>汇总当前课程数据中的主题指标、关联题目和有效来源核验。课程未提供的主题关系或常见难点不会从设计示例补入。</p>
