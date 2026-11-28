@@ -170,16 +170,17 @@ test('teacher edits, accepts, records implementation, confirms a case and reload
   await expect(restored.getByLabel('教师结论')).toHaveValue('E2E 合成验收，不代表真实教学效果。');
 });
 
-test('blocked drafts still record a teacher decision with a reason', async ({ page, request }) => {
+test('blocked drafts keep review controls disabled until a valid plan is available', async ({ page, request }) => {
   await signOff(request, 'I012', [], 'pending');
   await openScope(page, { student: 'D01', indicator: 'I012', node: 'N01' });
 
   await expect(page.getByText('等待来源核验').first()).toBeVisible({ timeout: 30_000 });
-  await page.getByLabel('复核教师').fill(TEACHER);
-  await page.getByLabel('复核理由').fill('E2E 合成：来源未核验时先继续观察。');
-  await page.getByRole('button', { name: '继续观察' }).click();
-  await expect(page.getByText('复核结果已保存。')).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByText(/第 \d+ 版 · 继续观察/).first()).toBeVisible();
+  await expect(page.getByLabel('复核教师')).toBeDisabled();
+  await expect(page.getByLabel('复核理由')).toBeDisabled();
+  await expect(page.getByRole('button', { name: '通过方案' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '继续观察' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '驳回修改' })).toBeDisabled();
+  await expect(page.getByText('待来源核验通过并生成有效方案后，教师方可提交正式复核意见。')).toBeVisible();
 });
 
 test('a no-record diagnostic plan can be accepted, implemented and confirmed as a coverage case', async ({ page, request }) => {

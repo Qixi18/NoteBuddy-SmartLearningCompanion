@@ -22,7 +22,7 @@ export function ReviewHistoryPanel({ rows, studentId, nodeId, effectiveVersion }
   effectiveVersion?: unknown;
 }) {
   const ordered = [...rows].reverse();
-  return <Panel title="教师复核历史" icon={<History size={18}/>} action={<span className={styles.historyCount}>{rows.length ? `共 ${rows.length} 个版本` : '暂无版本'}</span>}>
+  return <Panel className={styles.reviewHistoryPanel} title="教师复核历史" icon={<History size={18}/>} action={<span className={styles.historyCount}>{rows.length ? `共 ${rows.length} 个版本` : '暂无版本'}</span>}>
     <div className={styles.historyHeaderRow}><b>{studentId} · {nodeId}</b><span>按版本倒序 · 当前有效版本单独标识</span></div>
     {rows.length ? <ol className={styles.historyTimeline}>{ordered.map(row => {
       const refs = Array.isArray(row.evidence_refs) ? row.evidence_refs as Row[] : [];

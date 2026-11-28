@@ -1,4 +1,4 @@
-import { ArrowRight, ClipboardCheck, Route, ShieldCheck } from 'lucide-react';
+import { ArrowRight, ChevronRight, ClipboardCheck, Route, ShieldCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Panel } from '../../../components/PageBits';
 import { routes } from '../../../app/routes';
@@ -12,13 +12,12 @@ import styles from '../pages/StudentTeachingPage.module.css';
  * 方案存在时按「目标 → 材料/练习 → 步骤 → 提示 → 观察/调整 → 证据范围」呈现；
  * 方案不存在时说明阻塞原因、下一步入口和仍可参考的候选材料，不用空白占位。
  */
-export function PersonalizedLearningPath({ plan, planOrigin, planVersion, stateLabel, stateTone, stateDetail, selection, status, error, draft, search, onRetry }: {
+export function PersonalizedLearningPath({ plan, planOrigin, planVersion, stateLabel, stateTone, selection, status, error, draft, search, onRetry }: {
   plan?: TeachingPlanV2 | null;
   planOrigin?: 'accepted' | 'draft' | null;
   planVersion?: unknown;
   stateLabel: string;
   stateTone: 'green' | 'amber';
-  stateDetail: string;
   selection?: ResourceSelection | null;
   status: PlanStatus;
   error?: string | null;
@@ -30,12 +29,27 @@ export function PersonalizedLearningPath({ plan, planOrigin, planVersion, stateL
   const originLabel = planOrigin === 'accepted'
     ? `教师已采纳 · 第 ${String(planVersion ?? '—')} 版`
     : planOrigin === 'draft' ? '待教师审核的规则草稿' : stateLabel;
-  return <Panel title="个性化学习方案" icon={<Route size={18}/>} action={plan ? (
-    <span className={styles.planOriginBadge} data-tone={planOrigin === 'accepted' ? 'green' : 'amber'}>
-      {planOrigin === 'accepted' ? <ShieldCheck size={13}/> : <ClipboardCheck size={13}/>}
-      {originLabel}
-    </span>
-  ) : undefined}>
+  const blockerText = error || draft?.teaching_plan_preview_error || (
+    status === 'requires_source_verification' ? '当前指标的来源签核尚未通过或已失效，暂时不能生成正式学习方案。'
+      : status === 'requires_scoring' ? '当前范围仍有待评分记录，完成评分后才能生成正式学习方案。'
+        : status === 'requires_scope_selection' ? '请选择一个测验节点，再生成当前学生的个性化方案。'
+          : status === 'ready' ? '当前条件已满足，正在等待方案数据；可重新读取最新状态。'
+            : '当前证据或来源条件不足以生成可审核的 V2 方案。'
+  );
+  const nextStep = status === 'requires_source_verification'
+    ? '请先完成课程知识来源核验，再回到本页重新生成方案。'
+    : status === 'requires_scoring' ? '前往诊断页完成待评分记录，完成后返回本页继续。'
+      : status === 'requires_scope_selection' ? '先在页面顶部选择单一测验节点，再查看可用方案。'
+        : status === 'blocked' ? '核对当前诊断证据中的阻塞项，再重新读取方案状态。'
+          : '方案和教师复核状态会按当前学生、指标与测验节点分别保存。';
+  const originBadge = plan ? <span className={styles.planOriginBadge} data-tone={planOrigin === 'accepted' ? 'green' : 'amber'}>
+    {planOrigin === 'accepted' ? <ShieldCheck size={13}/> : <ClipboardCheck size={13}/>}
+    {originLabel}
+  </span> : null;
+  return <Panel title="个性化学习方案" icon={<Route size={18}/>} action={<div className={styles.planHeaderActions}>
+    <PlanStageProgress status={status} planOrigin={planOrigin}/>
+    {originBadge}
+  </div>}>
     {plan ? <>
       <div className={styles.pathGoal}>
         <span className={styles.pathGoalLabel}>本次学习目标 · {PURPOSE_LABELS[plan.purpose]}{planOrigin === 'accepted' ? ' · 已按教师审核版本执行' : ' · 待教师审核'}</span>
@@ -81,16 +95,16 @@ export function PersonalizedLearningPath({ plan, planOrigin, planVersion, stateL
     </> : <div className={styles.planStatePanel} data-tone={stateTone}>
       <div className={styles.planStateHead}>
         <span className={styles.statePill} data-tone={stateTone}>{stateLabel}</span>
-        <small>{stateDetail}</small>
       </div>
-      <p className={styles.planStateReason}>{error || draft?.teaching_plan_preview_error || '当前证据或来源条件不足以生成可审核的 V2 方案。'}</p>
+      <p className={styles.planStateReason}>{blockerText}</p>
+      <p className={styles.planStateSupport}>{nextStep}</p>
       <div className={styles.planStateActions}>
         {status === 'requires_source_verification' && <Link className={styles.stateActionLink} to={{ pathname: routes.topicOverview, search }}>前往课程知识核验 <ArrowRight size={14}/></Link>}
         {status === 'requires_scoring' && <Link className={styles.stateActionLink} to={{ pathname: routes.studentDiagnosis, search }}>查看待评分记录 <ArrowRight size={14}/></Link>}
         {(status === 'blocked' || status === 'requires_scope_selection') && <Link className={styles.stateActionLink} to={{ pathname: routes.studentDiagnosis, search }}>核对诊断证据 <ArrowRight size={14}/></Link>}
         {onRetry && <button type="button" className={styles.inlineButton} onClick={onRetry}>重新读取方案状态</button>}
       </div>
-      <p className={styles.planStateFoot}>来源与评分补齐后回到本页即可重新生成；页面不会用示例方案替代真实数据。</p>
+      <p className={styles.planStateFoot}>页面不会用示例方案替代真实数据；生成方案后，教师审核记录会保留对应版本。</p>
       {(selection?.practice_items.length || selection?.learning_resources.length) ? <div className={styles.planCandidates}>
         <h3>仍可参考的候选材料</h3>
         <p>以下材料只用于教师备课参考，尚未通过正式方案准入，不会被写成学生已完成的学习任务。</p>
@@ -98,4 +112,20 @@ export function PersonalizedLearningPath({ plan, planOrigin, planVersion, stateL
       </div> : null}
     </div>}
   </Panel>;
+}
+
+function PlanStageProgress({ status, planOrigin }: { status: PlanStatus; planOrigin?: 'accepted' | 'draft' | null }) {
+  const currentStep = planOrigin === 'accepted' ? 3 : planOrigin === 'draft' ? 3 : status === 'ready' ? 2 : 1;
+  const stages = ['来源核验', '方案生成', '教师审核'];
+  return <ol className={styles.planStageFlow} aria-label="个性化方案流程">
+    {stages.map((label, index) => {
+      const step = index + 1;
+      const state = planOrigin === 'accepted' || step < currentStep ? 'complete' : step === currentStep ? 'current' : 'upcoming';
+      return <li className={styles.planStageStep} data-state={state} aria-current={state === 'current' ? 'step' : undefined} key={label}>
+        <span className={styles.planStageMarker}>{step}</span>
+        <span>{label}</span>
+        {index < stages.length - 1 && <ChevronRight className={styles.planStageConnector} size={14} aria-hidden="true"/>}
+      </li>;
+    })}
+  </ol>;
 }

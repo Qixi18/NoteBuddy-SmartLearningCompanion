@@ -303,94 +303,101 @@ export function StudentTeachingPage() {
         />
       </section>
 
-      <section id="student-plan" className={styles.chapter}>
-        <ChapterHead index="03" title="个性化方案与学习路径" detail="方案未就绪时说明阻塞原因与下一步；方案生成后完整呈现目标、材料、步骤、提示与调整条件。"/>
-        {acceptedReviewIsStale && <Notice tone="warning">此前采纳的教师方案因来源或证据变化已失效，只能作为历史记录；请重新核验或生成方案后再审核。</Notice>}
-        <PersonalizedLearningPath
-          plan={displayPlan}
-          planOrigin={planOrigin}
-          planVersion={acceptedReviewIsCurrent ? acceptedReview?.version : undefined}
-          stateLabel={pageState.label}
-          stateTone={pageState.tone}
-          stateDetail={pageState.detail}
-          selection={selection}
-          status={planStatus}
-          error={draft?.teaching_plan_preview_error}
-          draft={draft}
-          search={search}
-        />
-      </section>
+      <div className={styles.chapterPair} role="group" aria-label="方案与审核">
+        <section id="student-plan" className={styles.chapter}>
+          <ChapterHead index="03" title="个性化方案与学习路径" detail="方案未就绪时说明阻塞原因与下一步；方案生成后完整呈现目标、材料、步骤、提示与调整条件。"/>
+          {acceptedReviewIsStale && <Notice tone="warning">此前采纳的教师方案因来源或证据变化已失效，只能作为历史记录；请重新核验或生成方案后再审核。</Notice>}
+          <PersonalizedLearningPath
+            plan={displayPlan}
+            planOrigin={planOrigin}
+            planVersion={acceptedReviewIsCurrent ? acceptedReview?.version : undefined}
+            stateLabel={pageState.label}
+            stateTone={pageState.tone}
+            selection={selection}
+            status={planStatus}
+            error={draft?.teaching_plan_preview_error}
+            draft={draft}
+            search={search}
+          />
+        </section>
 
-      <section id="student-review" className={styles.chapter} data-testid="student-review-plan-panel">
-        <ChapterHead index="04" title="教师审核与方案调整" detail="当前方案审核与历史记录放在同一章节；只有最新且来源、证据都有效的采纳结果才作为实施依据。"/>
-        <Panel title="教师复核与个性化方案" icon={<ClipboardCheck size={18}/>} action={<span className={shared.muted}>审核结论按版本保留，不覆盖历史</span>}>
-          {reviewEditorPlan ? <>
-            <TeachingPlanReviewEditor
-              key={`${selectedStudent}:${selectedIndicator}:${selectedNode}:${reviewEditorPlan.evidence_fingerprint}:${latestSourceVerification?.version ?? 'no-source'}:${acceptedReview?.version ?? 'draft'}`}
-              plan={reviewEditorPlan}
-              selection={selection}
-              disabled={review.isPending}
-              canAccept={canAccept}
-              blocker={acceptBlocker}
-              alreadyAccepted={acceptedReviewIsCurrent}
-              acceptedVersion={acceptedReview?.version}
-              onSave={(status, editedPlan, reviewer, reason) => review.mutate({ status, plan: editedPlan, reviewer, reason })}
-              onOtherDecision={(status, reviewer, reason) => review.mutate({ status, reviewer, reason })}
-            />
-            {review.isSuccess && <Notice>教师复核已保存。页面已按最新有效版本更新方案展示。</Notice>}
-            {review.isError && <ErrorBox message={(review.error as Error).message}/>}
-          </> : <>
-            <Notice tone="warning">
-              {str(draft?.teaching_plan_preview_error, '当前没有可供教师复核的 V2 方案。请先补齐节点、评分或来源条件后重新生成。')}
-            </Notice>
-            <BlockedPlanDecision disabled={review.isPending} onDecide={(status, reviewer, reason) => review.mutate({ status, reviewer, reason })}/>
-            {review.isSuccess && <Notice>复核结果已保存。</Notice>}
-            {review.isError && <ErrorBox message={(review.error as Error).message}/>}
-          </>}
-        </Panel>
-        <ReviewHistoryPanel rows={currentNodeReviews} studentId={selectedStudent} nodeId={selectedNode} effectiveVersion={acceptedReviewIsCurrent ? acceptedReview?.version : undefined}/>
-      </section>
+        <section id="student-review" className={styles.chapter} data-testid="student-review-plan-panel">
+          <ChapterHead index="04" title="教师审核与方案调整" detail="当前方案审核与历史记录放在同一章节；只有最新且来源、证据都有效的采纳结果才作为实施依据。"/>
+          <Panel title="教师复核与个性化方案" icon={<ClipboardCheck size={18}/>} action={<span className={shared.muted}>审核结论按版本保留，不覆盖历史</span>}>
+            {reviewEditorPlan ? <>
+              <TeachingPlanReviewEditor
+                key={`${selectedStudent}:${selectedIndicator}:${selectedNode}:${reviewEditorPlan.evidence_fingerprint}:${latestSourceVerification?.version ?? 'no-source'}:${acceptedReview?.version ?? 'draft'}`}
+                plan={reviewEditorPlan}
+                selection={selection}
+                disabled={review.isPending}
+                canAccept={canAccept}
+                blocker={acceptBlocker}
+                alreadyAccepted={acceptedReviewIsCurrent}
+                acceptedVersion={acceptedReview?.version}
+                onSave={(status, editedPlan, reviewer, reason) => review.mutate({ status, plan: editedPlan, reviewer, reason })}
+                onOtherDecision={(status, reviewer, reason) => review.mutate({ status, reviewer, reason })}
+              />
+              {review.isSuccess && <Notice>教师复核已保存。页面已按最新有效版本更新方案展示。</Notice>}
+              {review.isError && <ErrorBox message={(review.error as Error).message}/>}
+            </> : <>
+              <Notice tone="warning">
+              {planStatus === 'requires_source_verification'
+                ? '当前指标的来源签核尚未通过或已失效，暂不能生成方案，也不能进入正式审核。'
+                : planStatus === 'requires_scoring'
+                  ? '当前范围仍有待评分记录，补齐评分并生成有效方案后，才能进入正式审核。'
+                  : '当前没有可供正式审核的 V2 方案；完成前置条件并生成方案后，才能提交复核意见。'}
+              </Notice>
+            <BlockedPlanDecision/>
+              {review.isSuccess && <Notice>复核结果已保存。</Notice>}
+              {review.isError && <ErrorBox message={(review.error as Error).message}/>}
+            </>}
+          </Panel>
+          <ReviewHistoryPanel rows={currentNodeReviews} studentId={selectedStudent} nodeId={selectedNode} effectiveVersion={acceptedReviewIsCurrent ? acceptedReview?.version : undefined}/>
+        </section>
+      </div>
 
       {(reviews.isPending || adjustments.isPending || teacherCases.isPending) ? <Loading label="读取教师复核与案例记录…"/>
         : reviews.isError ? <ErrorBox message={(reviews.error as Error).message}/>
           : adjustments.isError ? <ErrorBox message={(adjustments.error as Error).message}/>
             : teacherCases.isError ? <ErrorBox message={(teacherCases.error as Error).message}/>
               : <>
-                <section id="student-tracking" className={styles.chapter}>
-                  <ChapterHead index="05" title="教学实施与效果追踪" detail="只有当前有效且已被教师采纳的方案才能建立实施计划；没有后续有效评分时，不生成效果结论。"/>
-                  <StudentAdjustmentWorkflow
-                    run={run}
-                    studentId={selectedStudent}
-                    indicatorId={selectedIndicator}
-                    nodeId={selectedNode}
-                    review={acceptedReviewIsCurrent ? acceptedReview : undefined}
-                    latestReview={latestNodeReview}
-                    evidence={bundle}
-                    adjustments={(adjustments.data ?? []).filter(row => row.student_id === selectedStudent && row.indicator_id === selectedIndicator)}
-                    onGoToReview={() => scrollToSection('student-review')}
-                    goToReviewLabel={acceptedReviewIsStale ? '查看已失效的审核记录' : '前往教师审核'}
-                  />
-                </section>
-                <section id="student-export" className={styles.chapter}>
-                  <div className={styles.chapterTitleRow}>
-                    <ChapterHead index="06" title="代表性案例与成果导出" detail="三名代表性学生的确认状态与当前学生案例进度集中在这里；最终成果统一在教学工作台导出。"/>
-                    <Link to={{ pathname: routes.dashboard, search }} className={styles.exportLink}>前往案例资料包导出 <ArrowRight size={14}/></Link>
-                  </div>
-                  <RepresentativeCaseStatus cases={teacherCases.data} selectedStudent={selectedStudent} currentCase={currentCase} reviewCurrent={acceptedReviewIsCurrent}/>
-                  <TeacherCaseForm
-                    key={`${run.run_id}:${selectedStudent}:${selectedIndicator}:${selectedNode}:${acceptedReview?.version ?? 'pending'}`}
-                    runId={run.run_id}
-                    studentId={selectedStudent}
-                    indicatorId={selectedIndicator}
-                    nodeId={selectedNode}
-                    review={acceptedReviewIsCurrent ? acceptedReview : undefined}
-                    evidence={bundle}
-                    currentCase={currentCase}
-                    sourceVerified={acceptedSourceIsCurrent}
-                    pending={saveTeacherCase.isPending}
-                    onSave={payload => saveTeacherCase.mutate(payload)}
-                  />
-                </section>
+                <div className={styles.chapterPair} role="group" aria-label="教学实施与成果">
+                  <section id="student-tracking" className={styles.chapter}>
+                    <ChapterHead index="05" title="教学实施与效果追踪" detail="只有当前有效且已被教师采纳的方案才能建立实施计划；没有后续有效评分时，不生成效果结论。"/>
+                    <StudentAdjustmentWorkflow
+                      run={run}
+                      studentId={selectedStudent}
+                      indicatorId={selectedIndicator}
+                      nodeId={selectedNode}
+                      review={acceptedReviewIsCurrent ? acceptedReview : undefined}
+                      latestReview={latestNodeReview}
+                      evidence={bundle}
+                      adjustments={(adjustments.data ?? []).filter(row => row.student_id === selectedStudent && row.indicator_id === selectedIndicator)}
+                      onGoToReview={() => scrollToSection('student-review')}
+                      goToReviewLabel={acceptedReviewIsStale ? '查看已失效的审核记录' : '前往教师审核'}
+                    />
+                  </section>
+                  <section id="student-export" className={styles.chapter}>
+                    <div className={styles.chapterTitleRow}>
+                      <ChapterHead index="06" title="代表性案例与成果导出" detail="三名代表性学生的确认状态与当前学生案例进度集中在这里；最终成果统一在教学工作台导出。"/>
+                      <Link to={{ pathname: routes.dashboard, search }} className={styles.exportLink}>前往案例资料包导出 <ArrowRight size={14}/></Link>
+                    </div>
+                    <RepresentativeCaseStatus cases={teacherCases.data} selectedStudent={selectedStudent} currentCase={currentCase} reviewCurrent={acceptedReviewIsCurrent}/>
+                    <TeacherCaseForm
+                      key={`${run.run_id}:${selectedStudent}:${selectedIndicator}:${selectedNode}:${acceptedReview?.version ?? 'pending'}`}
+                      runId={run.run_id}
+                      studentId={selectedStudent}
+                      indicatorId={selectedIndicator}
+                      nodeId={selectedNode}
+                      review={acceptedReviewIsCurrent ? acceptedReview : undefined}
+                      evidence={bundle}
+                      currentCase={currentCase}
+                      sourceVerified={acceptedSourceIsCurrent}
+                      pending={saveTeacherCase.isPending}
+                      onSave={payload => saveTeacherCase.mutate(payload)}
+                    />
+                  </section>
+                </div>
                 {saveTeacherCase.isError && <ErrorBox message={(saveTeacherCase.error as Error).message}/>}
               </>}
 
@@ -409,27 +416,24 @@ function ChapterHead({ index, title, detail }: { index: string; title: string; d
   </div>;
 }
 
-/** 没有可审核方案时的教师决定：继续观察或驳回也必须留下教师与理由。 */
-function BlockedPlanDecision({ disabled, onDecide }: {
-  disabled: boolean;
-  onDecide: (status: 'rejected' | 'needs_observation', reviewer: string, reason: string) => void;
-}) {
-  const [reviewer, setReviewer] = useState('');
-  const [reason, setReason] = useState('');
-  const complete = Boolean(reviewer.trim() && reason.trim());
+/** 方案未通过来源与证据准入时，展示正式审核的禁用状态。 */
+function BlockedPlanDecision() {
   return <>
-    <div className={styles.editorRow2}>
-      <label className={styles.editorField}><span>复核教师</span>
-        <input required maxLength={200} aria-label="复核教师" value={reviewer} onChange={event => setReviewer(event.target.value)} placeholder="教师姓名"/>
-      </label>
-      <label className={styles.editorField}><span>复核理由</span>
-        <input required maxLength={4000} aria-label="复核理由" value={reason} onChange={event => setReason(event.target.value)} placeholder="说明为何继续观察或驳回"/>
-      </label>
-    </div>
-    <div className={styles.editorActions}>
-      <button type="button" disabled={disabled || !complete} onClick={() => onDecide('needs_observation', reviewer.trim(), reason.trim())}>继续观察</button>
-      <button className={styles.rejectAction} type="button" disabled={disabled || !complete} onClick={() => onDecide('rejected', reviewer.trim(), reason.trim())}>拒绝方案</button>
-    </div>
-    {!complete && <p className={styles.editorHint}>继续观察或驳回也需要填写复核教师与理由。</p>}
+    <fieldset className={styles.blockedPlanDecision} disabled>
+      <div className={styles.editorRow2}>
+        <label className={styles.editorField}><span>复核教师</span>
+          <input maxLength={200} aria-label="复核教师" placeholder="教师姓名"/>
+        </label>
+        <label className={styles.editorField}><span>复核理由</span>
+          <input maxLength={4000} aria-label="复核理由" placeholder="说明为何继续观察或驳回"/>
+        </label>
+      </div>
+      <div className={styles.blockedPlanActions}>
+        <button className={styles.primaryAction} type="button" disabled>通过方案</button>
+        <button type="button" disabled>继续观察</button>
+        <button className={styles.rejectAction} type="button" disabled>驳回修改</button>
+      </div>
+    </fieldset>
+    <p className={styles.editorHint}>待来源核验通过并生成有效方案后，教师方可提交正式复核意见。</p>
   </>;
 }

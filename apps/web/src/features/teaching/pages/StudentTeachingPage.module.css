@@ -868,6 +868,14 @@
   font-size: var(--font-size-label);
 }
 
+.blockedPlanDecision { display: flex; min-width: 0; flex-direction: column; gap: 8px; margin: 0; padding: 0; border: 0; }
+.blockedPlanDecision .editorField { color: #89958c; }
+.blockedPlanDecision input:disabled { color: #87938a; background: #f4f6f4; cursor: not-allowed; }
+.blockedPlanActions { display: flex; flex-wrap: wrap; gap: 8px; }
+.blockedPlanActions button { min-height: 36px; font-size: var(--font-size-label); }
+.blockedPlanActions button:disabled { color: #8e9991; border-color: #e0e6e1; background: #f3f5f3; cursor: not-allowed; opacity: 1; }
+.blockedPlanActions .rejectAction:disabled { color: #a38383; border-color: #ece4e4; background: #f8f5f5; }
+
 .primaryAction {
   color: #fff;
   border-color: #0f7a42;
@@ -1205,6 +1213,9 @@
   align-items: stretch;
 }
 .contextControls > :global(section) { min-width: 0; }
+.contextControls > :global(div) { min-width: 0; }
+.contextControls > :global(div) label { min-width: 0; }
+.contextControls > :global(div) select { min-width: 0; max-width: 100%; flex: 1 1 160px; }
 
 .sectionNav {
   position: sticky;
@@ -1228,7 +1239,13 @@
   padding: 6px 0 10px;
   scroll-margin-top: 86px;
 }
-.chapter + .chapter { border-top: 1px solid #e6f0e8; padding-top: 22px; }
+.chapterPair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 20px;
+}
+.chapterPair + .chapterPair { margin-top: 8px; padding-top: 22px; border-top: 1px solid #e6f0e8; }
 .chapter h2 { margin: 0; color: #145334; font-size: 20px; line-height: 1.3; }
 .chapterHead { display: flex; align-items: flex-start; gap: 12px; }
 .chapterHead > div { min-width: 0; }
@@ -1249,8 +1266,7 @@
 .chapterTitleRow { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .chapterTitleRow .exportLink { margin-top: 4px; }
 
-.overviewGrid { align-items: start; }
-.overviewGrid > :first-child { height: 100%; }
+.overviewGrid { align-items: stretch; }
 
 /* 摘要状态徽标：统一 data-tone 语气 */
 .summaryBadge[data-tone="green"] { color: #1d6b3c; background: #e6f5e8; }
@@ -1356,6 +1372,16 @@
 .planOriginBadge[data-tone="green"] { color: #1d6b3c; background: #e6f5e8; }
 .planOriginBadge[data-tone="amber"] { color: #8a5c15; background: #fff4df; }
 
+.planHeaderActions { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 12px; }
+.planStageFlow { display: flex; align-items: center; gap: 0; margin: 0; padding: 0; list-style: none; }
+.planStageStep { position: relative; display: flex; min-width: 70px; flex-direction: column; align-items: center; gap: 3px; padding-right: 14px; color: #849087; font-size: var(--font-size-sm); line-height: 1.25; text-align: center; }
+.planStageMarker { display: grid; width: 24px; height: 24px; place-items: center; border-radius: 50%; color: #78877c; background: #e8ece9; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.planStageStep[data-state="current"] { color: #17643a; font-weight: 750; }
+.planStageStep[data-state="current"] .planStageMarker { color: #fff; background: #16834b; box-shadow: 0 0 0 3px #e5f3e8; }
+.planStageStep[data-state="complete"] { color: #3e7450; }
+.planStageStep[data-state="complete"] .planStageMarker { color: #17643a; background: #dff0e3; }
+.planStageConnector { position: absolute; top: 5px; right: -1px; color: #a0aaa3; }
+
 .planFlowGrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 .planFlowGrid .pathSection { margin-top: 14px; }
 
@@ -1363,6 +1389,7 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-height: 292px;
   padding: 16px;
   border: 1px solid #efe3c8;
   border-radius: 12px;
@@ -1371,8 +1398,11 @@
 .planStatePanel[data-tone="green"] { border-color: #d6ecdb; background: #f7fcf8; }
 .planStateHead { display: flex; flex-direction: column; gap: 6px; }
 .planStateHead small { color: #6f8074; font-size: var(--font-size-label); line-height: 1.5; }
-.planStateReason { margin: 0; color: #4c5f52; font-size: var(--font-size-body); line-height: 1.6; overflow-wrap: anywhere; }
+.planStateReason { margin: 0; color: #2e4636; font-size: var(--font-size-body); font-weight: 700; line-height: 1.6; overflow-wrap: anywhere; }
+.planStateSupport { margin: 0; color: #6e8074; font-size: var(--font-size-label); line-height: 1.55; }
 .planStateActions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.planStateActions .stateActionLink { min-height: 40px; align-items: center; color: #fff; border-color: #148048; background: #148048; }
+.planStateActions .stateActionLink:hover, .planStateActions .stateActionLink:focus-visible { color: #fff; background: #0f6f3e; }
 .stateActionLink {
   display: inline-flex;
   align-items: center;
@@ -1388,13 +1418,15 @@
   cursor: pointer;
 }
 .stateActionLink:hover, .stateActionLink:focus-visible { background: #eef8ef; }
-.planStateFoot { margin: 0; color: #7c8a80; font-size: var(--font-size-sm); line-height: 1.5; }
+.planStateFoot { margin: auto 0 0; color: #7c8a80; font-size: var(--font-size-sm); line-height: 1.5; }
 .planCandidates { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; padding-top: 12px; border-top: 1px solid #efe7d4; }
 .planCandidates h3 { margin: 0; color: #2f5f41; font-size: var(--font-size-body); }
 .planCandidates > p { margin: 0; color: #7c8a80; font-size: var(--font-size-sm); line-height: 1.5; }
 
 /* ---------- 04 复核历史时间线 ---------- */
 .historyCount { color: #7b887e; font-size: var(--font-size-sm); }
+.reviewHistoryPanel { padding-top: 14px; padding-bottom: 14px; }
+.reviewHistoryPanel > :global(header) { margin-bottom: 10px; }
 .historyEmpty { margin: 0; padding: 10px 0 2px; color: #7b887e; font-size: var(--font-size-label); line-height: 1.6; }
 .historyTimeline { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
 .historyItem {
@@ -1460,7 +1492,14 @@
 .metricCurrentTag { margin-left: 6px; padding: 1px 6px; border-radius: 999px; color: #1d6b3c; background: #e2f2e5; font-size: 11px; font-style: normal; font-weight: 700; }
 
 /* ---------- 新布局响应式 ---------- */
+@media (min-width: 1101px) and (max-width: 1500px) {
+  .planStatePanel { min-height: 320px; }
+}
+
 @media (max-width: 1100px) {
+  .chapterPair { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .planStatePanel { min-height: 0; }
+  .planStageStep { min-width: 62px; }
   .contextPanel { grid-template-columns: minmax(0, 1fr); }
   .contextState { padding-left: 0; border-left: 0; border-top: 1px solid #e6f0e8; padding-top: 10px; }
   .contextControls { grid-template-columns: minmax(0, 1fr); }
