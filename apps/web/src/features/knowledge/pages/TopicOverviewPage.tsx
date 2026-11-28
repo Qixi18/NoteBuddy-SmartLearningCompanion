@@ -84,7 +84,7 @@ function TopicOverviewView({ run, catalog, catalogPending, catalogError, selecte
   const [topicFilter, setTopicFilter] = useState('');
   const [indicatorFilter, setIndicatorFilter] = useState('');
   const [itemPage, setItemPage] = useState(0);
-  const pageSize = 9;
+  const pageSize = 18;
   const indicatorTopic = new Map<string, string>();
   for (const objective of run.objectives) indicatorTopic.set(String(objective['指标编号'] ?? ''), String(objective['主题编号'] ?? ''));
   const indicatorOptions = run.objectives.filter(row => !topicFilter || String(row['主题编号'] ?? '') === topicFilter);
@@ -126,8 +126,8 @@ function TopicOverviewView({ run, catalog, catalogPending, catalogError, selecte
         <label>观察指标<select aria-label="筛选观察指标" value={indicatorFilter} onChange={event => changeIndicator(event.target.value)}><option value="">全部指标</option>{indicatorOptions.map((row, index) => <option key={String(row['指标编号'] ?? index)} value={String(row['指标编号'] ?? '')}>{String(row['指标编号'] ?? '')} · {label(row, ['观察指标', '指标名称', '名称'], '课程指标')}</option>)}</select></label>
         <span>当前显示 {filteredItems.length} 项题目与材料</span>
       </div>
-      <Panel title="教材 / 来源映射" icon={<NotebookTabs size={18}/>} className={styles.overviewEqualCard}>{catalogPending ? <Loading compact/> : catalog ? <MaterialCatalog value={catalog} indicatorFilter={indicatorFilter} topicIndicatorIds={topicIndicatorIds}/> : <EmptyState title="来源目录暂不可用" detail={catalogError?.message ?? '当前运行没有可用的来源目录。'}/>}</Panel>
-      <Panel title={`相关题目 / 材料列表（${filteredItems.length}）`} icon={<FileSearch size={18}/>} className={styles.overviewEqualCard}>{filteredItems.length ? <><div className={styles.overviewItemTable}><DataTable columns={[
+      <Panel title="教材 / 来源映射" icon={<NotebookTabs size={18}/>} className={styles.catalogSourcePanel}>{catalogPending ? <Loading compact/> : catalog ? <MaterialCatalog value={catalog} indicatorFilter={indicatorFilter} topicIndicatorIds={topicIndicatorIds}/> : <EmptyState title="来源目录暂不可用" detail={catalogError?.message ?? '当前运行没有可用的来源目录。'}/>}</Panel>
+      <Panel title={`相关题目 / 材料列表（${filteredItems.length}）`} icon={<FileSearch size={18}/>} className={styles.overviewItemsPanel}>{filteredItems.length ? <><div className={styles.overviewItemTable}><DataTable columns={[
         { key: 'id', title: '编号', render: row => String(row['材料编号'] ?? '—') },
         { key: 'type', title: '类型', render: row => <span className={styles.typeTag}>{String(linkedById.get(String(row['材料编号'] ?? ''))?.resource_type ?? '题目')}</span> },
         { key: 'content', title: '内容简述', render: row => <span className={styles.clamped}>{label(row, ['题干或内容', '题目内容', '材料名称'], '当前数据未提供题目内容')}</span> },
@@ -147,7 +147,7 @@ function MaterialCatalog({ value, indicatorFilter, topicIndicatorIds }: { value:
     const docs = Array.isArray(item.documents) ? item.documents as Row[] : [];
     const materials = Array.isArray(item.materials) ? item.materials as Row[] : [];
     const indicatorId = String(item.indicator_id ?? index);
-    const expanded = expandedIndicator === null ? index === 0 : expandedIndicator === indicatorId;
+    const expanded = expandedIndicator === indicatorId;
     return <article key={indicatorId} className={`${styles.catalogItem} ${expanded ? styles.catalogItemExpanded : ''}`}><button type="button" className={styles.catalogSummary} aria-expanded={expanded} onClick={() => setExpandedIndicator(current => current === indicatorId ? null : indicatorId)}><header><div><strong>{str(item.indicator_id)}</strong><small>{str(item.topic_id, '未关联主题')}</small></div></header><span className={styles.catalogExpandLabel}>{expanded ? '收起' : '查看来源与关联材料'}</span></button>
       {expanded && <div className={styles.catalogBody}>
         {Boolean(item.curriculum_locator) && <p className={styles.catalogLocator}>课标定位：{str(item.curriculum_locator)}</p>}{Boolean(item.textbook_locator) && <p className={styles.catalogLocator}>教材定位：{str(item.textbook_locator)}</p>}

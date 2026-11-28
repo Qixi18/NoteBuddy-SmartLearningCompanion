@@ -58,6 +58,9 @@ export function KnowledgeStructurePage({ run, selectedIndicator, search, verific
     return (latest.knowledge_links as Row[]).map(link => ({ sourceId, synthetic: isSyntheticVerification(latest), ...link }));
   });
   const relatedItems = objective ? run.items.filter(row => String(row['指标编号'] ?? '') === String(objective['指标编号'] ?? '')) : [];
+  const activeIndicatorId = String(objective?.['指标编号'] ?? selectedIndicator);
+  const verifiedRelationCount = verifiedRelations.filter(row => String(row.sourceId) === activeIndicatorId || String(row.target_indicator_id) === activeIndicatorId).length;
+  const latestVerification = verifications[activeIndicatorId]?.at(-1);
 
   return <>
     <div className={styles.structureColumns} data-testid="knowledge-structure-columns">
@@ -85,13 +88,27 @@ export function KnowledgeStructurePage({ run, selectedIndicator, search, verific
         </div> : <EmptyState title="没有可展示的课程结构" detail="当前运行尚未提供主题和观察指标。"/>}
       </Panel>
 
-      <Panel title="当前知识点详情" icon={<Target size={18}/> }>
+      <Panel title="当前知识点详情" icon={<Target size={18}/> } className={styles.structureDetailPanel}>
         {objective ? <div className={styles.nodeDetail}>
           <span className={styles.itemId}>{String(objective['指标编号'] ?? selectedIndicator)}</span>
           <h3>{field(objective, ['观察指标', '指标名称', '名称'], '课程指标')}</h3>
           <p>所属主题：{topicName}</p>
           <p>学习要求：{field(objective, ['学习要求', '课程要求', '内容要求', '要求描述'], '当前数据未提供独立的学习要求文本。')}</p>
-          <div className={styles.structureRelationStatus}><span>关联题目</span><b>{relatedItems.length} 道</b><span>关系状态</span><b>{verifiedRelations.filter(row => String(row.sourceId) === String(objective['指标编号']) || String(row.target_indicator_id) === String(objective['指标编号'])).length} 条已核验</b><span>当前来源记录</span><b>{isSyntheticVerification(verifications[String(objective['指标编号'])]?.at(-1)) ? '合成验收数据' : '按记录状态显示'}</b></div>
+          <div className={styles.topicIndicatorSection}>
+            <header className={styles.topicIndicatorHeader}><h4>同主题课程指标</h4><span>共 {topicRows.length} 项 · 仅表示主题归属</span></header>
+            <div className={styles.topicIndicatorList}>{topicRows.map((row, index) => {
+              const id = String(row['指标编号'] ?? `indicator-${index}`);
+              const active = id === activeIndicatorId;
+              return <button key={id} type="button" aria-pressed={active} className={`${styles.topicIndicatorButton} ${active ? styles.topicIndicatorButtonActive : ''}`} onClick={() => onSelectIndicator(id)}>
+                <b>{id}</b><span>{field(row, ['观察指标', '指标名称', '名称'], '课程指标')}</span><i aria-hidden="true"/>
+              </button>;
+            })}</div>
+          </div>
+          <div className={styles.structureRelationStatus}>
+            <div><span>关联题目</span><b>{relatedItems.length} 道</b></div>
+            <div><span>关系状态</span><b>{verifiedRelationCount} 条已核验</b></div>
+            <div><span>来源记录</span><b>{isSyntheticVerification(latestVerification) ? '合成验收数据' : '按记录状态显示'}</b></div>
+          </div>
         </div> : <EmptyState title="选择一个课程指标" detail="指标详情和关联题目会显示在这里。"/>}
       </Panel>
     </div>
