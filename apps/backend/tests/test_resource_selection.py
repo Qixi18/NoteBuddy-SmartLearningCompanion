@@ -231,6 +231,24 @@ def test_learning_material_without_node_practice_is_blocked_for_plan_generation(
     assert "no_verified_node_practice" in result["reason_codes"]
 
 
+def test_transfer_without_unseen_practice_names_the_concrete_blocker():
+    bundle = _bundle()
+    bundle["responses"] = [
+        {"material_id": "Q1", "disposition": "scored", "record_id": "R1"},
+        {"material_id": "Q2", "disposition": "scored", "record_id": "R2"},
+    ]
+
+    result = select_resources(bundle, [], _catalog(), "transfer")
+
+    assert result["status"] == "blocked"
+    assert result["practice_items"] == []
+    assert "no_unseen_practice_for_transfer" in result["reason_codes"]
+    assert any(
+        row["material_id"] == "Q2" and "already_observed" in row["reason_codes"]
+        for row in result["excluded"]
+    )
+
+
 def test_recommendation_reasons_are_teacher_readable_and_hide_sort_tiebreaks():
     result = select_resources(_bundle(), _insights(), _catalog(), "remediation")
 
@@ -238,3 +256,39 @@ def test_recommendation_reasons_are_teacher_readable_and_hide_sort_tiebreaks():
     assert "stable_id_tiebreak" not in question["reason_codes"]
     assert question["reason_details"]
     assert all(row["description"] for row in question["reason_details"])
+
+
+def test_selected_materials_expose_only_recorded_locator_facts():
+    catalog = _catalog()
+    for row in catalog:
+        if row["material_id"] == "Q1":
+            row.update(source_file="演示教材 B01 单元练习", locator="B01 第 12-18 页")
+            row["node_ids"] = ["N01"]
+    bundle = _bundle()
+    bundle["source_context"]["resource_links"][0]["source_locator"] = (
+        "B01 第 12-18 页 概念回顾"
+    )
+
+    result = select_resources(bundle, _insights(), catalog, "remediation")
+
+    question = next(row for row in result["practice_items"] if row["material_id"] == "Q1")
+    assert question["source_file"] == "演示教材 B01 单元练习"
+    assert question["locator"] == "B01 第 12-18 页"
+    assert question["source_verified"] is True
+    assert question["indicator_id"] == "I1"
+    assert question["node_ids"] == ["N01"]
+
+    resource = result["learning_resources"][0]
+    assert resource["material_id"] == "TB1"
+    assert resource["source_file"] == "B01 第 12-18 页 概念回顾"
+    assert resource["source_verified"] is True
+    assert resource["node_ids"] == ["N01"]
+
+
+def test_locator_fields_stay_empty_when_imported_data_does_not_record_them():
+    result = select_resources(_bundle(), _insights(), _catalog(), "remediation")
+
+    for row in result["practice_items"] + result["learning_resources"]:
+        assert row["source_file"] == ""
+        assert row["locator"] == ""
+        assert row["source_verified"] is True

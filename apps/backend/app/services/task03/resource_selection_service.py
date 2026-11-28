@@ -26,6 +26,74 @@ def _excluded(material_id: str, reason_code: str, reason: str) -> dict:
     }
 
 
+def _location(
+    catalog_item: dict,
+    link: dict | None,
+    material_id: str,
+    is_question: bool,
+    verified_questions: set[str],
+    source: dict,
+) -> dict:
+    """Expose only locator facts that already exist in imported or signed data.
+
+    The locator is never synthesized: a question uses its own 来源 column plus
+    the signed textbook locator of the current indicator, while a learning
+    resource uses the source locator recorded on its verified resource link.
+    """
+    source_current = bool(
+        source.get("status") == "verified" and not source.get("stale")
+    )
+    if is_question:
+        source_verified = bool(source_current and material_id in verified_questions)
+        source_file = str(
+            catalog_item.get("source_file") or catalog_item.get("来源") or ""
+        ).strip()
+        locator = str(
+            catalog_item.get("locator") or source.get("textbook_locator") or ""
+        ).strip()
+        node_ids = [
+            str(node_id)
+            for node_id in catalog_item.get("node_ids", [])
+            if str(node_id).strip()
+        ]
+    else:
+        verified_link = bool(link and link.get("status") == "verified")
+        source_verified = bool(source_current and verified_link)
+        source_file = str(
+            catalog_item.get("source_file")
+            or (link or {}).get("source_locator")
+            or ""
+        ).strip()
+        locator = str(
+            (link or {}).get("source_locator")
+            or catalog_item.get("locator")
+            or catalog_item.get("source_file")
+            or ""
+        ).strip()
+        node_ids = [
+            str(node_id)
+            for node_id in (link or {}).get("allowed_node_ids", [])
+            if str(node_id).strip()
+        ]
+    if not node_ids:
+        node_ids = [
+            str(node_id)
+            for node_id in catalog_item.get("node_ids", [])
+            if str(node_id).strip()
+        ]
+    return {
+        "source_file": source_file,
+        "locator": locator,
+        "source_verified": source_verified,
+        "indicator_id": str(
+            catalog_item.get("indicator_id")
+            or catalog_item.get("指标编号")
+            or ""
+        ),
+        "node_ids": node_ids,
+    }
+
+
 def select_resources(
     bundle: dict, insights: list[dict], catalog: list[dict], purpose: str
 ) -> dict:
@@ -77,6 +145,7 @@ def select_resources(
     learning_candidates = []
     excluded = []
     seen_ids = set()
+    observed_transfer_questions = 0
     for material_id in sorted(set(known) | set(resource_links)):
         item = known.get(material_id)
         if item is None:
@@ -203,11 +272,20 @@ def select_resources(
             reason_codes.append("unseen_for_transfer")
         elif purpose == "transfer" and not unseen:
             reason_codes.append("observed_item_reflection_only")
+        location = _location(
+            item,
+            link,
+            material_id,
+            is_question,
+            verified_questions,
+            source,
+        )
         entry = {
             "material_id": material_id,
             "resource_type": resource_type,
             "title": item.get("title") or item.get("题干或内容", ""),
             "purpose": purpose_text,
+            **location,
             "reason_codes": reason_codes,
             "reason": "；".join(
                 _REASON_DESCRIPTIONS[code]
@@ -221,6 +299,7 @@ def select_resources(
             ],
         }
         if purpose == "transfer" and not unseen and is_question:
+            observed_transfer_questions += 1
             excluded.append(
                 _excluded(
                     material_id,
@@ -260,7 +339,13 @@ def select_resources(
             )
         )
     ready = bool(practice)
-    if learning_candidates and not practice:
+    if (
+        purpose == "transfer"
+        and not practice
+        and observed_transfer_questions > 0
+    ):
+        reason_codes = ["no_unseen_practice_for_transfer"]
+    elif learning_candidates and not practice:
         reason_codes = ["no_verified_node_practice"]
     else:
         reason_codes = [] if ready else ["no_verified_candidate"]

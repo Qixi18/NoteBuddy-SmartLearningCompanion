@@ -423,6 +423,13 @@ class ResourceSelectionEntryResponse(BaseModel):
     resource_type: str
     title: str = ""
     purpose: str = ""
+    # Locator facts come straight from imported material data or a signed
+    # resource link; empty strings mean "not recorded", never a guess.
+    source_file: str = ""
+    locator: str = ""
+    source_verified: bool = False
+    indicator_id: str = ""
+    node_ids: list[str] = Field(default_factory=list)
     reason_codes: list[str] = Field(default_factory=list)
     reason: str = ""
     reason_details: list[dict[str, str]] = Field(default_factory=list)

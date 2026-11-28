@@ -31,8 +31,16 @@ def build_teaching_plan(
     objective: str = "",
     allowed_record_ids: set[str] | None = None,
     templates: dict | None = None,
+    draft_context: dict | None = None,
 ) -> dict:
-    """Create a concrete teacher draft only when evidence and verified sources exist."""
+    """Create a concrete teacher draft only when evidence and verified sources exist.
+
+    ``draft_context`` carries the diagnosis that produced this draft
+    (rule_id / evidence_kind / observed_fact / inference_limit /
+    score_points_to_review / diagnosis). It lets one template produce
+    materially different plans for different students instead of only swapping
+    the goal sentence.
+    """
     if selection.get("status") != "ready":
         raise ValueError("没有范围内且来源已核验的候选材料，不能生成结构化方案")
     source_context = bundle.get("source_context", {})
@@ -47,6 +55,14 @@ def build_teaching_plan(
     if not material_ids:
         raise ValueError("没有可使用的方案材料")
     purpose = selection["purpose"]
+    context = draft_context or {}
+    score_points = [
+        str(point).strip()
+        for point in context.get("score_points_to_review", [])
+        if str(point).strip()
+    ]
+    observed_fact = str(context.get("observed_fact") or "").strip()
+    diagnosis = str(context.get("diagnosis") or "").strip()
     evidence_refs = tuple(
         PlanEvidenceRef(
             kind="response",
@@ -84,15 +100,52 @@ def build_teaching_plan(
         ),
         "",
     )
-    materials_label = "、".join(material_ids)
+    practice_label = "、".join(
+        row["material_id"] for row in selection.get("practice_items", [])
+    )
+    resource_label = "、".join(
+        row["material_id"] for row in selection.get("learning_resources", [])
+    )
+    materials_label = resource_label or practice_label
     evidence_label = (
         "、".join(ref.record_id for ref in evidence_refs)
         or "当前节点无有效作答记录，依据覆盖情况安排补充观察"
     )
+    points_label = "、".join(score_points[:4])
     goal_subject = objective.strip() or scope["indicator_id"]
-    goal = template["goal"].format(objective=goal_subject, materials=materials_label)
-    if issue:
+    goal = template["goal"].format(
+        objective=goal_subject, materials=materials_label
+    )
+    if observed_fact:
+        goal += f"当前可核验事实：{observed_fact}"
+    elif issue:
         goal += f"当前待核对线索：{issue}"
+    steps = _compose_steps(
+        purpose,
+        evidence_label=evidence_label,
+        materials_label=materials_label,
+        practice_label=practice_label,
+        score_points_label=points_label,
+        observed_fact=observed_fact,
+        diagnosis=diagnosis,
+    )
+    hints = _compose_hints(
+        template,
+        purpose=purpose,
+        score_points_label=points_label,
+        observed_fact=observed_fact,
+    )
+    observation_points = _compose_observation_points(
+        template,
+        purpose=purpose,
+        score_points_label=points_label,
+        observed_fact=observed_fact,
+    )
+    adjustment_conditions = _compose_adjustment_conditions(
+        template,
+        purpose=purpose,
+        score_points_label=points_label,
+    )
     plan = TeachingPlanV2(
         scope=TeachingPlanScope(**scope),
         goal=goal,
@@ -107,19 +160,10 @@ def build_teaching_plan(
             )
             for row in selected
         ),
-        steps=(
-            template["steps"][0].format(evidence=evidence_label),
-            template["step_two"].format(materials=materials_label),
-            template["steps"][1],
-        ),
-        hints=tuple(
-            PlanHint(level=level, **hint)
-            for level, hint in zip(
-                ("direction", "structure", "local_check"), template["hints"]
-            )
-        ),
-        observation_points=tuple(template["observation_points"]),
-        adjustment_conditions=tuple(template["adjustment_conditions"]),
+        steps=steps,
+        hints=hints,
+        observation_points=observation_points,
+        adjustment_conditions=adjustment_conditions,
         evidence_refs=evidence_refs,
         source_versions={
             key: int(value) for key, value in bundle["source_versions"].items()
@@ -128,6 +172,124 @@ def build_teaching_plan(
         template_version=template_catalog["version"],
     )
     return plan.to_dict()
+
+
+def _compose_steps(
+    purpose: str,
+    *,
+    evidence_label: str,
+    materials_label: str,
+    practice_label: str,
+    score_points_label: str,
+    observed_fact: str,
+    diagnosis: str,
+) -> tuple[str, ...]:
+    """Organize steps as review → targeted learning → independent practice → next move."""
+    practice_text = practice_label or "节点内练习"
+    if purpose == "remediation":
+        focus = f"重点关注评分点 {score_points_label} 对应步骤。" if score_points_label else ""
+        return (
+            f"回看有效评分记录 {evidence_label}，确认本次要巩固的具体步骤。{focus}",
+            f"使用材料 {materials_label} 针对性回看该步骤，让学生复述方法与判断依据。",
+            f"学生独立完成节点内练习 {practice_text}，逐题记录是否独立完成及卡点位置。",
+            "依据观察点核对过程与结果：稳定则换用新题观察迁移，仍不稳定则回到材料片段继续练习。",
+        )
+    if purpose == "transfer":
+        return (
+            f"回看有效评分记录 {evidence_label}，说明本次不是重复练习，而是观察学生能否迁移。",
+            f"使用材料 {materials_label} 比较新旧任务条件，标出可以保留与需要调整的步骤。",
+            f"学生独立完成当前节点内未观察练习 {practice_text}，说明方法如何迁移到新条件。",
+            "依据观察点核对学生的条件说明与步骤调整，再决定下一次观察或补充证据。",
+        )
+    observation = observed_fact or diagnosis
+    return (
+        f"核对当前范围证据 {evidence_label}，明确本次只做补充观察，暂不下掌握结论。",
+        f"使用材料 {materials_label} 说明观察任务、记录方式与完成标准。",
+        f"学生完成任务 {practice_text}，教师逐项记录可观察表现"
+        + (f"（当前线索：{observation}）" if observation else "")
+        + "；依据观察点区分已观察事实与仍不确定的部分，决定补充证据或转入正式方案。",
+    )
+
+
+def _compose_hints(
+    template: dict,
+    *,
+    purpose: str,
+    score_points_label: str,
+    observed_fact: str,
+) -> tuple[PlanHint, ...]:
+    """Keep the three-level hint structure and tie teacher notes to this draft."""
+    context_suffix = ""
+    if purpose == "remediation" and score_points_label:
+        context_suffix = f"本次重点观察评分点 {score_points_label} 对应步骤的表现。"
+    elif purpose == "transfer":
+        context_suffix = "本次重点是条件变化后的方法调整，不以答案相同与否判断迁移。"
+    elif purpose == "diagnostic":
+        context_suffix = "本次只记录可观察表现；证据不足时保留未知，不补推测结论。"
+    elif observed_fact:
+        context_suffix = f"结合当前可核验事实观察：{observed_fact}"
+    hints = []
+    for level, hint in zip(
+        ("direction", "structure", "local_check"), template["hints"]
+    ):
+        teacher_note = str(hint.get("teacher_note", ""))
+        if level == "local_check" and context_suffix:
+            teacher_note = f"{teacher_note}{context_suffix}"
+        hints.append(
+            PlanHint(
+                level=level,
+                student_prompt=str(hint.get("student_prompt", "")),
+                teacher_note=teacher_note,
+            )
+        )
+    return tuple(hints)
+
+
+def _compose_observation_points(
+    template: dict,
+    *,
+    purpose: str,
+    score_points_label: str,
+    observed_fact: str,
+) -> tuple[str, ...]:
+    points = [str(point) for point in template["observation_points"]]
+    if purpose == "remediation" and score_points_label:
+        points.append(
+            f"记录学生在评分点 {score_points_label} 对应步骤上是否独立完成并说明依据。"
+        )
+    elif purpose == "transfer":
+        points.append("记录学生说明条件差异与方法调整的依据，不以答案对错替代迁移判断。")
+    elif purpose == "diagnostic":
+        points.append("记录哪些表现属于已观察事实，哪些仍缺少证据。")
+    elif observed_fact:
+        points.append(f"记录与当前事实相关的表现：{observed_fact}")
+    return tuple(dict.fromkeys(point for point in points if point.strip()))
+
+
+def _compose_adjustment_conditions(
+    template: dict, *, purpose: str, score_points_label: str
+) -> tuple[str, ...]:
+    conditions = [str(condition) for condition in template["adjustment_conditions"]]
+    if purpose == "remediation":
+        conditions.append(
+            (
+                f"若评分点 {score_points_label} 相关步骤连续两次独立完成，改用新题观察迁移；"
+                if score_points_label
+                else "若相关步骤连续两次独立完成，改用新题观察迁移；"
+            )
+            + "若仍失分，回到材料对应片段再次讲解并复查。"
+        )
+    elif purpose == "transfer":
+        conditions.append(
+            "若学生能说明条件变化对方法的影响，改用不同表征复查；"
+            "若沿用方法但未核对条件，先做条件比较再换题。"
+        )
+    elif purpose == "diagnostic":
+        conditions.append(
+            "若补充证据与当前判断一致，可形成正式方案；"
+            "若仍冲突，继续核对原始记录与评分依据。"
+        )
+    return tuple(dict.fromkeys(condition for condition in conditions if condition.strip()))
 
 
 def validate_teaching_plan(

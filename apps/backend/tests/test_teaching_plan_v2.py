@@ -131,7 +131,7 @@ def test_local_templates_produce_distinct_goal_hints_and_adjustments_by_purpose(
     assert len({plan["hints"][0]["student_prompt"] for plan in plans.values()}) == 3
     assert len({plan["adjustment_conditions"][0] for plan in plans.values()}) == 3
     assert all(
-        plan["template_version"] == "teaching-plan-2026.11.1" for plan in plans.values()
+        plan["template_version"] == "teaching-plan-2026.11.2" for plan in plans.values()
     )
 
 
@@ -222,3 +222,131 @@ def test_diagnostic_plan_uses_coverage_when_records_exist_but_none_are_scored():
     assert plan["evidence_refs"][0]["kind"] == "coverage"
     assert plan["evidence_refs"][0]["evidence_id"] == "coverage-pending-only"
     assert validate_teaching_plan(plan, pending, _sources()) == []
+
+
+def _draft_context(**overrides):
+    context = {
+        "rule_id": "TR-05",
+        "evidence_kind": "partial_score",
+        "observed_fact": "Q2 的合并同类项步骤失分，代入求值步骤正确。",
+        "inference_limit": "仅能说明该步骤需要回看，不能推断整章掌握情况。",
+        "score_points_to_review": ["Q2P1 合并同类项", "Q2P3 结果核对"],
+        "diagnosis": "部分得分集中在合并同类项步骤。",
+    }
+    context.update(overrides)
+    return context
+
+
+def test_plan_steps_hints_and_conditions_use_the_draft_diagnosis_context():
+    plan = build_teaching_plan(
+        _bundle(),
+        [],
+        _selection(),
+        "目标指标",
+        {"R1"},
+        draft_context=_draft_context(),
+    )
+
+    assert len(plan["steps"]) == 4
+    assert "Q2P1 合并同类项" in plan["steps"][0]
+    assert "Q2P1 合并同类项" in "".join(plan["observation_points"])
+    assert "Q2P1 合并同类项" in "".join(plan["adjustment_conditions"])
+    assert "Q2P1 合并同类项" in plan["hints"][-1]["teacher_note"]
+    assert "当前可核验事实" in plan["goal"]
+    assert plan["purpose"] == "remediation"
+    assert validate_teaching_plan(plan, _bundle(), _sources()) == []
+
+
+def test_same_purpose_produces_different_plans_for_different_students():
+    first = build_teaching_plan(
+        _bundle(),
+        [],
+        _selection(),
+        "目标指标",
+        {"R1"},
+        draft_context=_draft_context(),
+    )
+    second = build_teaching_plan(
+        _bundle(),
+        [],
+        _selection(),
+        "目标指标",
+        {"R1"},
+        draft_context=_draft_context(
+            rule_id="TR-07",
+            observed_fact="已能独立完成当前节点练习，但未见到迁移表现。",
+            score_points_to_review=[],
+            diagnosis="当前表现稳定，适合观察迁移。",
+        ),
+    )
+
+    assert first["goal"] != second["goal"]
+    assert first["steps"] != second["steps"]
+    assert first["observation_points"] != second["observation_points"]
+
+
+def test_transfer_steps_compare_task_conditions_instead_of_repeating_practice():
+    selection = _selection()
+    selection["purpose"] = "transfer"
+
+    plan = build_teaching_plan(
+        _bundle(),
+        [],
+        selection,
+        "目标指标",
+        {"R1"},
+        draft_context=_draft_context(
+            rule_id="TR-07",
+            observed_fact="当前题目完成稳定，尚未观察到迁移。",
+            score_points_to_review=[],
+        ),
+    )
+
+    text = "".join(plan["steps"])
+    assert "不是重复练习" in text
+    assert "条件" in text
+    assert len(plan["steps"]) == 4
+
+
+def test_diagnostic_plan_steps_keep_observation_boundaries():
+    empty = _bundle()
+    empty["responses"] = []
+    empty["coverage"] = {"evidence_id": "coverage-1", "record_count": 0}
+    selection = _selection()
+    selection["purpose"] = "diagnostic"
+
+    plan = build_teaching_plan(
+        empty,
+        [],
+        selection,
+        "目标指标",
+        draft_context=_draft_context(
+            rule_id="TR-04",
+            evidence_kind="no_scored_record",
+            score_points_to_review=[],
+        ),
+    )
+
+    text = "".join(plan["steps"])
+    assert "补充观察" in text
+    assert "不下掌握结论" in text
+    assert len(plan["steps"]) == 3
+    assert plan["evidence_refs"][0]["kind"] == "coverage"
+
+
+@pytest.mark.parametrize(
+    "tamper",
+    [
+        lambda plan: plan["hints"].reverse(),
+        lambda plan: plan["hints"][0].update(student_prompt="   "),
+        lambda plan: plan["hints"][1].pop("student_prompt"),
+    ],
+)
+def test_rejects_incomplete_or_misordered_three_level_hints(tamper):
+    plan = build_teaching_plan(_bundle(), [], _selection(), "目标指标", {"R1"})
+    tamper(plan)
+
+    codes = {
+        row["code"] for row in validate_teaching_plan(plan, _bundle(), _sources())
+    }
+    assert codes == {"invalid_plan"}

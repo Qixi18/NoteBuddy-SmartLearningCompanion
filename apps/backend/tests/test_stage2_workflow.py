@@ -331,6 +331,30 @@ def test_rule_draft_exposes_blocked_and_scoring_required_plan_states(tmp_path):
     assert pending["plan_status"] == "requires_scoring"
 
 
+def test_rule_draft_reports_source_verification_as_the_plan_blocker(tmp_path):
+    client = client_for(tmp_path / "unverified-source")
+    pending = client.post(
+        "/api/source-verification",
+        json={
+            "indicator_id": "T01I1",
+            "status": "pending",
+            "material_ids": [],
+            "reviewer": "数学教师甲",
+            "reason": "逐页核对后再签核",
+        },
+    )
+    assert pending.status_code == 200
+
+    draft = client.get(
+        "/api/draft", params={"student": "D02", "indicator": "T01I1", "node": "N01"}
+    ).json()
+
+    assert draft["plan_status"] == "requires_source_verification"
+    assert draft["teaching_plan_preview"] is None
+    assert draft["teaching_plan_preview_error"]
+    assert draft["resource_selection"]["status"] == "blocked"
+
+
 def test_unverified_source_and_unconfirmed_case_never_enter_confirmed_export(tmp_path):
     client = client_for(tmp_path)
     pending = client.post(

@@ -9,11 +9,11 @@ const PAGE_READY_HEADINGS: Record<string, string | RegExp> = {
   '/': '当前运行整体数据质量',
   '/knowledge/overview': '主题学习要求与资源映射',
   '/knowledge/structure': '知识结构图',
-  '/knowledge/items': /题目关联清单/,
+  '/knowledge/items': '题目关联',
   '/diagnosis/class': '共同题目指标比较',
   '/diagnosis/student': '本次作答表现',
   '/diagnosis/evidence': '题目信息',
-  '/teaching/student': '学习建议草稿',
+  '/teaching/student': '学生当前学习情况',
   '/teaching/class': '班级教学分析报告',
 };
 
@@ -95,7 +95,7 @@ test('desktop acceptance: nine pages render with real data and saved screenshots
   for (const [index, route] of allRoutes.entries()) {
     await gotoRoute(page, route.path, route.title);
     await waitForPageReady(page, route.path);
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
     await page.screenshot({
       path: path.join(DESKTOP, `${String(index + 1).padStart(2, '0')}-${slug(route.path)}.png`),
       fullPage: true,

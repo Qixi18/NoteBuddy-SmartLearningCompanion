@@ -171,6 +171,8 @@ def test_no_record_has_stable_coverage_evidence_not_a_zero_score():
         "status": "pending",
         "stale": False,
         "topic_id": "",
+        "curriculum_locator": "",
+        "textbook_locator": "",
         "material_ids": [],
         "resource_links": [],
         "rubric_mappings": [],

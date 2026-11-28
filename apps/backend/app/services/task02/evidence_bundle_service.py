@@ -139,6 +139,8 @@ def build_evidence_bundle(
         else "pending",
         "stale": bool(latest_source.get("stale")) if latest_source else False,
         "topic_id": objective.get("主题编号", ""),
+        "curriculum_locator": (latest_source or {}).get("curriculum_locator", ""),
+        "textbook_locator": (latest_source or {}).get("textbook_locator", ""),
         "material_ids": latest_source.get("material_ids", [])
         if latest_source
         and latest_source.get("status") == "verified"

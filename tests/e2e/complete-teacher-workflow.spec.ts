@@ -30,7 +30,7 @@ test('a teacher can run the whole class workflow end to end', async ({ page }) =
   await expect(page.getByRole('heading', { level: 1, name: '题目证据详情' })).toBeVisible();
 
   await gotoRoute(page, '/teaching/student', '学生个性化学习建议');
-  await expect(page.getByText('学习建议草稿')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('学生当前学习情况')).toBeVisible({ timeout: 30_000 });
 
   await gotoRoute(page, '/teaching/class', '班级教学建议');
   await page.getByRole('button', { name: /生成规则方案|按当前证据重新生成/ }).click();
