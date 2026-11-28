@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Activity, AlertTriangle, ArrowRight, BookOpen, Bot, CheckCircle2, CircleHelp, ClipboardCheck, FileUp, GraduationCap, Layers3, Lightbulb, RefreshCw, Sparkles, Target, Users } from 'lucide-react';
+import { Activity, AlertTriangle, ArrowRight, BookOpen, Bot, CheckCircle2, CircleHelp, ClipboardCheck, FileUp, GraduationCap, Layers3, Lightbulb, RefreshCw, Sparkles, Target, Users, UploadCloud } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { api, postJson } from '../../api/client';
 import { useCases, useClassInsights, useReadiness } from '../../api/queries';
@@ -97,20 +97,37 @@ export function DashboardPage() {
   if (runQuery.isPending) return <Loading/>;
   if (!run) {
     const notImported = (runQuery.error as ApiProblem | null)?.status === 400 || (runQuery.error as ApiProblem | null)?.status === 404;
+    const requiredFiles = [
+      { name: '课程要求.csv', group: 'course' },
+      { name: '题目与材料.csv', group: 'course' },
+      { name: '字段说明.csv', group: 'course' },
+      { name: '模拟学生.csv', group: 'records' },
+      { name: '测验节点.csv', group: 'records' },
+      { name: '作答记录.csv', group: 'records' },
+    ];
     return <div className={styles.firstRun}>
-      <section className={styles.welcome}><div className={styles.welcomeIcon}><GraduationCap size={30}/></div><div><span className={styles.kicker}>开始使用</span><h2>先导入一份学情数据</h2><p>导入课程要求、题目材料、学生、测验节点和作答记录，开始查看真实的教学分析。</p></div></section>
+      <section className={styles.onboarding} aria-labelledby="first-run-title">
+        <div className={styles.onboardingHeading}><div><span className={styles.kicker}>首次使用</span><h2 id="first-run-title">建立你的教学分析工作台</h2><p>导入课程资料和学生作答数据，开始进行有证据支持的教学分析。</p></div><GraduationCap className={styles.onboardingIcon} size={36} aria-hidden="true"/></div>
+        <div className={styles.workflow} aria-label="使用流程">
+          <div className={`${styles.workflowStep} ${styles.workflowCurrent}`} aria-current="step"><span>01</span><div><strong>导入数据</strong><small>准备课程与学情资料</small></div></div>
+          <div className={styles.workflowStep}><span>02</span><div><strong>分析学情</strong><small>查看班级与学生诊断</small></div></div>
+          <div className={styles.workflowStep}><span>03</span><div><strong>制定教学</strong><small>生成建议与实施方案</small></div></div>
+        </div>
+      </section>
       {!notImported && runQuery.error && <ErrorBox message={(runQuery.error as Error).message} onRetry={() => void runQuery.refetch()}/>}
-      <Panel title="选择数据文件" icon={<FileUp size={19}/> }>
+      <Panel title="导入课程与学情数据" icon={<UploadCloud size={20}/>} className={styles.firstRunImport}>
         <div className={styles.importBody}>
-          <div className={styles.importCopy}><strong>导入 CSV 数据包</strong><p>选择同一数据包中的 CSV 文件。若同时有教材 PDF，可一并选择；单次导入原始文件总量不超过 {formatBytes(MAX_TOTAL_BYTES)}（PDF 会按 Base64 计入请求体）。</p><button className={styles.primaryButton} disabled={importMutation.isPending} onClick={() => inputRef.current?.click()}><FileUp size={17}/>{importMutation.isPending ? '正在校验并导入…' : '选择 CSV / PDF 文件'}</button>
+          <div className={styles.importCopy}><div className={styles.uploadPrompt}><FileUp size={34}/><strong>选择数据文件</strong><p>支持 CSV 数据文件，可同时选择教材 PDF</p><span>单次原始文件总量不超过 {formatBytes(MAX_TOTAL_BYTES)}</span></div><button className={styles.importAction} disabled={importMutation.isPending} onClick={() => inputRef.current?.click()}><FileUp size={19}/>{importMutation.isPending ? '正在校验并导入…' : '选择文件并导入'}</button><small className={styles.importSubtext}>文件选择后将自动校验并开始导入；支持同一数据包中的多份文件。</small>
             <input ref={inputRef} hidden type="file" multiple accept=".csv,.pdf" onChange={event => event.currentTarget.files && importMutation.mutate(event.currentTarget.files)}/>
             {importMessage && <p className={styles.successText} role="status"><CheckCircle2 size={16}/>{importMessage}</p>}{importError && <p className={styles.importError} role="alert">{importError}</p>}
           </div>
-          <div className={styles.required}><span>常见必需表</span><div>{['课程要求.csv', '题目与材料.csv', '模拟学生.csv', '测验节点.csv', '字段说明.csv', '作答记录.csv'].map(file => <code key={file}>{file}</code>)}</div></div>
+          <div className={styles.required}><strong>导入前需要准备</strong><section><span>课程基础资料</span>{requiredFiles.filter(file => file.group === 'course').map(file => <div className={styles.requiredFile} key={file.name}><span aria-hidden="true">▦</span>{file.name}</div>)}</section><section><span>学生与测验记录</span>{requiredFiles.filter(file => file.group === 'records').map(file => <div className={styles.requiredFile} key={file.name}><span aria-hidden="true">▦</span>{file.name}</div>)}</section><small>以上六份 CSV 均为当前导入流程要求的文件。</small></div>
         </div>
         {readiness.data && <Notice>本地数据服务已连接。导入会创建新的分析运行；已有运行与复核历史由后端保存。</Notice>}
+        {!readiness.data && readiness.isError && <Notice tone="warning">暂时无法确认本地数据服务状态。服务恢复后即可导入数据。</Notice>}
       </Panel>
-      <div className={styles.firstRunHint}><CircleHelp size={17}/>导入后的统计、图表与教学建议都基于本次运行数据；这里不会填入设计稿中的示例数字。</div>
+      <section className={styles.afterImport} aria-labelledby="after-import-title"><div className={styles.afterImportHeading}><div><span className={styles.kicker}>导入之后</span><h2 id="after-import-title">从真实学情到教学行动</h2></div><p>所有分析均依据当前导入运行和可用证据生成。</p></div><div className={styles.afterImportGrid}><article><span className={styles.afterImportIcon}><Activity size={19}/></span><div><strong>班级诊断</strong><p>汇总班级表现与需要优先关注的指标。</p></div><ArrowRight size={16}/></article><article><span className={styles.afterImportIcon}><Users size={19}/></span><div><strong>学生分析</strong><p>查看学生作答证据和个体学习情况。</p></div><ArrowRight size={16}/></article><article><span className={styles.afterImportIcon}><Lightbulb size={19}/></span><div><strong>教学建议</strong><p>结合课程目标与学情制定后续教学行动。</p></div><ArrowRight size={16}/></article></div></section>
+      <div className={styles.firstRunHint}><CircleHelp size={17}/>缺失或未评分的数据会保持其真实状态，不会被补成零分或示例统计。</div>
     </div>;
   }
 
