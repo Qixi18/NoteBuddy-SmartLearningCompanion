@@ -169,3 +169,36 @@ test('blocked drafts still record a teacher decision with a reason', async ({ pa
   await expect(page.getByText('复核结果已保存。')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText(/第 \d+ 版 · 继续观察/).first()).toBeVisible();
 });
+
+test('a no-record diagnostic plan can be accepted, implemented and confirmed as a coverage case', async ({ page, request }) => {
+  test.setTimeout(180_000);
+  await signOff(request, 'I022', ['Q005']);
+  await openScope(page, { student: 'D07', indicator: 'I022', node: 'N01' });
+  await expect(page.getByText(/补充诊断/).first()).toBeVisible({ timeout: 30_000 });
+
+  await page.getByLabel('复核教师').fill(TEACHER);
+  await page.getByLabel('复核理由').fill('E2E 合成：无作答记录，按当前范围覆盖证据确认补充观察方案。');
+  await page.getByRole('button', { name: '接受方案' }).click();
+  await expect(page.getByText('教师复核已保存。')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('第 1 版 · 已采纳')).toBeVisible();
+
+  await expect(page.getByText('继承完整 V2 方案快照')).toBeVisible();
+  await page.getByLabel('教师', { exact: true }).fill(TEACHER);
+  await page.getByRole('button', { name: '保存教学调整计划' }).click();
+  await expect(page.getByText('教学调整计划已保存，并关联了起始复核与作答来源。')).toBeVisible({ timeout: 30_000 });
+
+  const caseForm = page.locator('[data-testid="teacher-case-form"]');
+  await caseForm.locator('summary').click();
+  await expect(caseForm.getByLabel('案例类型')).toHaveValue('部分得分');
+  await caseForm.getByLabel('案例类型').selectOption('无记录观察');
+  await caseForm.getByLabel('选择理由').fill('E2E 合成：验证无作答记录学生也能形成正式覆盖证据案例。');
+  await caseForm.getByLabel('案例叙述').fill('E2E 合成案例：当前范围没有作答记录，只依据覆盖证据安排补充观察。');
+  await caseForm.getByLabel('解释限制').fill('合成数据；覆盖证据不能当作已完成的作答。');
+  await caseForm.getByLabel('核验教师').fill(TEACHER);
+  await caseForm.getByRole('button', { name: '确认并保存案例' }).click();
+  await expect(page.getByText('2 / 3')).toBeVisible({ timeout: 20_000 });
+
+  await page.reload();
+  await expect(page.getByRole('heading', { level: 1, name: '学生个性化学习建议' })).toBeVisible();
+  await expect(page.getByText('第 1 版 · 已采纳')).toBeVisible({ timeout: 30_000 });
+});
