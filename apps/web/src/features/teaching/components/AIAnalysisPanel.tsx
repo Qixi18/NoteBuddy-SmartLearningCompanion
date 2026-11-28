@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import { EmptyState, ErrorBox, Loading, Notice } from '../../../components/PageBits';
 import { api, postJson } from '../api';
+import { queryKeys } from '../../../api/queries';
 import { str } from '../../shared/workbenchTypes';
 import type { Row } from '../../shared/workbenchTypes';
 import styles from '../../shared/WorkbenchPages.module.css';
@@ -13,7 +14,7 @@ export function AIAnalysisPanel({ runId, studentId, indicatorId, nodeId }: { run
   const queryClient = useQueryClient();
   const params = new URLSearchParams({ task: 'task03', run_id: runId, student_id: studentId, indicator_id: indicatorId, node_id: nodeId });
   const preview = useQuery({
-    queryKey: ['ai-analysis-preview', runId, studentId, indicatorId, nodeId],
+    queryKey: queryKeys.aiAnalysisPreview(runId, studentId, indicatorId, nodeId),
     queryFn: () => api<Row>(`/api/ai-analysis?${params.toString()}`),
   });
   const generate = useMutation({
@@ -25,10 +26,19 @@ export function AIAnalysisPanel({ runId, studentId, indicatorId, nodeId }: { run
     })),
     onSuccess: async () => {
       setConfirmed(false);
-      await queryClient.invalidateQueries({ queryKey: ['ai-analysis-preview', runId, studentId, indicatorId, nodeId] });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.aiAnalysisPreview(runId, studentId, indicatorId, nodeId) });
     },
   });
-  const saved = (generate.data ?? preview.data?.analysis) as Row | undefined;
+  const saved = ((): Row | undefined => {
+    const generated = generate.data as Row | undefined;
+    const previewFingerprint = typeof preview.data?.source_fingerprint === 'string' ? preview.data.source_fingerprint : '';
+    const generatedIsCurrent = Boolean(generated && previewFingerprint && String(generated.source_fingerprint ?? '') === previewFingerprint);
+    if (generatedIsCurrent) return generated;
+    return preview.data?.analysis as Row | undefined;
+  })();
+  useEffect(() => {
+    setConfirmed(false);
+  }, [preview.data?.source_fingerprint]);
   const findings = Array.isArray(saved?.findings) ? saved.findings as Row[] : [];
   const summary = preview.data?.input_summary && typeof preview.data.input_summary === 'object' ? preview.data.input_summary as Row : {};
   return <details className={pageStyles.collapsedSection} data-testid="ai-analysis-panel">

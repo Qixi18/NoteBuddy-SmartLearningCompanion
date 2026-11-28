@@ -172,6 +172,15 @@ class TeachingAdjustments:
             record = uow.teaching_adjustments.get(adjustment_id)
             if record is None:
                 raise FileNotFoundError("教学调整记录不存在")
+            if payload.get("update_type") == "implementation":
+                # 教学活动已经开展、后续测验尚未进行时，允许只保存实施情况。
+                return uow.teaching_adjustments.update(
+                    adjustment_id,
+                    {
+                        "implementation": payload["implementation"].strip(),
+                        "implementation_status": payload["implementation_status"],
+                    },
+                )
             followup = uow.runs.load(payload["followup_run_id"])
             origin = uow.runs.load(record["origin_run_id"])
             origin_node = next(

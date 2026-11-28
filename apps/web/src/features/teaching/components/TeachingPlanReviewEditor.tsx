@@ -13,12 +13,14 @@ const joinLines = (value: string[] | undefined) => (value ?? []).join('\n');
  * 可改学习目标、步骤、推荐材料、三级提示、观察点与调整条件；
  * 学生/指标/节点/运行、证据指纹、来源签核版本属于后端校验范围，不在前端修改。
  */
-export function TeachingPlanReviewEditor({ plan, selection, disabled, canAccept, blocker, onSave, onOtherDecision }: {
+export function TeachingPlanReviewEditor({ plan, selection, disabled, canAccept, blocker, alreadyAccepted = false, acceptedVersion, onSave, onOtherDecision }: {
   plan: TeachingPlanV2;
   selection?: ResourceSelection | null;
   disabled: boolean;
   canAccept: boolean;
   blocker?: string;
+  alreadyAccepted?: boolean;
+  acceptedVersion?: unknown;
   onSave: (status: 'accepted' | 'edited', plan: TeachingPlanV2, reviewer: string, reason: string) => void;
   onOtherDecision: (status: 'rejected' | 'needs_observation', reviewer: string, reason: string) => void;
 }) {
@@ -98,14 +100,16 @@ export function TeachingPlanReviewEditor({ plan, selection, disabled, canAccept,
 
   return <form className={styles.editor} onSubmit={submit} data-testid="teaching-plan-review-editor">
     <div className={styles.editorHeader}>
-      <h3>个性化学习方案 · V2</h3>
+      <h3>当前方案审核 · V2</h3>
       <div className={styles.editorActions}>
-        <span className={styles.editorMode}><ShieldCheck size={13}/>教师审核后生效</span>
+        <span className={styles.editorMode}><ShieldCheck size={13}/>{alreadyAccepted ? `第 ${String(acceptedVersion ?? '—')} 版已采纳并在上方生效` : '教师审核后生效'}</span>
         <button type="button" onClick={() => setEditing(value => !value)}>
           {editing ? <><Eye size={14}/>返回预览</> : <><Pencil size={14}/>编辑方案</>}
         </button>
       </div>
     </div>
+
+    {alreadyAccepted && <Notice>当前版本已被教师采纳。再次保存会创建新的复核版本，历史版本仍可在下方时间线查看。</Notice>}
 
     <details className={styles.reviewDetails}>
       <summary>查看方案范围与证据版本</summary>

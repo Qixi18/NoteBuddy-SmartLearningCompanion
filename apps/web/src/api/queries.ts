@@ -28,6 +28,10 @@ export const queryKeys = {
   classReport: (runId: string, nodeId: string) => ['class-report', runId, nodeId] as const,
   classTeachingPlans: (runId: string, classId: string, nodeId: string) =>
     ['class-teaching-plans', runId, classId, nodeId] as const,
+  aiAnalysisPreview: (runId: string, studentId: string, indicatorId: string, nodeId: string) =>
+    ['ai-analysis-preview', runId, studentId, indicatorId, nodeId] as const,
+  classAiAnalysis: (runId: string, nodeId: string, classId: string) =>
+    ['class-ai-analysis', runId, nodeId, classId] as const,
 };
 
 /**
@@ -45,6 +49,8 @@ export const sourceVerificationAffectedKeys = [
   ['draft'],
   ['class-teaching-plans'],
   ['class-report'],
+  ['ai-analysis-preview'],
+  ['class-ai-analysis'],
   ['readiness'],
 ] as const;
 

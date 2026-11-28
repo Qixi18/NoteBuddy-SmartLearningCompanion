@@ -342,18 +342,42 @@ class TeachingAdjustmentCreateRequest(BaseModel):
 
 class TeachingAdjustmentUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    update_type: Literal["implementation", "outcome"] = "outcome"
     implementation: str = Field(min_length=1, max_length=8000)
     implementation_status: Literal["completed", "partial", "not_completed"]
-    outcome_observations: str = Field(min_length=1, max_length=8000)
-    followup_run_id: str = Field(min_length=1)
-    followup_node_id: str = Field(min_length=1)
-    followup_evidence_record_ids: list[str] = Field(min_length=1)
+    outcome_observations: str = Field(default="", max_length=8000)
+    followup_run_id: str = Field(default="", max_length=64)
+    followup_node_id: str = Field(default="", max_length=64)
+    followup_evidence_record_ids: list[str] = Field(default_factory=list, max_length=200)
     followup_evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
-    comparability: Literal["comparable", "not_comparable", "undetermined"]
-    comparability_reason: str = Field(min_length=1, max_length=4000)
-    teacher_conclusion: str = Field(min_length=1, max_length=8000)
-    reviewer: str = Field(min_length=1, max_length=200)
-    concluded_at: str = Field(min_length=1, max_length=64)
+    comparability: Literal["comparable", "not_comparable", "undetermined"] = "undetermined"
+    comparability_reason: str = Field(default="", max_length=4000)
+    teacher_conclusion: str = Field(default="", max_length=8000)
+    reviewer: str = Field(default="", max_length=200)
+    concluded_at: str = Field(default="", max_length=64)
+
+    @model_validator(mode="after")
+    def outcome_requires_followup_evidence(self):
+        """只保存实施情况时允许缺少后续证据；效果复核仍必须完整提供。"""
+        if self.update_type != "outcome":
+            return self
+        missing = [
+            name
+            for name, value in (
+                ("outcome_observations", self.outcome_observations.strip()),
+                ("followup_run_id", self.followup_run_id.strip()),
+                ("followup_node_id", self.followup_node_id.strip()),
+                ("followup_evidence_record_ids", self.followup_evidence_record_ids),
+                ("comparability_reason", self.comparability_reason.strip()),
+                ("teacher_conclusion", self.teacher_conclusion.strip()),
+                ("reviewer", self.reviewer.strip()),
+                ("concluded_at", self.concluded_at.strip()),
+            )
+            if not value
+        ]
+        if missing:
+            raise ValueError("效果复核缺少必要字段：" + "、".join(missing))
+        return self
 
 
 class ImportResponse(BaseModel):

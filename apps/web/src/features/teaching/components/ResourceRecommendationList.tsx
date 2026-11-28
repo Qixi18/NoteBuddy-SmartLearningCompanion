@@ -18,8 +18,8 @@ function EntryCard({ entry }: { entry: ResourceSelectionEntry }) {
       <span className={styles.resourceId}>{entry.material_id}</span>
       <span className={styles.resourceType}>{entry.resource_type || '材料'}</span>
       {entry.source_verified
-        ? <span className={styles.verifiedBadge}><BadgeCheck size={12}/>已核验</span>
-        : <span className={styles.unverifiedBadge}><ShieldQuestion size={12}/>待核验</span>}
+        ? <span className={styles.verifiedBadge}><BadgeCheck size={12}/>已核验 · 正式</span>
+        : <span className={styles.unverifiedBadge}><ShieldQuestion size={12}/>待核验 · 候选</span>}
     </div>
     {entry.title && <p className={styles.resourceTitle}>{entry.title}</p>}
     <p className={styles.resourceLocator}>
@@ -34,14 +34,14 @@ function EntryCard({ entry }: { entry: ResourceSelectionEntry }) {
 
 /**
  * 推荐材料与练习：只展示后端选择结果、理由和来源定位。
- * 没有练习题时明确说明"只能展示材料"，不把不完整资源集显示成已完成方案。
+ * 正式材料与待核验候选材料在视觉上分开；没有练习题时明确说明"只能展示材料"。
  */
-export function ResourceRecommendationList({ selection }: { selection?: ResourceSelection | null }) {
+export function ResourceRecommendationList({ selection, showStatus = true }: { selection?: ResourceSelection | null; showStatus?: boolean }) {
   if (!selection) return <Notice>资源选择结果尚未返回，暂不展示推荐材料。</Notice>;
   const reason = selection.reason_codes.map(code => BLOCK_REASONS[code]).filter(Boolean);
   const noPractice = selection.reason_codes.includes('no_verified_node_practice');
-  return <div>
-    {selection.status === 'blocked' && <Notice tone="warning">
+  return <div className={styles.resourcePanel}>
+    {showStatus && selection.status === 'blocked' && <Notice tone="warning">
       {reason.length ? reason.join(' ') : '当前没有可生成完整方案的材料组合。'}
       {noPractice && selection.learning_resources.length ? ' 下面列出的学习材料仍可作为教师备课参考。' : ''}
     </Notice>}

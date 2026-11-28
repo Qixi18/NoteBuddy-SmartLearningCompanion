@@ -1118,3 +1118,367 @@
     display: none;
   }
 }
+
+/* ============================================================
+   信息架构重构（按《一、先给出结论》规划）
+   纵向业务流程布局：顶部上下文 → 固定章节导航 → 01~06 全宽章节。
+   ============================================================ */
+
+.pageStack { gap: 18px; }
+
+.pageHeading {
+  align-items: flex-start;
+  padding: 4px 2px 0;
+}
+
+.headingText { min-width: 0; }
+.headingText h1 {
+  margin: 2px 0 6px;
+  color: #123f2a;
+  font-size: clamp(24px, 2.4vw, 30px);
+  line-height: 1.2;
+  letter-spacing: -.01em;
+  text-wrap: balance;
+}
+.headingText p { max-width: 760px; }
+
+.pageStatePill,
+.statePill {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+  padding: 6px 11px;
+  border-radius: 999px;
+  font-size: var(--font-size-label);
+  font-weight: 750;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.pageStatePill[data-tone="green"], .statePill[data-tone="green"] { color: #1d6b3c; background: #e6f5e8; }
+.pageStatePill[data-tone="amber"], .statePill[data-tone="amber"] { color: #8a5c15; background: #fff4df; }
+
+.contextPanel {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(260px, .75fr);
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid #dcebe1;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #ffffff, #f7fbf7 65%);
+  box-shadow: 0 6px 18px #173e1b0b;
+}
+.contextFacts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px 18px;
+  align-items: start;
+}
+.contextLabel {
+  grid-column: 1 / -1;
+  color: #13854d;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .06em;
+}
+.contextFact { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
+.contextFact span { color: #6c7f71; font-size: var(--font-size-sm); }
+.contextFact b { overflow-wrap: anywhere; color: #1f4630; font-size: var(--font-size-body); line-height: 1.4; }
+.contextFact small { color: #7b887e; font-size: var(--font-size-sm); }
+.contextFactWide { grid-column: span 1; }
+.contextState {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 16px;
+  border-left: 1px solid #e3eee6;
+}
+.contextState > span { color: #6c7f71; font-size: var(--font-size-sm); }
+.contextState small { color: #6f8074; font-size: var(--font-size-sm); line-height: 1.5; }
+
+.contextControls {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(260px, .8fr);
+  gap: 10px;
+  align-items: stretch;
+}
+.contextControls > :global(section) { min-width: 0; }
+
+.sectionNav {
+  position: sticky;
+  top: 8px;
+  z-index: 6;
+  background: #fff;
+  backdrop-filter: blur(6px);
+}
+.sectionNav button[aria-current="true"] {
+  color: #0f6d3c;
+  background: #e7f5ea;
+  box-shadow: inset 0 -2px 0 #2f8a52;
+}
+.sectionNav button { transition: background-color .2s ease, color .2s ease; }
+
+.chapter {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+  padding: 6px 0 10px;
+  scroll-margin-top: 86px;
+}
+.chapter + .chapter { border-top: 1px solid #e6f0e8; padding-top: 22px; }
+.chapter h2 { margin: 0; color: #145334; font-size: 20px; line-height: 1.3; }
+.chapterHead { display: flex; align-items: flex-start; gap: 12px; }
+.chapterHead > div { min-width: 0; }
+.chapterHead p { max-width: 880px; margin: 4px 0 0; color: #6e8074; font-size: var(--font-size-label); line-height: 1.55; }
+.chapterIndex {
+  display: inline-grid;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 10px;
+  color: #1f6f40;
+  background: #e5f4e6;
+  font-size: var(--font-size-label);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.chapterTitleRow { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.chapterTitleRow .exportLink { margin-top: 4px; }
+
+.overviewGrid { align-items: start; }
+.overviewGrid > :first-child { height: 100%; }
+
+/* 摘要状态徽标：统一 data-tone 语气 */
+.summaryBadge[data-tone="green"] { color: #1d6b3c; background: #e6f5e8; }
+.summaryBadge[data-tone="amber"] { color: #8a5c15; background: #fff4df; }
+
+/* ---------- 02 证据三层 ---------- */
+.evidenceLayerHint { display: inline-flex; align-items: center; gap: 5px; color: #74867a; font-size: var(--font-size-sm); }
+.evidenceSummary {
+  display: grid;
+  grid-template-columns: minmax(260px, .85fr) minmax(0, 1.6fr);
+  gap: 16px;
+  padding: 14px;
+  border: 1px solid #e2eee5;
+  border-radius: 12px;
+  background: #f8fcf8;
+}
+.evidenceStats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.evidenceStat {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: #fff;
+  border: 1px solid #e6f0e8;
+}
+.evidenceStat strong { color: #1d6b3c; font-size: 24px; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.evidenceStat span { color: #6f8074; font-size: var(--font-size-sm); }
+.evidenceSummaryText { display: flex; min-width: 0; flex-direction: column; gap: 7px; }
+.evidenceSummaryText p { margin: 0; color: #4c6354; font-size: var(--font-size-label); line-height: 1.6; overflow-wrap: anywhere; }
+.evidenceSummaryText p b { display: block; margin-bottom: 2px; color: #2b5c3f; }
+
+.evidenceCardGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.evidenceCard {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+  padding: 13px 14px;
+  border: 1px solid #e6eee7;
+  border-radius: 11px;
+  background: #fff;
+  color: #4e6355;
+  font-size: var(--font-size-label);
+  line-height: 1.6;
+}
+.evidenceCardHead { display: flex; align-items: center; gap: 6px; color: #2d5c40; font-size: var(--font-size-body); font-weight: 750; }
+.evidenceCard p { margin: 0; overflow-wrap: anywhere; }
+.evidenceCard .requirementList { margin: 0; }
+.evidenceCardEmpty { color: #82908a; }
+.evidenceCard .claimList { margin: 0; padding-left: 18px; }
+
+.answerDetails { border: 1px solid #e2ebe3; border-radius: 11px; background: #fcfdfc; }
+.answerDetails > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  color: #2d5c40;
+  cursor: pointer;
+  font-size: var(--font-size-body);
+  font-weight: 750;
+  list-style: none;
+}
+.answerDetails > summary::-webkit-details-marker { display: none; }
+.answerDetails > summary small { color: #7b887e; font-size: var(--font-size-sm); font-weight: 500; }
+.answerDetails > summary em { margin-left: auto; color: #86938b; font-size: var(--font-size-sm); font-style: normal; }
+.answerDetails[open] > summary { border-bottom: 1px solid #e8f0e9; }
+.answerBody { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px 14px; }
+.answerHint { margin: 0; color: #7a641f; font-size: var(--font-size-sm); line-height: 1.55; }
+.answerRefs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: #6f8074; font-size: var(--font-size-sm); }
+
+.inlineButton {
+  width: fit-content;
+  padding: 7px 11px;
+  border: 1px solid #cfe4d3;
+  border-radius: 8px;
+  color: #246b40;
+  background: #f2faf3;
+  font: inherit;
+  font-size: var(--font-size-label);
+  font-weight: 700;
+  cursor: pointer;
+}
+.inlineButton:hover { background: #e7f6eb; }
+
+/* ---------- 03 方案状态 ---------- */
+.planOriginBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: var(--font-size-sm);
+  font-weight: 750;
+}
+.planOriginBadge[data-tone="green"] { color: #1d6b3c; background: #e6f5e8; }
+.planOriginBadge[data-tone="amber"] { color: #8a5c15; background: #fff4df; }
+
+.planFlowGrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.planFlowGrid .pathSection { margin-top: 14px; }
+
+.planStatePanel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid #efe3c8;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #fffdf7, #fffaf0);
+}
+.planStatePanel[data-tone="green"] { border-color: #d6ecdb; background: #f7fcf8; }
+.planStateHead { display: flex; flex-direction: column; gap: 6px; }
+.planStateHead small { color: #6f8074; font-size: var(--font-size-label); line-height: 1.5; }
+.planStateReason { margin: 0; color: #4c5f52; font-size: var(--font-size-body); line-height: 1.6; overflow-wrap: anywhere; }
+.planStateActions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.stateActionLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid #cde5d3;
+  border-radius: 8px;
+  color: #1d6b3c;
+  background: #fff;
+  font-size: var(--font-size-label);
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+.stateActionLink:hover, .stateActionLink:focus-visible { background: #eef8ef; }
+.planStateFoot { margin: 0; color: #7c8a80; font-size: var(--font-size-sm); line-height: 1.5; }
+.planCandidates { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; padding-top: 12px; border-top: 1px solid #efe7d4; }
+.planCandidates h3 { margin: 0; color: #2f5f41; font-size: var(--font-size-body); }
+.planCandidates > p { margin: 0; color: #7c8a80; font-size: var(--font-size-sm); line-height: 1.5; }
+
+/* ---------- 04 复核历史时间线 ---------- */
+.historyCount { color: #7b887e; font-size: var(--font-size-sm); }
+.historyEmpty { margin: 0; padding: 10px 0 2px; color: #7b887e; font-size: var(--font-size-label); line-height: 1.6; }
+.historyTimeline { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.historyItem {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 10px;
+  padding: 6px 0 10px;
+  border: 0;
+  background: transparent;
+}
+.historyDot { position: relative; display: block; width: 9px; height: 9px; margin: 7px auto 0; border-radius: 50%; background: #c9dccd; }
+.historyItem[data-tone="current"] .historyDot { background: #2f8a52; box-shadow: 0 0 0 4px #e3f4e7; }
+.historyItem[data-tone="inactive"] .historyDot { background: #d9b67e; }
+.historyItem:not(:last-child) .historyDot::after {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  width: 1px;
+  height: calc(100% + 26px);
+  background: #e2ede4;
+  content: '';
+  transform: translateX(-50%);
+}
+.historyBody { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
+.historyItemHead { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.historyItemHead b { color: #274c36; font-size: var(--font-size-body); }
+.historyCurrent, .historyTag { padding: 2px 7px; border-radius: 999px; font-size: var(--font-size-sm); font-weight: 700; }
+.historyCurrent { color: #1d6b3c; background: #e5f5e8; }
+.historyTag { color: #6f8074; background: #eef3ef; }
+.historyTag[data-tone="inactive"] { color: #8a6418; background: #fff4df; }
+.historyDetails { margin-top: 3px; }
+.historyDetails > summary { color: #2d6a45; cursor: pointer; font-size: var(--font-size-label); font-weight: 700; }
+.historyDetails[open] > summary { margin-bottom: 6px; }
+.historyPlan { padding: 10px 12px; border: 1px solid #e8f0e9; border-radius: 9px; background: #fbfdfb; color: #4e6355; font-size: var(--font-size-label); line-height: 1.6; }
+.historyPlan p { margin: 4px 0; overflow-wrap: anywhere; }
+.historyPlan ol { margin: 4px 0; padding-left: 20px; }
+
+/* ---------- 05 实施状态 ---------- */
+.adjustmentState {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border: 1px dashed #e2d3b4;
+  border-radius: 12px;
+  background: #fffdf8;
+}
+.adjustmentState[data-tone="green"] { border-color: #cfe6d5; background: #f8fcf9; }
+.adjustmentState p { margin: 0; color: #4e6355; font-size: var(--font-size-body); line-height: 1.6; }
+.adjustmentState small { color: #7b887e; font-size: var(--font-size-sm); line-height: 1.5; }
+
+/* ---------- 06 案例 ---------- */
+.caseProgress { display: flex; flex-direction: column; gap: 9px; }
+.caseProgressHead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+.caseCurrent { margin-left: auto; padding: 4px 9px; border-radius: 999px; color: #37644a; background: #eef5ef; font-size: var(--font-size-sm); }
+.caseHint { margin: 0; color: #74867a; font-size: var(--font-size-sm); line-height: 1.55; }
+.caseDetails > summary { color: #2d6a45; cursor: pointer; font-size: var(--font-size-label); font-weight: 700; }
+.caseDetails[open] > summary { margin-bottom: 6px; }
+.caseReference { margin: 0; padding: 8px 11px; border-radius: 8px; color: #4e6355; background: #f4f9f4; font-size: var(--font-size-sm); line-height: 1.55; }
+
+/* ---------- 01 指标 ---------- */
+.metricCurrent { padding: 4px 6px; border-radius: 7px; background: #f1f9f2; }
+.metricCurrentTag { margin-left: 6px; padding: 1px 6px; border-radius: 999px; color: #1d6b3c; background: #e2f2e5; font-size: 11px; font-style: normal; font-weight: 700; }
+
+/* ---------- 新布局响应式 ---------- */
+@media (max-width: 1100px) {
+  .contextPanel { grid-template-columns: minmax(0, 1fr); }
+  .contextState { padding-left: 0; border-left: 0; border-top: 1px solid #e6f0e8; padding-top: 10px; }
+  .contextControls { grid-template-columns: minmax(0, 1fr); }
+  .contextFacts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .evidenceSummary { grid-template-columns: minmax(0, 1fr); }
+  .evidenceCardGrid { grid-template-columns: minmax(0, 1fr); }
+  .planFlowGrid { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 760px) {
+  .pageHeading { flex-direction: column; gap: 8px; }
+  .contextFacts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .evidenceStats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .sectionNav { position: static; }
+  .chapter { scroll-margin-top: 16px; }
+  .chapterTitleRow { flex-direction: column; }
+  .caseCurrent { margin-left: 0; }
+  .metricList { grid-template-columns: minmax(0, 1fr); }
+  .metricRow { grid-template-columns: minmax(0, 1.5fr) minmax(78px, 1fr) 58px; }
+  .metricRow span { white-space: normal; overflow: visible; text-overflow: clip; }
+}

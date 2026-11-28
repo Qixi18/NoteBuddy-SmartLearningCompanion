@@ -632,6 +632,28 @@ def test_teaching_adjustment_links_origin_and_followup_runs_with_teacher_compara
     assert created.status_code == 200, created.text
     assert created.json()["origin_node_date"] == "2026-01-20"
 
+    implementation_only = client.patch(
+        f"/api/teaching-adjustments/{created.json()['adjustment_id']}",
+        json={
+            "update_type": "implementation",
+            "implementation": "已开展课堂讲解，后续测验尚未进行",
+            "implementation_status": "partial",
+        },
+    )
+    assert implementation_only.status_code == 200, implementation_only.text
+    assert implementation_only.json()["implementation_status"] == "partial"
+    assert implementation_only.json()["concluded_at"] is None
+    assert implementation_only.json()["followup_evidence_record_ids"] == []
+
+    missing_outcome = client.patch(
+        f"/api/teaching-adjustments/{created.json()['adjustment_id']}",
+        json={
+            "implementation": "已开展课堂讲解",
+            "implementation_status": "completed",
+        },
+    )
+    assert missing_outcome.status_code == 422
+
     followup_tables = sample_tables()
     followup_tables["测验节点"][0]["模拟测验日期"] = "2026-06-17"
     followup_tables["作答记录"][1]["得分"] = "2"
@@ -717,13 +739,15 @@ def test_teaching_adjustment_links_origin_and_followup_runs_with_teacher_compara
         },
     )
     assert revised.status_code == 200
-    assert len(revised.json()["history"]) == 2
+    # 保存实施情况、保存效果复核、再次修订，各生成一条历史快照。
+    assert len(revised.json()["history"]) == 3
     assert [item["comparability"] for item in revised.json()["history"]] == [
+        "pending",
         "pending",
         "not_comparable",
     ]
     assert (
-        revised.json()["history"][1]["teacher_conclusion"]
+        revised.json()["history"][2]["teacher_conclusion"]
         == completed.json()["teacher_conclusion"]
     )
     export = client.get("/api/export", params={"cases": "D01,D02,D03"})

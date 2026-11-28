@@ -76,15 +76,26 @@ test('student diagnosis uses readable text metrics and matching grid columns', a
   expect(pairs[0]).toBe(pairs[1]);
 });
 
-test('student review plan form occupies an independent full-width row', async ({ page }) => {
+test('evidence, plan and review sections stack as full-width rows', async ({ page }) => {
   await gotoRoute(page, '/teaching/student', '学生个性化学习建议');
   const review = page.getByTestId('student-review-plan-panel');
   await expect(review).toBeVisible();
   const dimensions = await page.evaluate(() => {
+    const evidence = document.getElementById('student-evidence')!.getBoundingClientRect();
+    const plan = document.getElementById('student-plan')!.getBoundingClientRect();
     const reviewPanel = document.querySelector('[data-testid="student-review-plan-panel"]')!.getBoundingClientRect();
-    const flow = document.querySelector('[data-testid="student-draft-and-evidence"]')!.getBoundingClientRect();
-    return { reviewWidth: reviewPanel.width, flowWidth: flow.width, reviewTop: reviewPanel.top, flowTop: flow.top };
+    return {
+      evidenceWidth: evidence.width,
+      planWidth: plan.width,
+      reviewWidth: reviewPanel.width,
+      evidenceBottom: evidence.bottom,
+      planTop: plan.top,
+      planBottom: plan.bottom,
+      reviewTop: reviewPanel.top,
+    };
   });
-  expect(dimensions.reviewWidth).toBeGreaterThan(dimensions.flowWidth - 2);
-  expect(dimensions.reviewTop).toBeGreaterThan(dimensions.flowTop);
+  expect(dimensions.planTop).toBeGreaterThanOrEqual(dimensions.evidenceBottom - 2);
+  expect(dimensions.reviewTop).toBeGreaterThanOrEqual(dimensions.planBottom - 2);
+  expect(Math.abs(dimensions.planWidth - dimensions.reviewWidth)).toBeLessThanOrEqual(2);
+  expect(dimensions.planWidth).toBeGreaterThan(800);
 });

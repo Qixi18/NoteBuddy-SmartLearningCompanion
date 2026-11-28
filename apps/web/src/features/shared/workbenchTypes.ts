@@ -20,6 +20,8 @@ export type Bundle = {
   coverage: Record<string, unknown>;
   source_context?: Row;
   issues: Row[];
+  source_versions?: Record<string, number>;
+  fingerprint?: string;
 };
 
 export function str(value: unknown, empty = '—') { return value == null || value === '' ? empty : String(value); }

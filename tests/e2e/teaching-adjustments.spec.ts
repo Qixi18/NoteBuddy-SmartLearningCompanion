@@ -9,7 +9,7 @@ test('teaching adjustment section explains why a plan needs an accepted review',
   await gotoRoute(page, '/teaching/student', '学生个性化学习建议');
 
   await expect(page.getByText('教学实施与调整记录')).toBeVisible();
-  await expect(page.getByText(/需要先接受当前节点的建议|教学调整计划/)).toBeVisible();
+  await expect(page.getByText(/尚未建立教学实施计划|教学调整计划/)).toBeVisible();
 });
 
 test('adjustment update endpoint accepts PATCH and never answers 405', async ({ request }) => {

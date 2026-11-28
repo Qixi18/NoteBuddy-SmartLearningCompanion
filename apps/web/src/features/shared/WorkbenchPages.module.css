@@ -761,3 +761,17 @@
 }
 .itemRelationControls label>span { color:#78857b; font-size:var(--font-size-xs); font-weight:650; }
 @media (max-width:600px) { .itemRelationGrid { grid-template-columns:1fr; } .itemRelationControls { grid-template-columns:1fr; } .itemRelationSearchBar { flex-wrap:wrap; padding:5px 9px 9px; } .itemRelationSearchBar>label { flex-basis:100%; } .itemRelationSearchBar select { max-width:none; flex:1; } .itemRelationPanelCount { display:none; } .itemRelationDetail { gap:12px; } .itemRelationActions a { flex:1 1 auto; justify-content:center; } }
+
+/* 原始作答列表：得分与状态分离，供学生建议与学生诊断两页复用 */
+.evidenceRows summary b { flex: 1 1 auto; min-width: 0; }
+.evidenceRows summary span:nth-child(2) { flex: 0 0 auto; }
+.responseScore { color: #3d5945; font-variant-numeric: tabular-nums; font-weight: 700; }
+.responseNote { color: #8a6418; }
+.disposition[data-state="pending"] { color: #8a6418; background: #fff6e3; }
+.disposition[data-state="unanswered"] { color: #8a5a18; background: #fdf3e2; }
+.disposition[data-state="excluded"] { color: #7a5a5a; background: #f5eeee; }
+
+/* 实施记录与效果复核分阶段保存 */
+.adjustmentSection { display:flex; flex-direction:column; gap:10px; padding:12px; border:1px solid #e8efe9; border-radius:10px; background:#fcfdfc; }
+.adjustmentSection h4 { display:flex; flex-wrap:wrap; align-items:baseline; gap:8px; margin:0; color:#2f5c41; font-size:var(--font-size-body); }
+.adjustmentSection h4 small { color:#8b978f; font-size:var(--font-size-sm); font-weight:500; }

@@ -10,6 +10,7 @@ import { routes } from '../../../app/routes';
 import {
   api, postJson, useClassReport, useClassTeachingPlans,
 } from '../api';
+import { queryKeys } from '../../../api/queries';
 import { ClassAdjustmentWorkflow } from '../components/ClassAdjustmentWorkflow';
 import { ClassTeachingReport } from '../components/ClassTeachingReport';
 import { ClassPlanEditor } from '../components/ClassPlanEditor';
@@ -151,7 +152,7 @@ export function ClassTeachingPage() {
   });
 
   const aiPreview = useQuery({
-    queryKey: ['class-ai-analysis', runId, nodeId, classId],
+    queryKey: queryKeys.classAiAnalysis(runId, nodeId, classId),
     queryFn: () => api<Row>(
       `/api/ai-analysis?task=task02&node_id=${encodeURIComponent(nodeId)}&class=${encodeURIComponent(classId)}`,
     ),
@@ -171,7 +172,7 @@ export function ClassTeachingPage() {
     onSuccess: async () => {
       setError('');
       setMessage('班级 AI 分析已生成。它只作为方案参考，仍需教师核对证据后采纳。');
-      await queryClient.invalidateQueries({ queryKey: ['class-ai-analysis'] });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.classAiAnalysis(runId, nodeId, classId) });
       await queryClient.invalidateQueries({ queryKey: ['class-teaching-plans'] });
     },
     onError: cause => { setMessage(''); setError((cause as Error).message); },

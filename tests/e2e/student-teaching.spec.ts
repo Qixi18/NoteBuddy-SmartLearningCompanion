@@ -44,6 +44,8 @@ test('page organizes summary, evidence, plan and review sections without page er
   const ai = page.locator('[data-testid="ai-analysis-panel"]');
   await expect(ai).toBeVisible();
   await expect(ai).not.toHaveAttribute('open', /.*/);
+  const answerDetails = page.locator('details').filter({ hasText: '原始作答与评分详情' }).first();
+  await expect(answerDetails).not.toHaveAttribute('open', /.*/);
   await ai.locator('summary').click();
   const consent = ai.getByRole('checkbox');
   if (await consent.count()) {
@@ -126,24 +128,29 @@ test('teacher edits, accepts, records implementation, confirms a case and reload
 
   const adjustment = page.locator('details').filter({ hasText: /调整计划 ·/ }).first();
   await adjustment.locator('summary').click();
+  await page.getByLabel('实施记录').fill('E2E 合成流程模拟；非真实教学活动。');
+  await page.getByRole('button', { name: '保存实施情况' }).click();
+  await expect(page.getByText('实施情况已保存；后续测验完成后，再在下方补充效果复核。')).toBeVisible({ timeout: 10_000 });
+
   const followupNode = adjustment.getByLabel('后续测验节点');
   await expect(followupNode.locator('option[value="N01"]')).toBeDisabled();
   await followupNode.selectOption('N02');
   const followupEvidence = adjustment.getByRole('checkbox', { name: /R0146.*Q005/ });
   await expect(followupEvidence).toBeVisible({ timeout: 20_000 });
   await followupEvidence.check();
-  await adjustment.getByLabel('实施记录').fill('E2E 合成流程模拟；非真实教学活动。');
   await adjustment.getByLabel('效果观察').fill('只验证 N02 证据路径，不推断真实教学效果。');
   await adjustment.getByLabel('实施状态').selectOption('partial');
   await adjustment.getByLabel('比较口径').selectOption('comparable');
   await adjustment.getByLabel('比较说明').fill('仅依据 N01/N02 共同题 Q005 的有效评分。');
   await adjustment.getByLabel('教师结论').fill('E2E 合成验收，不代表真实教学效果。');
   await adjustment.getByLabel('记录教师').fill(TEACHER);
-  await adjustment.getByRole('button', { name: '保存实施与后续结论' }).click();
-  await expect(adjustment.getByText('实施情况和后续证据已保存，先前版本保留在调整记录历史中。')).toBeVisible({ timeout: 10_000 });
+  await adjustment.getByRole('button', { name: '保存效果复核' }).click();
+  await expect(adjustment.getByText('效果复核已保存，先前版本保留在调整记录历史中。')).toBeVisible({ timeout: 10_000 });
 
   const caseForm = page.locator('[data-testid="teacher-case-form"]');
   await caseForm.locator('summary').click();
+  await expect(caseForm.getByLabel('案例类型')).toHaveValue('待教师选择');
+  await caseForm.getByLabel('案例类型').selectOption('部分得分');
   await caseForm.getByLabel('选择理由').fill('E2E 合成：验证部分得分学生的正式案例归档。');
   await caseForm.getByLabel('案例叙述').fill('E2E 合成案例叙述，仅用于隔离测试环境。');
   await caseForm.getByLabel('解释限制').fill('合成数据，不代表真实教学效果。');
@@ -154,6 +161,8 @@ test('teacher edits, accepts, records implementation, confirms a case and reload
   await page.reload();
   await expect(page.getByRole('heading', { level: 1, name: '学生个性化学习建议' })).toBeVisible();
   await expect(page.getByText('第 1 版 · 修改后采纳')).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('#student-review')).toContainText('教师复核历史');
+  await expect(page.locator('#student-plan')).toContainText('教师已采纳 · 第 1 版');
   const restored = page.locator('details').filter({ hasText: /调整计划 ·/ }).first();
   await restored.locator('summary').click();
   await expect(restored.getByLabel('后续测验节点').locator('option:checked')).toContainText('N02');
@@ -192,7 +201,7 @@ test('a no-record diagnostic plan can be accepted, implemented and confirmed as 
 
   const caseForm = page.locator('[data-testid="teacher-case-form"]');
   await caseForm.locator('summary').click();
-  await expect(caseForm.getByLabel('案例类型')).toHaveValue('部分得分');
+  await expect(caseForm.getByLabel('案例类型')).toHaveValue('无记录观察');
   await caseForm.getByLabel('案例类型').selectOption('无记录观察');
   await caseForm.getByLabel('选择理由').fill('E2E 合成：验证无作答记录学生也能形成正式覆盖证据案例。');
   await caseForm.getByLabel('案例叙述').fill('E2E 合成案例：当前范围没有作答记录，只依据覆盖证据安排补充观察。');

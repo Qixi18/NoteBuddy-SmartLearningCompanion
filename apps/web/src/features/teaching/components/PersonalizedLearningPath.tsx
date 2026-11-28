@@ -1,45 +1,44 @@
-import { Route } from 'lucide-react';
+import { ArrowRight, ClipboardCheck, Route, ShieldCheck } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Panel } from '../../../components/PageBits';
+import { routes } from '../../../app/routes';
 import type { Draft, PlanStatus, ResourceSelection, TeachingPlanV2 } from '../types';
-import { HINT_LEVEL_LABELS, PLAN_STATUS_LABELS, PURPOSE_LABELS, isCoveragePlan } from '../types';
+import { HINT_LEVEL_LABELS, PURPOSE_LABELS, isCoveragePlan } from '../types';
 import { ResourceRecommendationList } from './ResourceRecommendationList';
 import styles from '../pages/StudentTeachingPage.module.css';
 
-const BLOCKED_GUIDANCE: Record<PlanStatus, string[]> = {
-  requires_source_verification: [
-    '在「课程知识 → 主题概览」完成当前指标的来源核验，并确认来源版本仍然有效。',
-    '核验通过后回到本页；方案会按新的来源版本重新生成，不需要手工填写材料。',
-  ],
-  requires_scoring: [
-    '先在工作台补齐当前范围的评分；待评分记录不能作为教学判断依据。',
-    '评分完成后重新打开当前范围，再生成可审核的方案。',
-  ],
-  requires_scope_selection: [
-    '在上方选择单一测验节点；系统不会合并不同节点的证据。',
-  ],
-  blocked: [
-    '查看「推荐学习材料与练习」中的排除原因，核对材料范围、来源与核验状态。',
-    '证据冲突或缺少有效评分时，先核对原始记录；页面不会用通用建议填补空缺。',
-  ],
-  ready: [],
-};
-
 /**
- * 页面核心展示组件：目标 → 材料与练习 → 步骤 → 三级提示 → 后续观察与调整。
- * 所有正式内容都来自 V2 方案与资源选择接口；没有方案时说明阻塞原因，不填充示例。
+ * 个性化学习方案：四种状态 + 完整方案展示。
+ * 方案存在时按「目标 → 材料/练习 → 步骤 → 提示 → 观察/调整 → 证据范围」呈现；
+ * 方案不存在时说明阻塞原因、下一步入口和仍可参考的候选材料，不用空白占位。
  */
-export function PersonalizedLearningPath({ plan, selection, status, error, draft }: {
+export function PersonalizedLearningPath({ plan, planOrigin, planVersion, stateLabel, stateTone, stateDetail, selection, status, error, draft, search, onRetry }: {
   plan?: TeachingPlanV2 | null;
+  planOrigin?: 'accepted' | 'draft' | null;
+  planVersion?: unknown;
+  stateLabel: string;
+  stateTone: 'green' | 'amber';
+  stateDetail: string;
   selection?: ResourceSelection | null;
   status: PlanStatus;
   error?: string | null;
   draft?: Draft;
+  search: string;
+  onRetry?: () => void;
 }) {
   const coverage = isCoveragePlan(plan);
-  return <Panel title="个性化学习方案" icon={<Route size={18}/>}>
+  const originLabel = planOrigin === 'accepted'
+    ? `教师已采纳 · 第 ${String(planVersion ?? '—')} 版`
+    : planOrigin === 'draft' ? '待教师审核的规则草稿' : stateLabel;
+  return <Panel title="个性化学习方案" icon={<Route size={18}/>} action={plan ? (
+    <span className={styles.planOriginBadge} data-tone={planOrigin === 'accepted' ? 'green' : 'amber'}>
+      {planOrigin === 'accepted' ? <ShieldCheck size={13}/> : <ClipboardCheck size={13}/>}
+      {originLabel}
+    </span>
+  ) : undefined}>
     {plan ? <>
       <div className={styles.pathGoal}>
-        <span className={styles.pathGoalLabel}>本次学习目标 · {PURPOSE_LABELS[plan.purpose]} · 待教师审核</span>
+        <span className={styles.pathGoalLabel}>本次学习目标 · {PURPOSE_LABELS[plan.purpose]}{planOrigin === 'accepted' ? ' · 已按教师审核版本执行' : ' · 待教师审核'}</span>
         <p className={styles.pathGoalText}>{plan.goal}</p>
       </div>
 
@@ -48,7 +47,7 @@ export function PersonalizedLearningPath({ plan, selection, status, error, draft
         {coverage && <p className={styles.coverageNote}>
           本方案依据当前节点的范围覆盖证据生成：学生在该范围内没有有效作答记录，因此这是补充观察与诊断安排，不是补救结论。
         </p>}
-        <ResourceRecommendationList selection={selection}/>
+        <ResourceRecommendationList selection={selection} showStatus={false}/>
       </section>
 
       <section className={styles.pathSection}>
@@ -57,7 +56,7 @@ export function PersonalizedLearningPath({ plan, selection, status, error, draft
       </section>
 
       <section className={styles.pathSection}>
-        <div className={styles.pathSectionHead}><span className={styles.pathIndex}>3</span><h3>分步提示</h3></div>
+        <div className={styles.pathSectionHead}><span className={styles.pathIndex}>3</span><h3>三级提示</h3></div>
         <div className={styles.hintGrid}>{plan.hints.map(hint => <article key={hint.level} className={styles.hintCard}>
           <span className={styles.hintLevel}>{HINT_LEVEL_LABELS[hint.level] ?? hint.level}</span>
           <p className={styles.hintStudent}>{hint.student_prompt}</p>
@@ -79,13 +78,24 @@ export function PersonalizedLearningPath({ plan, selection, status, error, draft
           <span>证据指纹：<code>{plan.evidence_fingerprint.slice(0, 16)}…</code></span>
         </div>
       </section>
-    </> : <div className={styles.emptyPlan}>
-      <strong>当前状态：{PLAN_STATUS_LABELS[status] ?? status}</strong>
-      <span>{error || draft?.teaching_plan_preview_error || '当前证据或来源条件不足以生成可审核的 V2 方案。'}</span>
-      <span>补齐来源核验、评分或节点范围后重新生成；页面不会用静态示例替代真实方案。</span>
-      {BLOCKED_GUIDANCE[status]?.length ? <ul className={styles.emptyGuidance}>
-        {BLOCKED_GUIDANCE[status].map(item => <li key={item}>{item}</li>)}
-      </ul> : null}
+    </> : <div className={styles.planStatePanel} data-tone={stateTone}>
+      <div className={styles.planStateHead}>
+        <span className={styles.statePill} data-tone={stateTone}>{stateLabel}</span>
+        <small>{stateDetail}</small>
+      </div>
+      <p className={styles.planStateReason}>{error || draft?.teaching_plan_preview_error || '当前证据或来源条件不足以生成可审核的 V2 方案。'}</p>
+      <div className={styles.planStateActions}>
+        {status === 'requires_source_verification' && <Link className={styles.stateActionLink} to={{ pathname: routes.topicOverview, search }}>前往课程知识核验 <ArrowRight size={14}/></Link>}
+        {status === 'requires_scoring' && <Link className={styles.stateActionLink} to={{ pathname: routes.studentDiagnosis, search }}>查看待评分记录 <ArrowRight size={14}/></Link>}
+        {(status === 'blocked' || status === 'requires_scope_selection') && <Link className={styles.stateActionLink} to={{ pathname: routes.studentDiagnosis, search }}>核对诊断证据 <ArrowRight size={14}/></Link>}
+        {onRetry && <button type="button" className={styles.inlineButton} onClick={onRetry}>重新读取方案状态</button>}
+      </div>
+      <p className={styles.planStateFoot}>来源与评分补齐后回到本页即可重新生成；页面不会用示例方案替代真实数据。</p>
+      {(selection?.practice_items.length || selection?.learning_resources.length) ? <div className={styles.planCandidates}>
+        <h3>仍可参考的候选材料</h3>
+        <p>以下材料只用于教师备课参考，尚未通过正式方案准入，不会被写成学生已完成的学习任务。</p>
+        <ResourceRecommendationList selection={selection} showStatus={false}/>
+      </div> : null}
     </div>}
   </Panel>;
 }
