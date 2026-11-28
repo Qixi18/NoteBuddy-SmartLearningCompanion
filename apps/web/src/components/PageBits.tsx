@@ -2,10 +2,10 @@ import type { ReactNode } from 'react';
 import { AlertCircle, ArrowRight, FileQuestion, RefreshCw } from 'lucide-react';
 import styles from './PageBits.module.css';
 
-export function Panel({ title, icon, action, children, className = '' }: {
-  title: string; icon?: ReactNode; action?: ReactNode; children: ReactNode; className?: string;
+export function Panel({ title, icon, action, children, className = '', id }: {
+  title: string; icon?: ReactNode; action?: ReactNode; children: ReactNode; className?: string; id?: string;
 }) {
-  return <section className={`${styles.panel} ${className}`}>
+  return <section id={id} className={`${styles.panel} ${className}`}>
     <header className={styles.panelHeader}><h2>{icon}{title}</h2>{action}</header>
     {children}
   </section>;

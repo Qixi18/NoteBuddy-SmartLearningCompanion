@@ -7,10 +7,15 @@ export function ClassPlanEditor({ sections, onChange, resizeKey }: {
   onChange: (key: string, value: string) => void;
   resizeKey: string | number;
 }) {
+  const requiredKeys = new Set(['teaching_objectives', 'key_problems', 'teaching_actions', 'observation_points', 'adjustment_conditions']);
   return <div className={styles.classPlanEditor} data-testid="class-plan-editor">
-    {sections.map(section => <label key={section.key}>
-      {section.label}
-      <AutoResizeTextarea value={section.value} placeholder="当前方案未提供此部分" resizeKey={resizeKey} onChange={event => onChange(section.key, event.target.value)}/>
-    </label>)}
+    {sections.map(section => {
+      const required = requiredKeys.has(section.key);
+      return <label key={section.key} data-required={required} data-section={section.key}>
+        <span className={styles.classPlanEditorLabel}>{section.label}<small>{required ? '必填' : '选填'}</small></span>
+        {section.hint && <small className={styles.classPlanEditorHint}>{section.hint}</small>}
+        <AutoResizeTextarea aria-label={section.label} value={section.value} placeholder={section.hint ?? `填写${section.label}`} resizeKey={resizeKey} onChange={event => onChange(section.key, event.target.value)}/>
+      </label>;
+    })}
   </div>;
 }

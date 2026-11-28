@@ -124,13 +124,22 @@
 .classPlanActions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; }
 .classPlanReader { display:flex; flex-direction:column; gap:14px; }
 .classPlanStatus { color:#728077; font-size:var(--font-size-sm); line-height:1.5; }
-.classPlanReadingGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
-.classPlanReadingGrid article { min-width:0; padding:14px; border:1px solid #e5ece5; border-radius:10px; background:#fcfdfc; }
-.classPlanReadingGrid h3 { margin:0 0 8px; color:#354b3a; font-size:var(--font-size-body); }
+.classPlanReadingGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.classPlanReadingGrid article { min-width:0; padding:12px 14px; border:1px solid #e5ece5; border-radius:10px; background:#fcfdfc; }
+.classPlanReadingGrid article[data-section="teaching_actions"] { grid-column:1/-1; }
+.classPlanReadingGrid h3 { margin:0 0 7px; color:#354b3a; font-size:var(--font-size-body); }
+.classPlanReadingGrid ul { display:flex; flex-direction:column; gap:7px; margin:0; padding-left:20px; color:#4f6155; font-size:var(--font-size-body); line-height:var(--line-height-reading); overflow-wrap:anywhere; }
+.classPlanReadingGrid li::marker { color:#27804a; }
 .classPlanReadingGrid p { margin:0; color:#4f6155; font-size:var(--font-size-body); line-height:var(--line-height-reading); white-space:pre-wrap; overflow-wrap:anywhere; }
 .classPlanReadingGrid p.classPlanMissing { color:#8a968d; }
-.classPlanEditor { display:flex; flex-direction:column; gap:12px; }
-.classPlanEditor label { display:flex; min-width:0; flex-direction:column; gap:6px; color:#65756a; font-size:var(--font-size-label); font-weight:700; }
+.classPlanEditor { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:11px; }
+.classPlanEditor label { display:flex; min-width:0; flex-direction:column; gap:5px; padding:11px; border:1px solid #e5ece5; border-radius:10px; background:#fcfdfc; color:#65756a; font-size:var(--font-size-label); font-weight:700; }
+.classPlanEditor label[data-required="true"] .classPlanEditorLabel small { color:#9b6b30; background:#fff5e6; }
+.classPlanEditor label[data-required="false"] .classPlanEditorLabel small { color:#69796e; background:#f0f4f0; }
+.classPlanEditor label[data-section="teaching_actions"] { grid-column:1/-1; }
+.classPlanEditorLabel { display:flex; align-items:center; justify-content:space-between; gap:8px; color:#354b3a; }
+.classPlanEditorLabel small { padding:2px 7px; border-radius:20px; font-size:var(--font-size-xs); font-weight:650; }
+.classPlanEditorHint { color:#849087; font-size:var(--font-size-sm); font-weight:400; line-height:1.45; }
 .classPlanEditor textarea { min-height:72px; resize:vertical; }
 .reportPair { grid-template-columns:1fr; }
 .versionHistory>summary { display:flex; min-height:44px; align-items:center; gap:8px; color:#36543f; cursor:pointer; font-size:var(--font-size-label); font-weight:750; list-style:none; }
@@ -358,6 +367,7 @@
 .classComparisonLabel span { color:#78847c; font-size:var(--font-size-sm); line-height:1.35; }
 .classComparisonTrack { height:7px; overflow:hidden; border-radius:999px; background:#e6eee7; }
 .classComparisonTrack span { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,#66b77b,#23834c); transition:width .2s ease; }
+.classComparisonTrack span.classComparisonUnknown { width:100%; background:repeating-linear-gradient(135deg,#e7ece7 0 5px,#f8faf8 5px 10px); }
 .classComparisonRow>strong { color:#294b35; font-size:var(--font-size-body); font-variant-numeric:tabular-nums; text-align:right; }
 .reportCards { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
 .reportCards article { display:flex; flex-direction:column; gap:6px; padding:11px; border:1px solid #e8eee8; border-radius:8px; background:#fcfdfc; }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowDownRight, ArrowRight, Bot, CheckCircle2, ClipboardCheck, History,
+  ArrowRight, Bot, CheckCircle2, ClipboardCheck, History,
   Layers3, ShieldCheck, Sparkles, Users, XCircle,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -19,6 +19,7 @@ import { useWorkbenchScope } from '../../shared/useWorkbenchScope';
 import { str } from '../../shared/workbenchTypes';
 import type { Row } from '../../shared/workbenchTypes';
 import styles from '../../shared/WorkbenchPages.module.css';
+import pageStyles from './ClassTeachingPage.module.css';
 
 const SECTIONS = [
   { key: 'teaching_objectives', label: '教学目标', hint: '每行一条：本次要解决的教学问题' },
@@ -183,14 +184,25 @@ export function ClassTeachingPage() {
   const canReview = Boolean(latestPlan) && Boolean(latestPlanId)
     && Boolean(reviewer.trim()) && Boolean(reason.trim()) && !latestPlan?.stale;
   const busy = draft.isPending || review.isPending;
+  const generatedAnalysis = aiRun.data as Row | undefined;
+  const generatedAnalysisIsCurrent = Boolean(generatedAnalysis
+    && !generatedAnalysis.stale
+    && String(generatedAnalysis.source_fingerprint ?? '')
+      === String(aiPreview.data?.source_fingerprint ?? ''));
+  const aiAnalysis = (aiPreview.data?.analysis ?? (generatedAnalysisIsCurrent ? generatedAnalysis : undefined)) as Row | undefined;
   const findings = useMemo(() => {
-    const analysis = aiPreview.data?.analysis;
+    const analysis = aiAnalysis;
     if (!analysis || typeof analysis !== 'object') return [];
-    const list = (analysis as Row).findings;
+    const list = analysis.findings;
     return Array.isArray(list) ? list as Row[] : [];
-  }, [aiPreview.data]);
+  }, [aiAnalysis]);
   const modelConfigured = Boolean((aiPreview.data as Row | undefined)?.model_configured);
-  const aiAnalysis = (aiPreview.data?.analysis ?? aiRun.data) as Row | undefined;
+  const sections = [
+    { id: 'class-overview', label: '班级总览' }, { id: 'class-evidence', label: '诊断证据' },
+    { id: 'class-plan', label: '教学方案' }, { id: 'class-plan-history', label: '版本历史' },
+    { id: 'class-implementation', label: '实施复测' }, { id: 'class-ai-analysis', label: 'AI 分析' },
+  ];
+  const navigateToSection = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   if (runQuery.isPending) return <Loading/>;
   if (!run) {
@@ -204,11 +216,8 @@ export function ClassTeachingPage() {
     return <EmptyState title="请选择班级" detail="班级教学方案必须绑定一个明确的班级与测验节点。"/>;
   }
 
-  return <div className={styles.pageStack}>
-    <Notice>
-      班级教学方案绑定当前班级与测验节点：系统生成的是<b>规则草稿</b>，必须由教师核对证据后采纳或修改才生效。
-      历史版本只增不改，来源或数据变化后旧方案会被标记为过期。
-    </Notice>
+  return <div className={`${styles.pageStack} ${pageStyles.page}`} data-testid="class-teaching-page">
+    <Notice>流程：核对诊断证据 → 生成规则草稿 → 教师采纳或修改 → 登记实施并复测；历史版本只增不改，来源变化后标记过期。AI 仅作辅助参考。</Notice>
 
     <div className={styles.classScopeBar} aria-label="班级教学方案范围">
       <span><Users size={15}/><b>班级</b> {classId}</span>
@@ -216,23 +225,29 @@ export function ClassTeachingPage() {
       <span><History size={15}/><b>版本</b> {history.data?.plans.length ?? 0} 个</span>
     </div>
 
-    <div className={styles.classTeachingReport}>
+    <nav className={pageStyles.sectionNav} aria-label="班级教学建议页面导航">
+      {sections.map(section => <button key={section.id} type="button" onClick={() => navigateToSection(section.id)}>{section.label}</button>)}
+    </nav>
+
+    <div id="class-overview" className={`${styles.classTeachingReport} ${pageStyles.overviewGrid}`}>
       <Panel
+        id="class-overview-card"
         title="班级教学分析报告"
         icon={<Users size={18}/>}
         action={<button className={styles.textButton} onClick={() => window.print()}>打印报告</button>}
       >
         {report.isPending ? <Loading label="读取班级教学分析依据…"/>
           : report.isError ? <ErrorBox message={(report.error as Error).message} onRetry={() => void report.refetch()}/>
-          : report.data ? <ClassTeachingReport value={report.data}/>
+          : report.data ? <div id="class-evidence" className={pageStyles.evidenceArea} data-testid="class-evidence-area"><ClassTeachingReport value={report.data}/></div>
           : <EmptyState title="班级报告暂不可用" detail="当前班级与测验节点没有可展示的教学分析依据。"/>}
       </Panel>
 
       <Panel
+        id="class-plan"
         title="班级教学方案"
         icon={<ClipboardCheck size={18}/>}
         action={<div className={styles.classPlanActions}>
-          {latestPlan && !editingPlan && <button className={styles.textButton} onClick={() => setEditingPlan(true)}>编辑方案</button>}
+          {latestPlan && !editingPlan && <button className={styles.textButton} onClick={() => setEditingPlan(true)}>{['accepted', 'edited'].includes(str(latestPlan.status)) ? '创建修订版本' : '编辑方案'}</button>}
           <button className={styles.textButton} disabled={draft.isPending || !nodeId} onClick={() => { setError(''); draft.mutate(); }}>
             <Sparkles size={15}/>{draft.isPending ? '正在生成…' : latestPlan ? '按当前证据重新生成' : '生成规则方案'}
           </button>
@@ -249,24 +264,30 @@ export function ClassTeachingPage() {
               {Boolean(latestPlan.stale) && <Notice tone="warning">
                 来源核验或作答数据已变化，该版本已过期。请重新生成方案后再采纳。
               </Notice>}
+              <div className={pageStyles.planState} data-status={str(latestPlan.status)}>
+                <strong>{STATUS_LABELS[str(latestPlan.status)] ?? str(latestPlan.status)}</strong>
+                <span>第 {str(latestPlan.version)} 版 · {latestPlan.generation_source === 'ai' ? 'AI 参考生成' : '规则生成'}</span>
+                {Boolean(latestPlan.stale) && <span>来源或数据已变化</span>}
+              </div>
 
               {editingPlan ? <>
                 <ClassPlanEditor sections={SECTIONS.map(section => ({ ...section, value: text[section.key] }))} resizeKey={latestPlanId} onChange={(key, value) => setText(current => ({ ...current, [key]: value }))}/>
+                {missingSections(text).length > 0 && <p className={pageStyles.validationHint} role="status">请补齐必填部分：{missingSections(text).join('、')}。两个选填部分可以留空。</p>}
                 <div className={styles.adjustmentFormGrid}>
                   <label>审核人<input value={reviewer} maxLength={200} onChange={event => setReviewer(event.target.value)} placeholder="填写审核人姓名"/></label>
-                  <label>审核说明<input value={reason} maxLength={200} onChange={event => setReason(event.target.value)} placeholder="说明核对依据"/></label>
+                  <label>审核说明<textarea rows={2} value={reason} maxLength={4000} onChange={event => setReason(event.target.value)} placeholder="说明核对依据与处理意见（最多 4000 字）"/></label>
                 </div>
               </> : <ClassPlanReader sections={SECTIONS.map(section => ({ ...section, value: text[section.key] }))} status={<>第 {str(latestPlan.version)} 版 · {STATUS_LABELS[str(latestPlan.status)] ?? str(latestPlan.status)} · {latestPlan.reviewer ? `审核人 ${str(latestPlan.reviewer)}` : '尚未审核'} · {formatTime(latestPlan.updated_at)}</>}/>}
 
               <div className={styles.reviewActions}>
                 <button
                   type="button"
-                  disabled={!canReview || bodyChanged || busy}
+                  disabled={!canReview || bodyChanged || missingSections(text).length > 0 || busy}
                   onClick={() => { setError(''); review.mutate({ status: 'accepted', withPlan: true }); }}
                 ><CheckCircle2 size={15}/>采纳并保存</button>
                 <button
                   type="button"
-                  disabled={!canReview || !bodyChanged || busy}
+                  disabled={!canReview || !bodyChanged || missingSections(text).length > 0 || busy}
                   onClick={() => { setError(''); review.mutate({ status: 'edited', withPlan: true }); }}
                 ><ShieldCheck size={15}/>保存教师修改</button>
                 <button
@@ -287,14 +308,15 @@ export function ClassTeachingPage() {
       </Panel>
     </div>
 
-    <Panel title="方案版本历史" icon={<History size={18}/>}>
-      <details className={styles.versionHistory}>
+    <Panel id="class-plan-history" title="方案版本历史" icon={<History size={18}/>}>
+      <details className={styles.versionHistory} data-testid="class-plan-history-details">
         <summary>查看版本历史（{history.data?.plans.length ?? 0} 个版本）</summary>
         {history.isPending ? <Loading label="读取版本历史…" compact/>
         : !history.data?.plans.length ? <EmptyState compact title="暂无历史版本" detail="生成或审核方案后，每个版本都会保留在这里。"/>
-        : <div className={styles.adjustmentList}>{[...(history.data?.plans ?? [])].reverse().map(plan => <details className={styles.adjustmentRecord} key={str(plan.plan_id)}>
+        : <div className={styles.adjustmentList}>{[...(history.data?.plans ?? [])].reverse().map((plan, index) => <details className={`${styles.adjustmentRecord} ${index === 0 ? pageStyles.latestHistoryItem : ''}`} key={str(plan.plan_id)}>
             <summary>
               <b>第 {str(plan.version)} 版 · {STATUS_LABELS[str(plan.status)] ?? str(plan.status)}</b>
+              <span>{plan.generation_source === "ai" ? "AI 参考生成" : "规则生成"}</span>
               <span>{plan.reviewer ? `审核人 ${str(plan.reviewer)}` : '未审核'}</span>
               <span>{formatTime(plan.updated_at)}</span>
               {Boolean(plan.stale) && <span>已过期</span>}
@@ -312,9 +334,10 @@ export function ClassTeachingPage() {
       </details>
     </Panel>
 
-    <ClassAdjustmentWorkflow runId={runId} classId={classId} nodeId={nodeId} plan={latestPlan} nodes={run?.nodes ?? []}/>
+    <div id="class-implementation" className={pageStyles.anchor}><ClassAdjustmentWorkflow runId={runId} classId={classId} nodeId={nodeId} plan={latestPlan} nodes={run?.nodes ?? []}/></div>
 
     <Panel
+        id="class-ai-analysis"
       title="班级 AI 分析（可选）"
       icon={<Bot size={18}/>}
       action={<span className={styles.topicFocusMeta}>{modelConfigured ? '模型服务已配置' : '未配置模型服务'}</span>}
@@ -326,17 +349,22 @@ export function ClassTeachingPage() {
               外部模型只接收当前班级、当前测验节点的脱敏证据；传输前需要教师明确确认。
               没有配置模型时，规则方案与审核流程仍可完整演示。
             </p>
+            {Boolean(aiPreview.data?.stale) && <Notice tone="warning">已有 AI 分析对应旧证据或来源版本，当前不会作为有效分析展示；确认范围后可重新生成。</Notice>}
             {!modelConfigured && <Notice tone="warning">未配置模型服务：本页不会调用外部模型，规则方案仍可正常生成与审核。</Notice>}
             {aiAnalysis && <p className={styles.limitation}>分析状态：{aiAnalysis.status === 'complete' ? '已完成' : aiAnalysis.status === 'partial' ? '部分完成' : aiAnalysis.status === 'failed' ? '失败' : str(aiAnalysis.status)} · 第 {str(aiAnalysis.generation, '1')} 次 · 模型 {str(aiAnalysis.model)}</p>}
-            {findings.length ? <div className={styles.issueList}>{findings.map((finding, index) => <article key={`${str(finding.category, 'finding')}-${index}`}>
-              <span className={styles.issueRank}>{index + 1}</span>
-              <div>
-                <strong>{str(finding.claim, '模型观察')}</strong>
-                <p>{str(finding.interpretation, '')}</p>
-                <small>{str(finding.next_step, '')}{finding.support_level ? ` · 支持程度 ${str(finding.support_level)}` : ''}</small>
-              </div>
-            </article>)}</div>
-              : <EmptyState compact title="当前还没有班级 AI 分析结果" detail="生成后会在这里显示带证据引用的教师向观察。"/>}
+            {!aiAnalysis && <p className={styles.limitation}>尚无当前范围的分析结果 · 发现数量 {findings.length}</p>}
+            <details className={pageStyles.aiDetails} data-testid="class-ai-findings">
+              <summary>查看详细发现（{findings.length}）</summary>
+              {findings.length ? <div className={styles.issueList}>{findings.map((finding, index) => <article key={`${str(finding.category, 'finding')}-${index}`}>
+                <span className={styles.issueRank}>{index + 1}</span><div>
+                  {Boolean(finding.category) && <small>{str(finding.category)}</small>}
+                  <strong>{str(finding.claim, '模型观察')}</strong>
+                  {Boolean(finding.interpretation) && <p>{str(finding.interpretation)}</p>}
+                  {Boolean(finding.next_step) && <p><b>教学参考：</b>{str(finding.next_step)}</p>}
+                  {Boolean(finding.support_level) && <small>证据支持程度：{str(finding.support_level)}</small>}
+                </div>
+              </article>)}</div> : <EmptyState compact title="当前还没有班级 AI 分析结果" detail="生成后会在这里显示带证据引用的教师向观察。"/>}
+            </details>
             <div className={styles.aiConsent}>
               <label>
                 <input
@@ -358,12 +386,6 @@ export function ClassTeachingPage() {
           </>}
     </Panel>
 
-    <Panel title="教师教学流程" icon={<ArrowDownRight size={18}/>}>
-      <ol className={styles.flow}>
-        <li><b>查看班级诊断</b><span>确认共同题目范围、有效记录与数据质量。</span></li>
-        <li><b>生成并核对方案</b><span>规则草稿基于当前证据；可用 AI 分析作参考，但不能替代教师判断。</span></li>
-        <li><b>采纳或修改</b><span>保存后形成新版本；来源变化后旧版本会被标记为过期。</span></li>
-      </ol>
-    </Panel>
+
   </div>;
 }

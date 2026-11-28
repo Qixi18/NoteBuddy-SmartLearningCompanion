@@ -55,7 +55,7 @@ test('200% zoom equivalent keeps core pages reachable', async ({ page }) => {
   test.setTimeout(120_000);
   // 1440×900 在 200% 浏览器缩放下约等于 720×450 CSS 像素视口。
   await page.setViewportSize({ width: 720, height: 450 });
-  for (const route of ['/', '/knowledge/overview', '/diagnosis/class', '/teaching/student']) {
+  for (const route of ['/', '/knowledge/overview', '/diagnosis/class', '/teaching/class', '/teaching/student']) {
     const definition = allRoutes.find(item => item.path === route)!;
     await gotoRoute(page, route, definition.title);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);

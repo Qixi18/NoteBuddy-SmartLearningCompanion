@@ -88,13 +88,13 @@ export function ClassAdjustmentWorkflow({
 
     {adjustments.isPending ? <Loading label="读取班级实施记录…"/>
       : adjustments.isError ? <ErrorBox message={(adjustments.error as Error).message}/>
-      : !adjustments.data?.length ? <EmptyState compact title="暂无班级实施记录" detail="采纳方案后可登记一次班级教学实施与复测。"/>
-      : <div className={styles.adjustmentList}>{adjustments.data.map(record => <ClassAdjustmentRecord
+      : !adjustments.data?.length && planAccepted && !plan?.stale ? <EmptyState compact title="暂无班级实施记录" detail="可基于当前有效的已采纳方案登记班级教学实施与复测。"/>
+      : adjustments.data?.length ? <div className={styles.adjustmentList}>{adjustments.data.map(record => <ClassAdjustmentRecord
             key={str(record.adjustment_id)}
             record={record}
             nodes={nodes}
             nodeLabels={nodeLabels}
-          />)}</div>}
+      />)}</div> : null}
 
     {message && <p role="status" className={styles.limitation}>{message}</p>}
     {error && <Notice tone="error">{error}</Notice>}
