@@ -5,12 +5,13 @@ test.beforeAll(async ({ request }) => {
   await ensureDemoRun(request);
 });
 
-test('student teaching page shows the rule draft with evidence', async ({ page }) => {
+test('student teaching page presents scoped evidence and a V2 plan preview', async ({ page }) => {
   await gotoRoute(page, '/teaching/student', '学生个性化学习建议');
 
   await expect(page.getByText('学习建议草稿')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText('证据与资源')).toBeVisible();
-  await expect(page.getByText('诊断依据')).toBeVisible();
+  await expect(page.getByText('推断边界')).toBeVisible();
+  await expect(page.getByText('教师复核与个性化方案')).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
@@ -18,8 +19,8 @@ test('teacher can reject a draft and the decision is persisted', async ({ page }
   await gotoRoute(page, '/teaching/student', '学生个性化学习建议');
   await expect(page.getByText('学习建议草稿')).toBeVisible({ timeout: 20_000 });
 
-  await page.getByRole('button', { name: '拒绝草稿' }).click();
-  await expect(page.getByText('复核结果已保存')).toBeVisible();
+  await page.getByRole('button', { name: '拒绝方案' }).click();
+  await expect(page.getByText('教师复核已保存。')).toBeVisible();
 
   await page.reload();
   await page.getByRole('heading', { level: 1, name: '学生个性化学习建议' }).waitFor();
@@ -44,24 +45,18 @@ test('synthetic fixture covers accepted review and student N01-to-N02 follow-up'
   await expect(page.getByRole('heading', { level: 1, name: '学生个性化学习建议' })).toBeVisible();
   await expect(page.getByText('学习建议草稿')).toBeVisible({ timeout: 20_000 });
 
-  await page.getByLabel('教学活动').fill('E2E 合成测试：针对 Q005 演示方程组解法。');
-  await page.getByLabel('实施步骤').fill('核对消元依据\n分步示范');
-  await page.getByLabel('配套练习').fill('Q005 同型题练习');
-  await page.getByLabel('观察点').fill('观察消元步骤与验算');
-  await page.getByRole('checkbox', { name: 'Q005' }).check();
+  await expect(page.getByText('个性化学习方案 · V2')).toBeVisible();
   await page.getByLabel('复核教师').fill('Playwright 合成测试');
   await page.getByLabel('复核理由').fill('仅验证隔离 E2E 流程，非真实教师复核。');
-  await page.getByRole('button', { name: '采纳建议并保存方案' }).click();
-  await expect(page.getByText('复核结果已保存。')).toBeVisible({ timeout: 20_000 });
+  await page.getByRole('button', { name: '接受方案' }).click();
+  await expect(page.getByText('教师复核已保存。')).toBeVisible({ timeout: 20_000 });
 
-  await page.getByLabel(/计划活动|計畫活動/).fill('E2E 合成测试：练习 Q005 同型题。');
-  await page.getByLabel('练习安排').fill('完成一题 Q005 同型练习');
-  await page.getByLabel('观察要点').fill('核对消元步骤');
+  await expect(page.getByText('继承完整 V2 方案快照')).toBeVisible();
   await page.getByLabel('教师', { exact: true }).fill('Playwright 合成测试');
   await page.getByRole('button', { name: '保存教学调整计划' }).click();
   await expect(page.getByText('教学调整计划已保存，并关联了起始复核与作答来源。')).toBeVisible({ timeout: 20_000 });
 
-  const adjustment = page.locator('details').filter({ hasText: 'E2E 合成测试：练习 Q005 同型题。' });
+  const adjustment = page.locator('details').filter({ hasText: /调整计划 ·/ }).first();
   await expect(adjustment).toBeVisible();
   await adjustment.locator('summary').click();
   const followupNode = adjustment.getByLabel('后续测验节点');
@@ -82,7 +77,7 @@ test('synthetic fixture covers accepted review and student N01-to-N02 follow-up'
 
   await page.reload();
   await expect(page.getByRole('heading', { level: 1, name: '学生个性化学习建议' })).toBeVisible();
-  const restored = page.locator('details').filter({ hasText: 'E2E 合成测试：练习 Q005 同型题。' });
+  const restored = page.locator('details').filter({ hasText: /调整计划 ·/ }).first();
   await restored.locator('summary').click();
   await expect(restored.getByLabel('后续测验节点').locator('option:checked')).toContainText('N02');
   await expect(restored.getByRole('checkbox', { name: /R0146.*Q005/ })).toBeChecked();

@@ -70,6 +70,26 @@ class SaveReview:
             }:
                 raise ValueError("复核测验节点无效")
             cited = payload.get("evidence_record_ids", [])
+            candidate_plan = payload.get("teaching_plan_v2")
+            plan_evidence_refs = (
+                candidate_plan.get("evidence_refs", [])
+                if isinstance(candidate_plan, dict)
+                else []
+            )
+            if isinstance(candidate_plan, dict):
+                plan_scope = candidate_plan.get("scope", {})
+                plan_evidence_refs = [
+                    (
+                        {**reference, "scope": plan_scope}
+                        if isinstance(reference, dict)
+                        and "scope" not in reference
+                        else reference
+                    )
+                    for reference in plan_evidence_refs
+                ]
+            payload_evidence_refs = payload.get("evidence_refs", [])
+            if not payload_evidence_refs and plan_evidence_refs:
+                payload_evidence_refs = plan_evidence_refs
             if review_node_id is None and isinstance(cited, list):
                 cited_nodes = {
                     row["节点编号"]
@@ -103,8 +123,10 @@ class SaveReview:
                 or not set(cited).issubset(scoped_allowed)
             ):
                 raise ValueError("复核引用了范围外或无效记录")
-            evidence_refs = payload.get("evidence_refs", [])
-            evidence_refs = validate_evidence_references(run, evidence_refs)
+            evidence_refs = validate_evidence_references(
+                run,
+                payload_evidence_refs,
+            )
             coverage_refs = [
                 reference
                 for reference in evidence_refs
@@ -132,8 +154,8 @@ class SaveReview:
                     for reference in evidence_refs
                     if reference["kind"] == "response"
                 }
-                if response_ref_ids and response_ref_ids != set(cited):
-                    raise ValueError("作答证据引用与记录编号不一致")
+                if response_ref_ids and not response_ref_ids.issubset(set(cited)):
+                    raise ValueError("作答证据引用超出复核记录编号范围")
             structured_plan = payload.get("structured_plan")
             teaching_plan_v2 = payload.get("teaching_plan_v2")
             source_versions: dict[str, int] = {}
@@ -162,9 +184,29 @@ class SaveReview:
                 plan_errors = validate_teaching_plan(
                     teaching_plan_v2, bundle, histories
                 )
+                plan_references = validate_evidence_references(
+                    run,
+                    [
+                        (
+                            {**reference, "scope": teaching_plan_v2["scope"]}
+                            if "scope" not in reference
+                            else reference
+                        )
+                        for reference in teaching_plan_v2.get("evidence_refs", [])
+                    ],
+                )
+                if evidence_refs and plan_references != evidence_refs:
+                    plan_errors.append(
+                        {
+                            "code": "review_evidence_mismatch",
+                            "detail": "复核证据必须与 V2 方案引用保持一致。",
+                        }
+                    )
+                evidence_refs = plan_references
                 original_ids = set(original.get("evidence_record_ids", []))
                 if any(
-                    ref.get("record_id") not in original_ids
+                    ref.get("kind") == "response"
+                    and ref.get("record_id") not in original_ids
                     for ref in teaching_plan_v2.get("evidence_refs", [])
                 ):
                     plan_errors.append(
@@ -191,6 +233,9 @@ class SaveReview:
                     "practice": question_ids,
                     "observation_points": teaching_plan_v2["observation_points"],
                 }
+                if any(reference["kind"] == "coverage" for reference in plan_references):
+                    structured_plan["material_ids"] = []
+                    structured_plan["practice"] = teaching_plan_v2["steps"]
             if structured_plan is not None:
                 if (
                     not isinstance(structured_plan, dict)
@@ -309,6 +354,7 @@ class SaveReview:
                     "reviewer": str(payload.get("reviewer", "教师")),
                     "structured_plan": structured_plan,
                     "teaching_plan_v2": teaching_plan_v2,
+                    "evidence_refs": evidence_refs,
                     "source_verification_versions": source_versions,
                 },
             )

@@ -86,11 +86,16 @@ class TeachingPlanV2:
         ):
             if _is_placeholder(value):
                 raise InvalidReview(f"方案{name}不能为空")
-        if not self.material_ids or len(self.material_ids) != len(
+        has_coverage = bool(self.evidence_refs) and all(
+            reference.kind == "coverage" for reference in self.evidence_refs
+        )
+        if (not self.material_ids and not has_coverage) or len(self.material_ids) != len(
             set(self.material_ids)
         ):
-            raise InvalidReview("方案须包含不重复的已核验材料")
-        if not any(reason.resource_type == "题目" for reason in self.resource_reasons):
+            raise InvalidReview("方案须包含不重复的已核验材料，或使用合法覆盖证据")
+        if not has_coverage and not any(
+            reason.resource_type == "题目" for reason in self.resource_reasons
+        ):
             raise InvalidReview("方案至少须包含一道范围内练习题")
         if not self.steps or any(_is_placeholder(step) for step in self.steps):
             raise InvalidReview("方案须包含有效活动步骤")

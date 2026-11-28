@@ -10,11 +10,13 @@ from ...services.task02.evidence_reference_service import (
 from ...domain.assessment.evidence_bundle import AnalysisScope
 from ...services.shared.node_ordering import compare_node_dates, compare_nodes
 from ...services.task02.evidence_bundle_service import build_evidence_bundle
+from ...services.task03.teaching_plan_service import validate_teaching_plan
 
 
 class TeachingAdjustments:
-    def __init__(self, uow_factory):
+    def __init__(self, uow_factory, source_service=None):
         self.uow_factory = uow_factory
+        self.source_service = source_service
 
     def list(self, student_id: str | None = None) -> list[dict]:
         with self.uow_factory(immediate=False) as uow:
@@ -54,9 +56,29 @@ class TeachingAdjustments:
             ):
                 raise ValueError("起始复核必须是该节点已接受或修改的教师复核")
             source_ids = set(review.get("evidence_record_ids", []))
-            origin_refs = validate_evidence_references(
-                run, payload.get("origin_evidence_refs", [])
-            )
+            plan_v2 = review.get("teaching_plan_v2")
+            plan_snapshot = None
+            if plan_v2:
+                from .stage2 import Stage2Decisions
+
+                sources = Stage2Decisions(self.uow_factory, self.source_service).with_source_freshness(
+                    run, uow.stage2.list_sources(run["run_id"])
+                )
+                scope = AnalysisScope(
+                    run_id=run["run_id"],
+                    student_id=payload["student_id"],
+                    indicator_id=payload["indicator_id"],
+                    node_id=payload["origin_node_id"],
+                )
+                bundle = build_evidence_bundle(run, scope, sources)
+                errors = validate_teaching_plan(plan_v2, bundle, sources)
+                if errors:
+                    raise ValueError("复核方案已失效，不能创建教学调整：" + "；".join(item["detail"] for item in errors))
+                plan_snapshot = dict(plan_v2)
+            submitted_refs = payload.get("origin_evidence_refs", [])
+            if not submitted_refs and plan_v2:
+                submitted_refs = review.get("evidence_refs", [])
+            origin_refs = validate_evidence_references(run, submitted_refs)
             coverage_refs = [
                 reference
                 for reference in origin_refs
@@ -78,7 +100,7 @@ class TeachingAdjustments:
                     }
                     or checked not in review.get("evidence_refs", [])
                     or not review.get("reason", "").strip()
-                    or not review.get("structured_plan")
+                    or not (plan_v2 or review.get("structured_plan"))
                 ):
                     raise ValueError("起始覆盖证据必须关联教师确认的诊断方案和理由")
                 origin_refs = [checked]
@@ -96,8 +118,27 @@ class TeachingAdjustments:
                 for reference in origin_refs
                 if reference["kind"] == "response"
             }
-            if response_ref_ids and response_ref_ids != source_ids:
+            expected_response_ids = (
+                {
+                    reference["record_id"]
+                    for reference in review.get("evidence_refs", [])
+                    if reference.get("kind") == "response"
+                }
+                if plan_v2
+                else source_ids
+            )
+            if response_ref_ids and response_ref_ids != expected_response_ids:
                 raise ValueError("起始作答引用与教师复核证据不一致")
+            if plan_snapshot:
+                planned_activity = plan_snapshot["goal"]
+                planned_practice = list(plan_snapshot["steps"])
+                observation_points = list(plan_snapshot["observation_points"])
+            else:
+                planned_activity = payload.get("planned_activity")
+                planned_practice = payload.get("planned_practice", [])
+                observation_points = payload.get("observation_points", [])
+            if not planned_activity or not planned_practice or not observation_points:
+                raise ValueError("教学调整必须继承已复核方案或填写完整计划")
             return uow.teaching_adjustments.create(
                 {
                     key: payload[key]
@@ -112,16 +153,17 @@ class TeachingAdjustments:
                 | {
                     "origin_evidence_refs": origin_refs,
                     "origin_node_date": str(origin_node.get("模拟测验日期") or "").strip(),
+                    "teaching_plan_snapshot": plan_snapshot,
+                    "plan_schema_version": plan_snapshot.get("schema_version") if plan_snapshot else None,
+                    "source_versions": plan_snapshot.get("source_versions", {}) if plan_snapshot else review.get("source_verification_versions", {}),
+                    "evidence_fingerprint": plan_snapshot.get("evidence_fingerprint") if plan_snapshot else None,
                 },
                 {
-                    key: payload[key]
-                    for key in (
-                        "planned_activity",
-                        "planned_practice",
-                        "observation_points",
-                        "teacher",
-                        "planned_at",
-                    )
+                    "planned_activity": planned_activity,
+                    "planned_practice": planned_practice,
+                    "observation_points": observation_points,
+                    "teacher": payload["teacher"],
+                    "planned_at": payload["planned_at"],
                 },
             )
 

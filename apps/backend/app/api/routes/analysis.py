@@ -10,6 +10,7 @@ from ...schemas.http import (
     ClassInsightsResponse,
     DraftResponse,
     EvidenceBundleResponse,
+    ResourceSelectionResponse,
     StudentInsightsResponse,
 )
 from ..dependencies import get_use_cases
@@ -79,7 +80,18 @@ def rule_draft(
     indicator: str = Query(min_length=1),
     node: str | None = Query(default=None, min_length=1),
 ) -> dict:
-    return use_cases.rule_draft.execute(student, indicator, node)
+    result = use_cases.rule_draft.execute(student, indicator, node)
+    if result.get("resource_selection"):
+        result["resource_selection"] = ResourceSelectionResponse.model_validate(
+            result["resource_selection"]
+        ).model_dump()
+    if result.get("teaching_plan_preview"):
+        from ...schemas.http import TeachingPlanV2Payload
+
+        result["teaching_plan_preview"] = TeachingPlanV2Payload.model_validate(
+            result["teaching_plan_preview"]
+        ).model_dump()
+    return result
 
 
 @router.get("/api/source", tags=["sources"])

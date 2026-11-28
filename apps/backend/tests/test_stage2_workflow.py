@@ -240,6 +240,97 @@ def test_teaching_plan_v2_is_revalidated_on_save_and_export(tmp_path):
         assert json.loads(archive.read("confirmed_cases.json")) == []
 
 
+def test_v2_coverage_reference_is_allowed_when_original_draft_has_no_response_ids(tmp_path):
+    from test_core import sample_tables
+
+    tables = sample_tables()
+    tables["作答记录"] = [
+        row for row in tables["作答记录"] if row["学生编号"] != "D01"
+    ]
+    client = client_for(tmp_path, tables=tables)
+    signoff = client.post(
+        "/api/source-verification",
+        json={
+            "indicator_id": "T01I1",
+            "status": "verified",
+            "curriculum_locator": "课标第 62 页",
+            "textbook_locator": "教材第 68 页",
+            "material_ids": ["Q001"],
+            "reviewer": "数学教师甲",
+            "reason": "逐项核对来源",
+        },
+    )
+    assert signoff.status_code == 200
+    draft = client.get(
+        "/api/draft", params={"student": "D01", "indicator": "T01I1", "node": "N01"}
+    ).json()
+    assert draft["evidence_record_ids"] == []
+    plan = draft["teaching_plan_preview"]
+    assert plan["evidence_refs"][0]["kind"] == "coverage"
+
+    saved = client.post(
+        "/api/review",
+        json={
+            "student_id": "D01",
+            "indicator_id": "T01I1",
+            "status": "edited",
+            "diagnosis": draft["diagnosis"],
+            "recommendation": draft["recommendation"],
+            "reason": "教师将补充观察，不把缺少记录解释为零分。",
+            "evidence_record_ids": [],
+            "evidence_refs": [],
+            "original_draft": draft,
+            "teaching_plan_v2": plan,
+            "reviewer": "数学教师甲",
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["evidence_refs"][0]["kind"] == "coverage"
+    assert saved.json()["structured_plan"]["material_ids"] == []
+    adjustment = client.post(
+        "/api/teaching-adjustments",
+        json={
+            "student_id": "D01",
+            "indicator_id": "T01I1",
+            "origin_run_id": draft["run_id"],
+            "origin_node_id": "N01",
+            "review_version": saved.json()["version"],
+            "teacher": "数学教师甲",
+            "planned_at": "2026-11-28",
+        },
+    )
+    assert adjustment.status_code == 200, adjustment.text
+    assert adjustment.json()["teaching_plan_snapshot"] == plan
+    assert adjustment.json()["plan_schema_version"] == 2
+    assert adjustment.json()["evidence_fingerprint"] == plan["evidence_fingerprint"]
+    assert adjustment.json()["origin_evidence_refs"] == saved.json()["evidence_refs"]
+
+
+def test_rule_draft_exposes_blocked_and_scoring_required_plan_states(tmp_path):
+    from test_core import sample_tables
+
+    tables = sample_tables()
+    second_node = dict(tables["测验节点"][0])
+    second_node["节点编号"] = "N02"
+    tables["测验节点"].append(second_node)
+    second_response = dict(tables["作答记录"][1])
+    second_response.update({"记录编号": "R-N02", "作答事件编号": "E-N02", "节点编号": "N02"})
+    tables["作答记录"].append(second_response)
+    pending_response = dict(tables["作答记录"][0])
+    pending_response.update({"记录编号": "R-D02-P", "学生编号": "D02", "作答事件编号": "E-D02-P", "评分状态": "待评分", "得分": ""})
+    tables["作答记录"].append(pending_response)
+    client = client_for(tmp_path / "multi-node", tables=tables)
+    no_scope = client.get(
+        "/api/draft", params={"student": "D01", "indicator": "T01I1"}
+    ).json()
+    pending = client.get(
+        "/api/draft", params={"student": "D02", "indicator": "T01I1", "node": "N01"}
+    ).json()
+
+    assert no_scope["plan_status"] == "requires_scope_selection"
+    assert pending["plan_status"] == "requires_scoring"
+
+
 def test_unverified_source_and_unconfirmed_case_never_enter_confirmed_export(tmp_path):
     client = client_for(tmp_path)
     pending = client.post(

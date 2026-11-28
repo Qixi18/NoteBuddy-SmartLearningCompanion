@@ -8,6 +8,15 @@ _PURPOSE_TERMS = {
     "diagnostic": ("观察", "诊断", "检测", "核对"),
 }
 
+_REASON_DESCRIPTIONS = {
+    "ai_mapping_match": "AI 映射将该材料关联到当前学习指标，仍需以来源核验结果为准",
+    "verified_indicator_match": "材料已核验并关联当前学习指标",
+    "target_issue_match": "材料与当前证据中已观察到的失分评分点相匹配",
+    "purpose_match": "材料用途与本次教学目的相符",
+    "unseen_for_transfer": "该练习尚未在当前范围观察，适合用于迁移观察",
+    "observed_item_reflection_only": "该练习已观察过，仅作为回顾材料",
+}
+
 
 def _excluded(material_id: str, reason_code: str, reason: str) -> dict:
     return {
@@ -200,7 +209,16 @@ def select_resources(
             "title": item.get("title") or item.get("题干或内容", ""),
             "purpose": purpose_text,
             "reason_codes": reason_codes,
-            "reason": "、".join(reason_codes),
+            "reason": "；".join(
+                _REASON_DESCRIPTIONS[code]
+                for code in reason_codes
+                if code in _REASON_DESCRIPTIONS
+            ),
+            "reason_details": [
+                {"code": code, "description": _REASON_DESCRIPTIONS[code]}
+                for code in reason_codes
+                if code in _REASON_DESCRIPTIONS
+            ],
         }
         if purpose == "transfer" and not unseen and is_question:
             excluded.append(
@@ -233,8 +251,6 @@ def select_resources(
     )
     practice = practice_candidates[:2]
     resources = learning_candidates[:2]
-    for row in practice + resources:
-        row["reason_codes"].append("stable_id_tiebreak")
     for row in practice_candidates[2:] + learning_candidates[2:]:
         excluded.append(
             _excluded(
@@ -243,12 +259,16 @@ def select_resources(
                 "存在更符合当前问题或用途的候选材料。",
             )
         )
-    ready = bool(practice or resources)
+    ready = bool(practice)
+    if learning_candidates and not practice:
+        reason_codes = ["no_verified_node_practice"]
+    else:
+        reason_codes = [] if ready else ["no_verified_candidate"]
     return {
         "status": "ready" if ready else "blocked",
         "purpose": purpose,
         "practice_items": practice,
         "learning_resources": resources,
         "excluded": excluded,
-        "reason_codes": [] if ready else ["no_verified_candidate"],
+        "reason_codes": reason_codes,
     }

@@ -164,10 +164,8 @@ class TeachingPlanV2Payload(BaseModel):
     scope: PlanScopePayload
     goal: str = Field(min_length=1, max_length=4000)
     purpose: Literal["remediation", "transfer", "diagnostic"]
-    material_ids: list[str] = Field(min_length=1, max_length=50)
-    resource_reasons: list[PlanResourceReasonPayload] = Field(
-        min_length=1, max_length=50
-    )
+    material_ids: list[str] = Field(default_factory=list, max_length=50)
+    resource_reasons: list[PlanResourceReasonPayload] = Field(default_factory=list, max_length=50)
     steps: list[str] = Field(min_length=1, max_length=20)
     hints: list[PlanHintPayload] = Field(min_length=3, max_length=3)
     observation_points: list[str] = Field(min_length=1, max_length=20)
@@ -335,9 +333,9 @@ class TeachingAdjustmentCreateRequest(BaseModel):
     origin_node_id: str = Field(min_length=1)
     review_version: int = Field(ge=1)
     origin_evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
-    planned_activity: str = Field(min_length=1, max_length=4000)
-    planned_practice: list[str] = Field(min_length=1, max_length=20)
-    observation_points: list[str] = Field(min_length=1, max_length=20)
+    planned_activity: str | None = Field(default=None, min_length=1, max_length=4000)
+    planned_practice: list[str] = Field(default_factory=list, max_length=20)
+    observation_points: list[str] = Field(default_factory=list, max_length=20)
     teacher: str = Field(min_length=1, max_length=200)
     planned_at: str = Field(min_length=1, max_length=64)
 
@@ -427,6 +425,7 @@ class ResourceSelectionEntryResponse(BaseModel):
     purpose: str = ""
     reason_codes: list[str] = Field(default_factory=list)
     reason: str = ""
+    reason_details: list[dict[str, str]] = Field(default_factory=list)
 
 
 class ResourceSelectionExcludedResponse(BaseModel):
@@ -448,8 +447,7 @@ class ResourceSelectionResponse(BaseModel):
 
 
 class DraftResponse(BaseModel):
-    model_config = ConfigDict(extra="allow")
-
+    model_config = ConfigDict(extra="allow", validate_default=False)
     student_id: str
     indicator_id: str
     objective: str
@@ -480,6 +478,26 @@ class DraftResponse(BaseModel):
     resource_selection: ResourceSelectionResponse | None = None
     teaching_plan_preview: TeachingPlanV2Payload | None = None
     teaching_plan_preview_error: str | None = None
+    plan_status: Literal[
+        "ready",
+        "blocked",
+        "requires_scoring",
+        "requires_source_verification",
+        "requires_scope_selection",
+    ] = "blocked"
+
+    @model_validator(mode="before")
+    @classmethod
+    def infer_plan_status_for_legacy_payload(cls, value):
+        if isinstance(value, dict) and "plan_status" not in value:
+            value = dict(value)
+            if not value.get("node_id") or value.get("scope_required"):
+                value["plan_status"] = "requires_scope_selection"
+            elif value.get("unknown_reason") == "pending_scoring":
+                value["plan_status"] = "requires_scoring"
+            else:
+                value["plan_status"] = "blocked"
+        return value
 
 
 class ReviewRecordResponse(BaseModel):

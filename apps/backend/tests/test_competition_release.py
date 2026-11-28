@@ -172,6 +172,69 @@ def test_release_keeps_open_human_evaluation_visible_and_fingerprint_binds_snaps
         True,
     )
     assert first != second
+    changed_adjustment = release_service.release_fingerprint(
+        run,
+        sources,
+        cases,
+        reviews,
+        report,
+        case_ids,
+        "N1",
+        checks,
+        "内容负责人",
+        True,
+        teaching_adjustments=[{"student_id": "D1", "evidence_fingerprint": "changed"}],
+    )
+    baseline_adjustment = release_service.release_fingerprint(
+        run,
+        sources,
+        cases,
+        reviews,
+        report,
+        case_ids,
+        "N1",
+        checks,
+        "内容负责人",
+        True,
+        teaching_adjustments=[{"student_id": "D1", "evidence_fingerprint": "old"}],
+    )
+    assert changed_adjustment != baseline_adjustment
+
+
+def test_release_blocks_adjustments_that_do_not_match_the_review_snapshot(monkeypatch):
+    monkeypatch.setattr(
+        release_service, "validate_evidence_references", lambda run, refs: refs
+    )
+    run, sources, cases, reviews, report, case_ids = release_state()
+    checks = release_service.check_release(
+        run,
+        sources,
+        cases,
+        reviews,
+        report,
+        case_ids,
+        node_id="N1",
+        teaching_adjustments=[
+            {
+                "student_id": "D1",
+                "indicator_id": "I1",
+                "origin_run_id": "run-1",
+                "origin_node_id": "N1",
+                "review_version": 2,
+                "teaching_plan_snapshot": {"schema_version": 2},
+                "plan_schema_version": 2,
+                "evidence_fingerprint": "forged",
+                "planned_activity": "活动",
+                "planned_practice": ["练习"],
+                "observation_points": ["观察"],
+            }
+        ],
+    )
+    adjustment_check = next(
+        item for item in checks if item["id"] == "teaching_adjustments"
+    )
+    assert adjustment_check["status"] == "blocked"
+    assert "D1" in adjustment_check["detail"]
 
 
 def test_release_blocks_unknown_or_forged_evidence_references(monkeypatch):

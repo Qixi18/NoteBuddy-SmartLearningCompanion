@@ -1,6 +1,9 @@
 """Focused policy tests for deterministic TASK03 rules TR-01 through TR-08."""
 
+import pytest
+
 from app.services.task03.recommendation_service import _rubric, draft
+from app.application.use_cases.workbench import _purpose_for_rule
 
 
 def _response(
@@ -437,3 +440,15 @@ def test_missing_rubric_definition_keeps_point_evidence_unknown_not_conflicting(
     assert coherent is True
     assert scores == {}
     assert maxima == {}
+
+
+
+
+@pytest.mark.parametrize(("rule_id", "expected"), [
+    ("TR-01", "blocked"), ("TR-02", "diagnostic"),
+    ("TR-03", "requires_scoring"), ("TR-04", "diagnostic"),
+    ("TR-05", "remediation"), ("TR-06", "remediation"),
+    ("TR-07", "transfer"), ("TR-08", "blocked"),
+])
+def test_each_rule_has_an_explicit_teaching_purpose_or_blocker(rule_id, expected):
+    assert _purpose_for_rule(rule_id) == expected

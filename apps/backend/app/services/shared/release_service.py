@@ -6,6 +6,9 @@ import hashlib
 import json
 
 from ..task02.evidence_reference_service import validate_evidence_references
+from ...domain.assessment.evidence_bundle import AnalysisScope
+from ..task02.evidence_bundle_service import build_evidence_bundle
+from ..task03.teaching_plan_service import validate_teaching_plan
 
 
 def _check(
@@ -32,6 +35,7 @@ def check_release(
     content_reviewed: bool = False,
     reviewer: str = "",
     ai_mappings: dict[str, list[dict]] | None = None,
+    teaching_adjustments: list[dict] | None = None,
 ) -> list[dict]:
     student_rows = run.get("students", [])
     student_ids = [str(row.get("学生编号") or "").strip() for row in student_rows]
@@ -124,6 +128,7 @@ def check_release(
                     and bool(v2.get("steps"))
                     and complete_hints
                     and bool(v2.get("observation_points"))
+                    and bool(v2.get("adjustment_conditions"))
                 )
             else:
                 structured = review.get("structured_plan") or {}
@@ -212,6 +217,58 @@ def check_release(
             ),
         )
     )
+    invalid_adjustments = []
+    for adjustment in teaching_adjustments or []:
+        if adjustment.get("student_id") not in case_ids or adjustment.get(
+            "origin_run_id"
+        ) != run.get("run_id"):
+            continue
+        snapshot = adjustment.get("teaching_plan_snapshot")
+        if snapshot is None:
+            continue
+        student_id = adjustment.get("student_id", "")
+        indicator_id = adjustment.get("indicator_id", "")
+        node_id = adjustment.get("origin_node_id", "")
+        history = reviews.get(f"{student_id}:{indicator_id}", [])
+        review = next(
+            (row for row in history if row.get("version") == adjustment.get("review_version")),
+            None,
+        )
+        try:
+            bundle = build_evidence_bundle(
+                run,
+                AnalysisScope(
+                    run_id=run["run_id"],
+                    student_id=student_id,
+                    indicator_id=indicator_id,
+                    node_id=node_id,
+                ),
+                sources,
+            )
+            errors = validate_teaching_plan(snapshot, bundle, sources)
+        except (KeyError, TypeError, ValueError):
+            errors = [{"detail": "方案范围或证据无法重算"}]
+        if (
+            not review
+            or snapshot != review.get("teaching_plan_v2")
+            or adjustment.get("plan_schema_version") != 2
+            or adjustment.get("evidence_fingerprint") != snapshot.get("evidence_fingerprint")
+            or not adjustment.get("planned_activity")
+            or not adjustment.get("planned_practice")
+            or not adjustment.get("observation_points")
+            or errors
+        ):
+            invalid_adjustments.append(f"{student_id} · {indicator_id} · 版本 {adjustment.get('review_version')}")
+    checks.append(
+        _check(
+            "teaching_adjustments",
+            "V2 教学调整继承当前复核快照",
+            "blocked" if invalid_adjustments else "passed",
+            "已创建的 V2 教学调整均与复核方案、证据指纹和当前来源一致。"
+            if not invalid_adjustments
+            else "教学调整方案或证据已失效：" + "、".join(invalid_adjustments),
+        )
+    )
     case_report_data = report_data.get("cases", {})
     class_report_data = report_data.get("class", {})
     case_report_ready = (
@@ -281,6 +338,7 @@ def release_fingerprint(
     reviewer: str,
     content_reviewed: bool,
     ai_mappings: dict[str, list[dict]] | None = None,
+    teaching_adjustments: list[dict] | None = None,
 ) -> str:
     payload = {
         "run_id": run.get("run_id"),
@@ -295,6 +353,9 @@ def release_fingerprint(
         },
         "sources": sources,
         "ai_mappings": ai_mappings or {},
+        "teaching_adjustments": [
+            row for row in (teaching_adjustments or []) if row.get("student_id") in case_ids
+        ],
         "reports": reports,
         "checks": checks,
         "reviewer": reviewer.strip(),

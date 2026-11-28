@@ -22,8 +22,10 @@ from ...services.task01.mapping_generation_service import (
 from ...services.task02.class_insight_service import build_class_insights
 from ...services.task02.evidence_bundle_service import build_evidence_bundle
 from ...services.task02.insight_service import build_student_insights
-from ...services.task03.resource_selection_service import select_resources
-from ...services.task03.teaching_plan_service import build_teaching_plan
+from ...services.task03.student_advice_service import (
+    build_student_advice,
+    purpose_for_rule as _purpose_for_rule,
+)
 from ..ports.llm import LLMClient
 from .ai_analysis import GenerateAIAnalysis
 from .class_teaching import ClassTeachingPlanUseCases
@@ -84,80 +86,7 @@ def _ai_mapping_summaries(run: dict, histories: dict, source_service) -> dict:
 def _attach_resource_selection(
     run: dict, result: dict, sources: dict, ai_mappings: dict | None = None
 ) -> dict:
-    node_id = result.get("node_id")
-    if not node_id or result.get("scope_required"):
-        result["resource_selection"] = {
-            "status": "blocked",
-            "purpose": "diagnostic",
-            "practice_items": [],
-            "learning_resources": [],
-            "excluded": [],
-            "reason_codes": ["node_scope_required"],
-        }
-        return result
-    scope = AnalysisScope(
-        run_id=run["run_id"],
-        student_id=result["student_id"],
-        indicator_id=result["indicator_id"],
-        node_id=node_id,
-    )
-    bundle = build_evidence_bundle(run, scope, sources)
-    bundle.setdefault("source_context", {})["ai_mappings"] = ai_mappings or {}
-    insights = build_student_insights(bundle)
-    node_items = {
-        item_id
-        for node in run.get("nodes", [])
-        for item_id in re.findall(r"[A-Z]+\d+", str(node.get("可用题目编号", "")))
-        if node.get("节点编号") == node_id
-    }
-    catalog = [
-        {
-            "material_id": item.get("材料编号", ""),
-            "resource_type": item.get("材料类型") or item.get("题目类型") or "题目",
-            "indicator_id": item.get("指标编号", ""),
-            "topic_id": item.get("主题编号", ""),
-            "title": item.get("题干或内容", ""),
-            "available_node_ids": [
-                node.get("节点编号")
-                for node in run.get("nodes", [])
-                if item.get("材料编号")
-                in re.findall(r"[A-Z]+\d+", str(node.get("可用题目编号", "")))
-            ],
-        }
-        for item in run.get("items", [])
-        if item.get("材料编号")
-    ]
-    rule_id = result.get("rule_id")
-    purpose = (
-        "remediation"
-        if rule_id in {"TR-05", "TR-06"}
-        else "transfer"
-        if rule_id == "TR-07"
-        else "diagnostic"
-    )
-    result["resource_selection"] = select_resources(bundle, insights, catalog, purpose)
-    result["resource_selection"]["candidate_node_item_count"] = len(node_items)
-    try:
-        objective = next(
-            (
-                row.get("观察指标", "")
-                for row in run.get("objectives", [])
-                if row.get("指标编号") == result["indicator_id"]
-            ),
-            "",
-        )
-        result["teaching_plan_preview"] = build_teaching_plan(
-            bundle,
-            insights,
-            result["resource_selection"],
-            objective,
-            set(result.get("evidence_record_ids", [])),
-        )
-        result["teaching_plan_preview_error"] = None
-    except ValueError as exc:
-        result["teaching_plan_preview"] = None
-        result["teaching_plan_preview_error"] = str(exc)
-    return result
+    return build_student_advice(run, result, sources, ai_mappings)
 
 
 class CurrentRun:
@@ -585,6 +514,7 @@ class PrepareSubmission:
             content_reviewed=content_reviewed,
             reviewer=reviewer,
             ai_mappings=ai_mappings,
+            teaching_adjustments=adjustments,
         )
         fingerprint = release_fingerprint(
             run,
@@ -598,6 +528,7 @@ class PrepareSubmission:
             reviewer,
             content_reviewed,
             ai_mappings,
+            adjustments,
         )
         blocking = any(item["status"] == "blocked" for item in checks)
         unchecked = any(item["status"] == "not_checked" for item in checks)
@@ -692,7 +623,7 @@ class WorkbenchUseCases:
         self.list_reviews = ListReviews(uow_factory)
         self.save_review = save_review
         self.stage2 = Stage2Decisions(uow_factory, source_service)
-        self.teaching_adjustments = TeachingAdjustments(uow_factory)
+        self.teaching_adjustments = TeachingAdjustments(uow_factory, source_service)
         self.list_cases = ListCases(self.current_run)
         self.rule_draft = RuleDraft(self.current_run, self.stage2, source_service)
         self.deepseek_draft = DeepSeekDraft(

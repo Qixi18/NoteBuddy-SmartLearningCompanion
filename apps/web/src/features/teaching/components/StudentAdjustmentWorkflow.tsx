@@ -22,9 +22,12 @@ export function StudentAdjustmentWorkflow({ run, studentId, indicatorId, nodeId,
   const matchingReviewEvidence = review && evidence
     ? evidence.responses.filter(row => (review.evidence_record_ids as string[] | undefined)?.includes(String(row.record_id)))
     : [];
+  const planV2 = review?.teaching_plan_v2 && typeof review.teaching_plan_v2 === 'object' ? review.teaching_plan_v2 as Row : undefined;
+  const reviewRefs = Array.isArray(review?.evidence_refs) ? review.evidence_refs as Row[] : [];
+  const coverageOrigin = Boolean(planV2 && reviewRefs.length === 1 && reviewRefs[0].kind === 'coverage');
   return <Panel title="教学实施与调整记录" icon={<ClipboardCheck size={18}/> }>
     <Notice>计划和实施记录按学生、观察指标与测验节点保存。后续效果必须引用后续节点的实际作答记录；没有作答时请等待补充证据。</Notice>
-    {review && matchingReviewEvidence.length ? <AdjustmentPlanForm run={run} studentId={studentId} indicatorId={indicatorId} nodeId={nodeId} review={review} evidence={evidence!} matchingEvidence={matchingReviewEvidence}/> : latestReview?.status === 'accepted' || latestReview?.status === 'edited'
+    {review && (matchingReviewEvidence.length || coverageOrigin) ? <AdjustmentPlanForm run={run} studentId={studentId} indicatorId={indicatorId} nodeId={nodeId} review={review} evidence={evidence} matchingEvidence={matchingReviewEvidence}/> : latestReview?.status === 'accepted' || latestReview?.status === 'edited'
       ? <Notice tone="warning">已找到当前节点的教师复核，但证据包中没有匹配的作答来源，暂不能创建可追溯的教学调整计划。</Notice>
       : <EmptyState compact title="需要先接受当前节点的建议" detail={latestReview ? `当前最新复核状态为「${str(latestReview.status)}」。仅接受或修改后的建议可建立教学调整记录。` : '确认一份有可追溯作答依据的学生建议后，可在这里登记教学活动与后续观察。'}/>}
     <div className={styles.adjustmentList}>{adjustments.length ? adjustments.map(row => <AdjustmentProgressEditor key={String(row.adjustment_id)} run={run} record={row}/>) : <EmptyState compact title="暂无教学调整记录" detail="已接受当前学生建议后，可创建教学计划并持续记录实施结果。"/>}</div>
@@ -41,12 +44,13 @@ function AdjustmentPlanForm({ run, studentId, indicatorId, nodeId, review, evide
   indicatorId: string;
   nodeId: string;
   review: Row;
-  evidence: Bundle;
+  evidence?: Bundle;
   matchingEvidence: Row[];
 }) {
-  const [activity, setActivity] = useState('');
-  const [practice, setPractice] = useState('');
-  const [observations, setObservations] = useState('');
+  const plan = review.teaching_plan_v2 && typeof review.teaching_plan_v2 === 'object' ? review.teaching_plan_v2 as Row : undefined;
+  const [activity, setActivity] = useState(String(plan?.goal ?? ''));
+  const [practice, setPractice] = useState(Array.isArray(plan?.steps) ? (plan.steps as string[]).join('\n') : '');
+  const [observations, setObservations] = useState(Array.isArray(plan?.observation_points) ? (plan.observation_points as string[]).join('\n') : '');
   const [teacher, setTeacher] = useState('教师');
   const [plannedAt, setPlannedAt] = useState(localDateTimeValue);
   const queryClient = useQueryClient();
@@ -57,19 +61,16 @@ function AdjustmentPlanForm({ run, studentId, indicatorId, nodeId, review, evide
       origin_run_id: run.run_id,
       origin_node_id: nodeId,
       review_version: review.version,
-      origin_evidence_refs: responseEvidenceRefs(evidence, matchingEvidence.map(row => String(row.record_id))),
-      planned_activity: activity.trim(),
-      planned_practice: splitLines(practice),
-      observation_points: splitLines(observations),
+      origin_evidence_refs: plan ? [] : responseEvidenceRefs(evidence, matchingEvidence.map(row => String(row.record_id))),
+      ...(plan ? {} : { planned_activity: activity.trim(), planned_practice: splitLines(practice), observation_points: splitLines(observations) }),
       teacher: teacher.trim(),
       planned_at: plannedAt,
     })),
     onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ['teaching-adjustments'] }); },
   });
   return <form className={styles.adjustmentForm} onSubmit={event => { event.preventDefault(); create.mutate(); }}>
-    <div className={styles.adjustmentFormHeader}><strong>建立教學調整計畫</strong><span>來源：第 {str(review.version)} 版教師復核 · {matchingEvidence.length} 條引用作答</span></div>
-    <label>計畫活動<input required maxLength={4000} value={activity} onChange={event => setActivity(event.target.value)} placeholder="描述准备开展的具体教学活动"/></label>
-    <div className={styles.adjustmentFormGrid}><label>练习安排<textarea required value={practice} onChange={event => setPractice(event.target.value)} rows={3} placeholder="每行一项练习安排"/></label><label>观察要点<textarea required value={observations} onChange={event => setObservations(event.target.value)} rows={3} placeholder="每行一项后续观察要点"/></label></div>
+    <div className={styles.adjustmentFormHeader}><strong>建立教學調整計畫</strong><span>来源：第 {str(review.version)} 版教师复核 · {plan ? '继承完整 V2 方案快照' : `${matchingEvidence.length} 条引用作答`}</span></div>
+    {plan ? <article className={styles.planPreview}><h4>{activity}</h4><strong>方案步骤</strong><ol>{splitLines(practice).map((item, index) => <li key={index}>{item}</li>)}</ol><strong>观察点</strong><p>{splitLines(observations).join('；')}</p><small>范围指纹：{str(plan.evidence_fingerprint)} · 来源版本：{JSON.stringify(plan.source_versions ?? {})}</small></article> : <><label>计划活动<input required maxLength={4000} value={activity} onChange={event => setActivity(event.target.value)} placeholder="描述准备开展的具体教学活动"/></label><div className={styles.adjustmentFormGrid}><label>练习安排<textarea required value={practice} onChange={event => setPractice(event.target.value)} rows={3}/></label><label>观察要点<textarea required value={observations} onChange={event => setObservations(event.target.value)} rows={3}/></label></div></>}
     <div className={styles.adjustmentFormGrid}><label>教师<input required maxLength={200} value={teacher} onChange={event => setTeacher(event.target.value)} /></label><label>计划时间<input required type="datetime-local" value={plannedAt} onChange={event => setPlannedAt(event.target.value)}/></label></div>
     <button className={styles.adjustmentSubmit} type="submit" disabled={create.isPending || !splitLines(practice).length || !splitLines(observations).length}>{create.isPending ? '正在保存…' : '保存教学调整计划'}</button>
     {create.isSuccess && <Notice>教学调整计划已保存，并关联了起始复核与作答来源。</Notice>}{create.isError && <ErrorBox message={(create.error as Error).message}/>}

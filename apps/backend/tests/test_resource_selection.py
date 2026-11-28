@@ -219,3 +219,22 @@ def test_current_usable_ai_mapping_can_supply_candidate_without_legacy_signoff()
     assert [row["material_id"] for row in result["practice_items"]] == ["Q2"]
     assert [row["material_id"] for row in result["learning_resources"]] == ["TB1"]
     assert "ai_mapping_match" in result["practice_items"][0]["reason_codes"]
+
+
+def test_learning_material_without_node_practice_is_blocked_for_plan_generation():
+    bundle = _bundle()
+    bundle["items"] = []
+    result = select_resources(bundle, [], _catalog(), "diagnostic")
+
+    assert result["status"] == "blocked"
+    assert [row["material_id"] for row in result["learning_resources"]] == ["TB1"]
+    assert "no_verified_node_practice" in result["reason_codes"]
+
+
+def test_recommendation_reasons_are_teacher_readable_and_hide_sort_tiebreaks():
+    result = select_resources(_bundle(), _insights(), _catalog(), "remediation")
+
+    question = result["practice_items"][0]
+    assert "stable_id_tiebreak" not in question["reason_codes"]
+    assert question["reason_details"]
+    assert all(row["description"] for row in question["reason_details"])
