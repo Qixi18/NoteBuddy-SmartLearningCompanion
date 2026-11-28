@@ -37,6 +37,9 @@ test('page organizes summary, evidence, plan and review sections without page er
   await expect(page.getByRole('heading', { level: 2, name: '教师复核历史' })).toBeVisible();
   await expect(page.getByRole('heading', { level: 2, name: '代表性案例确认进度' })).toBeVisible();
   await expect(page.getByRole('heading', { level: 2, name: '教师复核与个性化方案' })).toBeVisible();
+  await page.getByRole('navigation', { name: '页面章节' }).getByRole('button', { name: '教师审核' }).click();
+  await expect(page).toHaveURL(/#\/teaching\/student/);
+  await expect(page.locator('#student-review')).toBeInViewport();
 
   const ai = page.locator('[data-testid="ai-analysis-panel"]');
   await expect(ai).toBeVisible();
